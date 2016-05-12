@@ -1,0 +1,332 @@
+#!/usr/bin/env python3
+#
+# This file is part of opsd.
+#
+# opsd is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# opsd is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with opsd.  If not, see <http://www.gnu.org/licenses/>.
+
+"""Operations daemon for the Warwick one-metre telescope"""
+
+# pylint: disable=invalid-name
+# pylint: disable=broad-except
+# pylint: disable=too-few-public-methods
+# pylint: disable=too-many-branches
+# pylint: disable=too-many-statements
+# pylint: disable=too-many-instance-attributes
+
+import datetime
+import threading
+import time
+import Pyro4
+
+PYRO_HOST = '192.168.0.102'
+PYRO_PORT = 9015
+PYRO_NAME = 'operations_daemon'
+
+DOME_HOST = '192.168.0.102'
+DOME_PORT = 9004
+DOME_NAME = 'dome_daemon'
+DOME_URI = 'PYRO:' + DOME_NAME + '@' + DOME_HOST + ':' + str(DOME_PORT)
+
+# Communications timeout when using the status and heartbeat commands (should be instant)
+DOME_PYRO_STATUSHEARTBEAT_TIMEOUT = 5
+
+# Communications timeout when opening or closing the dome (takes up to ~80 seconds)
+DOME_PYRO_OPENCLOSE_TIMEOUT = 120
+
+ENVIRONMENT_HOST = '192.168.0.102'
+ENVIRONMENT_PORT = 9002
+ENVIRONMENT_NAME = 'environment_daemon'
+ENVIRONMENT_URI = 'PYRO:' + ENVIRONMENT_NAME + '@' + ENVIRONMENT_HOST + ':' + str(ENVIRONMENT_PORT)
+
+# Communications timeout when using the status query (should be instant)
+ENVIRONMENT_PYRO_TIMEOUT = 5
+
+# Delay between ops and dome loop ticks (seconds)
+LOOP_DELAY = 10
+
+# Timeout period (seconds) for the dome controller
+# The dome heartbeat is pinged once per LOOP_DELAY when the dome is under
+# automatic control and is fully open or fully closed.  This timeout should
+# be large enough to account for the time it takes to open and close the dome
+DOME_HEARTBEAT_TIMEOUT = 120
+
+# This should be kept in sync with the dictionary in ops
+class CommandStatus:
+    """Numeric return codes"""
+    # General error codes
+    Succeeded = 0
+    Failed = 1
+    Blocked = 2
+    InErrorState = 3
+
+class OperationsMode:
+    """Operational status"""
+    Error, Automatic, Manual = range(3)
+    Names = ['Error', 'Automatic', 'Manual']
+
+class DomeStatus:
+    """Dome status"""
+    Closed, Open, Moving, Timeout = range(4)
+    Names = ['Closed', 'Open', 'Moving', 'Timeout']
+
+def ParseDomeStatus(status):
+    """Parses the return value from dome.status() into a DomeStatus"""
+    if status[4] <= 0:
+        return DomeStatus.Timeout
+    if status[1] == 0 and status[2] == 0:
+        return DomeStatus.Closed
+    elif status[1] == 1 and status[2] == 1:
+        return DomeStatus.Open
+    else:
+        return DomeStatus.Moving
+
+class DomeCommandStatus:
+    """Numeric return codes"""
+    # General error codes
+    Succeeded = 0
+    Failed = 1
+    Blocked = 2
+    HeartbeatTimedOut = 3
+    HeartbeatCloseInProgress = 4
+    EastShutterMustBeFullyOpen = 10
+
+class TryLock(object):
+    """Helper object for use with `with` statements"""
+    def __init__(self, lock):
+        self._lock = lock
+        self._locked = False
+
+    def __enter__(self):
+        self._locked = self._lock.acquire(False)
+        return self._locked
+
+    def __exit__(self, *args):
+        if self._locked:
+            self._lock.release()
+            self._locked = False
+
+class OperationsDaemon:
+    """Daemon class that controls the overall observatory operations"""
+    def __init__(self):
+        self._command_lock = threading.Lock()
+
+        # "public" interface for changing dome state
+        self._dome_requested_mode = OperationsMode.Manual
+        self._dome_requested_status = DomeStatus.Closed
+
+        # internal dome state - take the lock writing or reading coherant state!
+        self._dome_lock = threading.Lock()
+        self._dome_mode = OperationsMode.Manual
+        self._dome_status = DomeStatus.Closed
+        self._dome_updated = datetime.datetime.utcnow()
+
+        domeloop = threading.Thread(target=self.__dome_loop)
+        domeloop.daemon = True
+        domeloop.start()
+
+        # environment state - take the lock before writing or reading coherant state!
+        self._environment_lock = threading.Lock()
+        self._environment_updated = datetime.datetime.utcnow()
+        self._environment_safe = False
+
+        runloop = threading.Thread(target=self.__ops_loop)
+        runloop.daemon = True
+        runloop.start()
+
+    def __dome_status(self, status):
+        """Reports status back to the main thread in a thread-safe manner"""
+        with self._dome_lock:
+            self._dome_status = status
+            self._dome_updated = datetime.datetime.utcnow()
+            return status
+
+    def __dome_mode(self, mode):
+        """Reports status back to the main thread in a thread-safe manner"""
+        with self._dome_lock:
+            self._dome_mode = mode
+            self._dome_updated = datetime.datetime.utcnow()
+            return mode
+
+    def __dome_loop(self):
+        """Thread that controls dome opening/closing to match requested state"""
+        while True:
+            # Handle requests from the user to change between manual and automatic mode
+            # Manual intervention is required to clear errors and return to automatic mode.
+            # If an error does occur the dome heartbeat will timeout, and it will close itself.
+            auto_failure = self._dome_mode == OperationsMode.Error and \
+                self._dome_requested_mode == OperationsMode.Automatic
+
+            if self._dome_requested_mode != self._dome_mode and not auto_failure:
+                print('dome: changing mode from ' + OperationsMode.Names[self._dome_mode] + \
+                    ' to ' + OperationsMode.Names[self._dome_requested_mode])
+
+                try:
+                    with Pyro4.Proxy(DOME_URI) as dome:
+                        # pylint: disable=protected-access
+                        dome._pyroTimeout = DOME_PYRO_STATUSHEARTBEAT_TIMEOUT
+                        # pylint: enable=protected-access
+                        if self._dome_requested_mode == OperationsMode.Automatic:
+                            # TODO: Change this to lock to ops mode
+                            ret = dome.configure_heartbeat(DOME_HEARTBEAT_TIMEOUT)
+                            if ret == DomeCommandStatus.Succeeded:
+                                self.__dome_mode(OperationsMode.Automatic)
+                            else:
+                                print('error: failed to switch dome to auto with error: ', ret)
+                                self.__dome_mode(OperationsMode.Error)
+                        else:
+                            # Switch from auto or error state back to manual
+                            with Pyro4.Proxy(DOME_URI) as dome:
+                                # TODO: Change this to unlock from ops mode
+                                # TODO: the dome daemon should disable the ops lock if it times out
+                                ret = dome.configure_heartbeat(0)
+
+                            if ret == DomeCommandStatus.Succeeded:
+                                self.__dome_mode(OperationsMode.Manual)
+                            else:
+                                print('error: failed to switch dome to manual with error: ', ret)
+                                self.__dome_mode(OperationsMode.Error)
+                except Exception as e:
+                    print('error: failed to communicate with the dome daemon: ', e)
+                    self.__dome_mode(OperationsMode.Error)
+
+            if self._dome_mode == OperationsMode.Automatic:
+                try:
+                    with Pyro4.Proxy(DOME_URI) as dome:
+                        # pylint: disable=protected-access
+                        dome._pyroTimeout = DOME_PYRO_STATUSHEARTBEAT_TIMEOUT
+                        # pylint: enable=protected-access
+                        status = self.__dome_status(ParseDomeStatus(dome.status()))
+                        wants_status = self._dome_requested_status
+                        print('dome: is ' +  DomeStatus.Names[status] + ' and wants to be ' + \
+                            DomeStatus.Names[wants_status])
+
+                        if status == DomeStatus.Timeout:
+                            print('dome: detected heartbeat timeout!')
+                            self.__dome_mode(OperationsMode.Error)
+                        elif wants_status == DomeStatus.Closed and status == DomeStatus.Open:
+                            print('dome: closing')
+                            self.__dome_status(DomeStatus.Moving)
+                            # pylint: disable=protected-access
+                            dome._pyroTimeout = DOME_PYRO_OPENCLOSE_TIMEOUT
+                            ret = dome.close_shutters(east=True, west=True)
+                            dome._pyroTimeout = DOME_PYRO_STATUSHEARTBEAT_TIMEOUT
+                            # pylint: enable=protected-access
+                            if ret == DomeCommandStatus.Succeeded:
+                                self.__dome_status(DomeStatus.Closed)
+                            else:
+                                self.__dome_mode(OperationsMode.Error)
+                        elif wants_status == DomeStatus.Open and status == DomeStatus.Closed:
+                            print('dome: opening')
+                            self.__dome_status(DomeStatus.Moving)
+                            # pylint: disable=protected-access
+                            dome._pyroTimeout = DOME_PYRO_OPENCLOSE_TIMEOUT
+                            ret = dome.open_shutters(east=True, west=True)
+                            dome._pyroTimeout = DOME_PYRO_STATUSHEARTBEAT_TIMEOUT
+                            # pylint: enable=protected-access
+                            if ret == DomeCommandStatus.Succeeded:
+                                self.__dome_status(DomeStatus.Open)
+                            else:
+                                self.__dome_mode(OperationsMode.Error)
+                        elif status == wants_status:
+                            print('dome: sending heartbeat ping')
+                            dome.ping_heartbeat()
+                except Exception as e:
+                    print('error: failed to communicate with the dome daemon: ', e)
+                    self.__dome_mode(OperationsMode.Error)
+
+            time.sleep(LOOP_DELAY)
+
+    def __environment_safe(self, safe):
+        """Reports status back to the main thread in a thread-safe manner"""
+        with self._environment_lock:
+            self._environment_safe = safe
+            self._environment_updated = datetime.datetime.utcnow()
+            return safe
+
+    def __ops_loop(self):
+        """Main operations run loop."""
+        while True:
+            environment_safe = False
+            try:
+                with Pyro4.Proxy(ENVIRONMENT_URI) as environment:
+                    # pylint: disable=protected-access
+                    environment._pyroTimeout = ENVIRONMENT_PYRO_TIMEOUT
+                    # pylint: enable=protected-access
+                    status = environment.status()
+                environment_safe = status['can_observe']
+            except Exception as e:
+                print('error: failed to query environment: ', e)
+
+            wants_open = self.__environment_safe(environment_safe)
+
+            # TODO: Include sun altitude, whether the telescope is homed/limited, and whether we
+            # have an observing plan
+
+            self._dome_requested_status = DomeStatus.Open if wants_open else DomeStatus.Closed
+
+            # Check for requested status changes
+            time.sleep(LOOP_DELAY)
+
+    @Pyro4.expose
+    def dome_control(self, automatic):
+        """Switch the dome between manual (observer) and automatic (opsd) control"""
+        with TryLock(self._command_lock) as success:
+            if not success:
+                return CommandStatus.Blocked
+
+            if automatic and self._dome_mode == OperationsMode.Error:
+                return CommandStatus.InErrorState
+
+            self._dome_requested_mode = OperationsMode.Automatic if automatic else \
+                OperationsMode.Manual
+
+            return CommandStatus.Succeeded
+
+    @Pyro4.expose
+    def status(self):
+        """Query the latest status."""
+        data = {}
+
+        with self._environment_lock:
+            data.update({
+                'environment_safe': self._environment_safe,
+                'environment_updated': self._environment_updated.strftime('%Y-%m-%dT%H:%M:%SZ')
+            })
+
+        with self._dome_lock:
+            data.update({
+                'dome_mode': self._dome_mode,
+                'dome_status': self._dome_status,
+                'dome_updated': self._dome_updated.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                'dome_requested_mode': self._dome_requested_mode,
+                'dome_requested_status': self._dome_requested_status
+            })
+
+        return data
+
+def spawn_daemon():
+    """Spawns the daemon and registers it with Pyro"""
+    Pyro4.config.DETAILED_TRACEBACK = True
+    Pyro4.config.REQUIRE_EXPOSE = True
+
+    pyro = Pyro4.Daemon(host=PYRO_HOST, port=PYRO_PORT)
+    ops = OperationsDaemon()
+    uri = pyro.register(ops, objectId=PYRO_NAME)
+
+    print('Starting operations daemon with Pyro ID:', uri)
+    pyro.requestLoop()
+    print('Stopping operations daemon with Pyro ID:', uri)
+
+if __name__ == '__main__':
+    spawn_daemon()
