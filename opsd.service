@@ -1,0 +1,15 @@
+[Unit]
+Description=Daemon for top-level automatic observatory control.
+After=syslog.target
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Restart=on-failure
+Type=simple
+ExecStart=/usr/bin/env python3 -u /usr/bin/opsd
+StandardOutput=syslog
+StandardError=syslog
+
+[Install]
+WantedBy=multi-user.target
