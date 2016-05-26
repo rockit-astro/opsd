@@ -121,6 +121,8 @@ class OperationsDaemon:
     def __init__(self):
         self._command_lock = threading.Lock()
 
+        self._observing = False
+
         # "public" interface for changing dome state
         self._dome_requested_mode = OperationsMode.Manual
         self._dome_requested_status = DomeStatus.Closed
@@ -215,6 +217,8 @@ class OperationsDaemon:
                             print('dome: detected heartbeat timeout!')
                             self.__dome_mode(OperationsMode.Error)
                         elif wants_status == DomeStatus.Closed and status == DomeStatus.Open:
+                            print('dome: sending heartbeat ping before closing')
+                            dome.ping_heartbeat()
                             print('dome: closing')
                             self.__dome_status(DomeStatus.Moving)
                             # pylint: disable=protected-access
@@ -227,6 +231,8 @@ class OperationsDaemon:
                             else:
                                 self.__dome_mode(OperationsMode.Error)
                         elif wants_status == DomeStatus.Open and status == DomeStatus.Closed:
+                            print('dome: sending heartbeat ping before opening')
+                            dome.ping_heartbeat()
                             print('dome: opening')
                             self.__dome_status(DomeStatus.Moving)
                             # pylint: disable=protected-access
@@ -268,7 +274,13 @@ class OperationsDaemon:
             except Exception as e:
                 print('error: failed to query environment: ', e)
 
-            wants_open = self.__environment_safe(environment_safe)
+            self.__environment_safe(environment_safe)
+            if self._dome_requested_status == DomeStatus.Open and not environment_safe:
+                print('closing dome due to environment alert')
+                print('environment status is:')
+                print(status)
+
+            wants_open = self._observing and environment_safe
 
             # TODO: Include sun altitude, whether the telescope is homed/limited, and whether we
             # have an observing plan
@@ -285,6 +297,7 @@ class OperationsDaemon:
             if not success:
                 return CommandStatus.Blocked
 
+            # TODO: Require dome to be fully closed or open before switching to automatic
             if automatic and self._dome_mode == OperationsMode.Error:
                 return CommandStatus.InErrorState
 
@@ -294,9 +307,23 @@ class OperationsDaemon:
             return CommandStatus.Succeeded
 
     @Pyro4.expose
+    def set_observing(self, observing):
+        """Enable or disable the global observing mode (opens the dome)"""
+        with TryLock(self._command_lock) as success:
+            if not success:
+                return CommandStatus.Blocked
+
+            if observing and self._dome_mode == OperationsMode.Error:
+                return CommandStatus.InErrorState
+
+            self._observing = observing
+
+            return CommandStatus.Succeeded
+
+    @Pyro4.expose
     def status(self):
         """Query the latest status."""
-        data = {}
+        data = {'observing': self._observing}
 
         with self._environment_lock:
             data.update({

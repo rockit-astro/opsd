@@ -95,6 +95,15 @@ def dome_control(args):
     print('usage: {} dome (auto|manual)'.format(SCRIPT_NAME))
     return -1
 
+def set_observing(args):
+    """Enable or disable the global observing mode (opens the dome)"""
+    if len(args) > 0:
+        if args[0] == 'enabled' or args[0] == 'disabled':
+            with Pyro4.Proxy(PYRO_URI) as ops:
+                return ops.set_observing(args[0] == 'enabled')
+
+    print('usage: {} observing (enabled|disabled)'.format(SCRIPT_NAME))
+    return -1
 
 def print_status():
     """Prints the latest ops data in machine-readable form"""
@@ -123,6 +132,9 @@ def print_status():
     print(dome_mode)
 
     if status['dome_mode'] == 1:
+        observing = FMT_GREEN + 'ENABLED' if status['observing'] else FMT_RED + 'DISABLED'
+        observing_status = '    Observing: ' + FMT_BOLD + observing + FMT_CLEAR
+        print(observing_status)
         dome_status = '    Shutters: ' + FMT_BOLD + DOME_STATUS_CODES[status['dome_status']] + \
             FMT_CLEAR
         if status['dome_status'] != status['dome_requested_status']:
@@ -153,6 +165,7 @@ def print_usage(name):
     print('   json        print a machine-readable summary of the operations status')
     print('   status      print a human-readable summary of the operations status')
     print('   dome        toggle dome between manual and automatic control')
+    print('   observing   toggle observing mode on or off')
     print()
 
     return 1
@@ -168,6 +181,8 @@ if __name__ == '__main__':
         sys.exit(print_json())
     elif sys.argv[1] == 'dome':
         run_command(lambda: dome_control(sys.argv[2:]))
+    elif sys.argv[1] == 'observing':
+        run_command(lambda: set_observing(sys.argv[2:]))
 
     # Command not found
     sys.exit(print_usage(SCRIPT_NAME))
