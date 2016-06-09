@@ -280,12 +280,11 @@ class OperationsDaemon:
                 print('environment status is:')
                 print(status)
 
-            wants_open = self._observing and environment_safe
+            # Cancel observing if the weather turns bad
+            if not environment_safe:
+                self._observing = False
 
-            # TODO: Include sun altitude, whether the telescope is homed/limited, and whether we
-            # have an observing plan
-
-            self._dome_requested_status = DomeStatus.Open if wants_open else DomeStatus.Closed
+            self._dome_requested_status = DomeStatus.Open if self._observing else DomeStatus.Closed
 
             # Check for requested status changes
             time.sleep(LOOP_DELAY)
