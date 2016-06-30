@@ -28,11 +28,9 @@ import datetime
 import threading
 import time
 import Pyro4
+import warwick.observatory as observatory
 
-PYRO_HOST = '192.168.0.102'
-PYRO_PORT = 9015
-PYRO_NAME = 'operations_daemon'
-
+# TODO: Convert to new backend when we are able to test
 DOME_HOST = '192.168.0.102'
 DOME_PORT = 9004
 DOME_NAME = 'dome_daemon'
@@ -43,14 +41,6 @@ DOME_PYRO_STATUSHEARTBEAT_TIMEOUT = 5
 
 # Communications timeout when opening or closing the dome (takes up to ~80 seconds)
 DOME_PYRO_OPENCLOSE_TIMEOUT = 120
-
-ENVIRONMENT_HOST = '192.168.0.102'
-ENVIRONMENT_PORT = 9002
-ENVIRONMENT_NAME = 'environment_daemon'
-ENVIRONMENT_URI = 'PYRO:' + ENVIRONMENT_NAME + '@' + ENVIRONMENT_HOST + ':' + str(ENVIRONMENT_PORT)
-
-# Communications timeout when using the status query (should be instant)
-ENVIRONMENT_PYRO_TIMEOUT = 5
 
 # Delay between ops and dome loop ticks (seconds)
 LOOP_DELAY = 10
@@ -262,17 +252,21 @@ class OperationsDaemon:
 
     def __ops_loop(self):
         """Main operations run loop."""
+        environment_safe = False
         while True:
-            environment_safe = False
+            was_safe = environment_safe
             try:
-                with Pyro4.Proxy(ENVIRONMENT_URI) as environment:
-                    # pylint: disable=protected-access
-                    environment._pyroTimeout = ENVIRONMENT_PYRO_TIMEOUT
-                    # pylint: enable=protected-access
+                with observatory.daemons.onemetre_environment.connect() as environment:
                     status = environment.status()
                 environment_safe = status['can_observe']
+                if was_safe and not environment_safe:
+                    observatory.log.warning('opsd', 'Environment has become unsafe')
+                elif not was_safe and environment_safe:
+                    observatory.log.info('opsd', 'Environment trigger timed out')
             except Exception as e:
+                environment_safe = False
                 print('error: failed to query environment: ', e)
+                observatory.log.info('opsd', 'Failed to query environmentd (' + str(e) + ')')
 
             self.__environment_safe(environment_safe)
             if self._dome_requested_status == DomeStatus.Open and not environment_safe:
@@ -281,8 +275,9 @@ class OperationsDaemon:
                 print(status)
 
             # Cancel observing if the weather turns bad
-            if not environment_safe:
+            if not environment_safe and self._observing:
                 self._observing = False
+                observatory.log.info('opsd', 'Observing condition automatically disabled')
 
             self._dome_requested_status = DomeStatus.Open if self._observing else DomeStatus.Closed
 
@@ -303,6 +298,9 @@ class OperationsDaemon:
             self._dome_requested_mode = OperationsMode.Automatic if automatic else \
                 OperationsMode.Manual
 
+            observatory.log.info('opsd', 'Dome control manually changed to '
+                                 + 'automatic' if automatic else 'manual')
+
             return CommandStatus.Succeeded
 
     @Pyro4.expose
@@ -316,6 +314,8 @@ class OperationsDaemon:
                 return CommandStatus.InErrorState
 
             self._observing = observing
+            observatory.log.info('opsd', 'Observing condition manually '
+                                 + 'enabled' if observing else 'disabled')
 
             return CommandStatus.Succeeded
 
@@ -341,18 +341,6 @@ class OperationsDaemon:
 
         return data
 
-def spawn_daemon():
-    """Spawns the daemon and registers it with Pyro"""
-    Pyro4.config.DETAILED_TRACEBACK = True
-    Pyro4.config.REQUIRE_EXPOSE = True
-
-    pyro = Pyro4.Daemon(host=PYRO_HOST, port=PYRO_PORT)
-    ops = OperationsDaemon()
-    uri = pyro.register(ops, objectId=PYRO_NAME)
-
-    print('Starting operations daemon with Pyro ID:', uri)
-    pyro.requestLoop()
-    print('Stopping operations daemon with Pyro ID:', uri)
-
 if __name__ == '__main__':
-    spawn_daemon()
+    observatory.daemons.onemetre_operations.launch(OperationsDaemon())
+

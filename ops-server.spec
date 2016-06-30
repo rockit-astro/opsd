@@ -1,5 +1,5 @@
 Name:      onemetre-ops-server
-Version:   1.1
+Version:   1.2
 Release:   0
 Url:       https://github.com/warwick-one-metre/opsd
 Summary:   Operations server for the Warwick one-metre telescope.
@@ -26,7 +26,6 @@ mkdir -p %{buildroot}%{_unitdir}
 
 %post
 %service_add_post opsd.service
-%fillup_and_insserv -f -y opsd.service
 
 %preun
 %stop_on_removal opsd.service

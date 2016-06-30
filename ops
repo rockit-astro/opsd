@@ -22,13 +22,8 @@ import json
 import os
 import sys
 import Pyro4
+import warwick.observatory as observatory
 
-PYRO_HOST = '192.168.0.102'
-PYRO_PORT = 9015
-PYRO_NAME = 'operations_daemon'
-PYRO_COMM_TIMEOUT = 5
-
-PYRO_URI = 'PYRO:' + PYRO_NAME + '@' + PYRO_HOST + ':' + str(PYRO_PORT)
 SCRIPT_NAME = os.path.basename(sys.argv[0])
 sys.excepthook = Pyro4.util.excepthook
 
@@ -89,7 +84,7 @@ def dome_control(args):
     """Changes the dome between automatic and manual control"""
     if len(args) > 0:
         if args[0] == 'auto' or args[0] == 'manual':
-            with Pyro4.Proxy(PYRO_URI) as ops:
+            with observatory.daemons.onemetre_operations.connect() as ops:
                 return ops.dome_control(args[0] == 'auto')
 
     print('usage: {} dome (auto|manual)'.format(SCRIPT_NAME))
@@ -99,7 +94,7 @@ def set_observing(args):
     """Enable or disable the global observing mode (opens the dome)"""
     if len(args) > 0:
         if args[0] == 'enabled' or args[0] == 'disabled':
-            with Pyro4.Proxy(PYRO_URI) as ops:
+            with observatory.daemons.onemetre_operations.connect() as ops:
                 return ops.set_observing(args[0] == 'enabled')
 
     print('usage: {} observing (enabled|disabled)'.format(SCRIPT_NAME))
@@ -109,7 +104,7 @@ def print_status():
     """Prints the latest ops data in machine-readable form"""
     status = None
     try:
-        with Pyro4.Proxy(PYRO_URI) as ops:
+        with observatory.daemons.onemetre_operations.connect() as ops:
             status = ops.status()
     except Pyro4.errors.CommunicationError:
         print('error: unable to communicate with the operations daemon')
@@ -148,7 +143,7 @@ def print_json():
     """Prints the latest ops data in machine-readable form"""
     status = None
     try:
-        with Pyro4.Proxy(PYRO_URI) as ops:
+        with observatory.daemons.onemetre_operations.connect() as ops:
             status = ops.status()
     except Pyro4.errors.CommunicationError:
         print('error: unable to communicate with the operations daemon')
@@ -174,7 +169,6 @@ if __name__ == '__main__':
     if len(sys.argv) == 1:
         sys.exit(print_usage(SCRIPT_NAME))
 
-    Pyro4.config.COMMTIMEOUT = PYRO_COMM_TIMEOUT
     if sys.argv[1] == 'status':
         sys.exit(print_status())
     elif sys.argv[1] == 'json':
