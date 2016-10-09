@@ -299,7 +299,7 @@ class OperationsDaemon:
                 OperationsMode.Manual
 
             observatory.log.info('opsd', 'Dome control manually changed to '
-                                 + 'automatic' if automatic else 'manual')
+                                 + ('automatic' if automatic else 'manual'))
 
             return CommandStatus.Succeeded
 
@@ -315,7 +315,7 @@ class OperationsDaemon:
 
             self._observing = observing
             observatory.log.info('opsd', 'Observing condition manually '
-                                 + 'enabled' if observing else 'disabled')
+                                 + ('enabled' if observing else 'disabled'))
 
             return CommandStatus.Succeeded
 
