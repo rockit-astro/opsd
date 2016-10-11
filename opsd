@@ -171,8 +171,9 @@ class OperationsDaemon:
         self._environment_safe = False
 
         self._frame_watchers = []
-        self._autoflat_condition = threading.Condition()
-        self._autoflat_active = False
+        self._telescope_lock = threading.Lock()
+        self._telescope_condition = threading.Condition()
+        self._telescope_active = False
 
         runloop = threading.Thread(target=self.__ops_loop)
         runloop.daemon = True
@@ -393,159 +394,164 @@ class OperationsDaemon:
     @Pyro4.expose
     def autoflat(self):
         """Automatically runs the cameras (and eventually the telescope) to acquire flat frames"""
-        bias = {
-            'BLUE': 0,
-            'RED': 0
-        }
+        with TryLock(self._telescope_lock) as success:
+            if not success:
+                return CommandStatus.Blocked
 
-        state = {
-            'BLUE': AutoFlatState.Bias,
-            'RED': AutoFlatState.Bias
-        }
+            bias = {
+                'BLUE': 0,
+                'RED': 0
+            }
 
-        daemon = {
-            'BLUE': observatory.daemons.onemetre_blue_camera,
-            'RED': observatory.daemons.onemetre_red_camera,
-        }
+            state = {
+                'BLUE': AutoFlatState.Bias,
+                'RED': AutoFlatState.Bias
+            }
 
-        # Account for the setting or rising sun
-        is_evening = datetime.datetime.utcnow().hour > 12
-        scale = AUTOFLAT_EVENING_SCALE if is_evening else AUTOFLAT_DAWN_SCALE
+            daemon = {
+                'BLUE': observatory.daemons.onemetre_blue_camera,
+                'RED': observatory.daemons.onemetre_red_camera,
+            }
 
-        def received_frame(headers):
-            """Callback to process an acquired frame.  headers is a dictionary of header keys"""
-            arm = None
-            try:
-                arm = headers['INSTRARM']
-                last_state = state[arm]
+            # Account for the setting or rising sun
+            is_evening = datetime.datetime.utcnow().hour > 12
+            scale = AUTOFLAT_EVENING_SCALE if is_evening else AUTOFLAT_DAWN_SCALE
 
-                if state[arm] == AutoFlatState.Bias:
-                    bias[arm] = headers['MEDCNTS']
-                    print(arm + ' bias level is {:.0f} ADU'.format(headers['MEDCNTS']))
-                    # Take the first flat image
-                    state[arm] = AutoFlatState.Waiting
-                    with daemon[arm].connect() as cam:
-                        start_exp = AUTOFLAT_MIN_EXPOSURE if is_evening \
-                            else AUTOFLAT_MIN_SAVE_EXPOSURE
-                        cam.set_exposure(start_exp)
-                        cam.set_shutter(True)
-                        cam.start_sequence(1)
+            def received_frame(headers):
+                """Callback to process an acquired frame.  headers is a dictionary of header keys"""
+                arm = None
+                try:
+                    arm = headers['INSTRARM']
+                    last_state = state[arm]
 
-                elif state[arm] == AutoFlatState.Waiting or state[arm] == AutoFlatState.Saving:
-                    exposure = headers['EXPTIME']
-                    counts = headers['MEDCNTS'] - bias[headers['INSTRARM']]
-
-                    # If the count rate is too low then we scale the exposure by the max amount
-                    if counts > 0:
-                        new_exposure = scale * exposure * AUTOFLAT_TARGET_COUNTS / counts
-                    else:
-                        new_exposure = exposure * AUTOFLAT_MAX_EXPOSURE_DELTA
-
-                    # Clamp the exposure to a sensible range
-                    clamped_exposure = min(new_exposure, AUTOFLAT_MAX_EXPOSURE,
-                                           exposure * AUTOFLAT_MAX_EXPOSURE_DELTA)
-                    clamped_exposure = max(clamped_exposure, AUTOFLAT_MIN_EXPOSURE,
-                                           exposure / AUTOFLAT_MAX_EXPOSURE_DELTA)
-
-                    clamped_desc = ' (clamped from {:.2f}s)'.format(new_exposure) \
-                        if new_exposure > clamped_exposure else ''
-                    print(arm + ' exposure {:.2f}s counts {:.0f} ADU -> {:.2f}s{}'
-                          .format(exposure, counts, clamped_exposure, clamped_desc))
-
-                    if is_evening:
-                        # Sky is decreasing in brightness
-                        # TODO: Remove this once we account for sun elevation?
-                        for min_exposure in AUTOFLAT_EVENING_EXPOSURE_DELAYS:
-                            if new_exposure < min_exposure and counts > AUTOFLAT_MIN_SAVE_COUNTS:
-                                delay = AUTOFLAT_EVENING_EXPOSURE_DELAYS[min_exposure]
-                                print(arm + ' waiting ' + str(delay) + 's for it to get darker')
-                                time.sleep(delay)
-
-                        if clamped_exposure == AUTOFLAT_MAX_EXPOSURE \
-                                and counts < AUTOFLAT_MIN_SAVE_COUNTS:
-                            state[arm] = AutoFlatState.Complete
-                        elif state[arm] == AutoFlatState.Waiting \
-                                and counts > AUTOFLAT_MIN_SAVE_COUNTS \
-                                and new_exposure > AUTOFLAT_MIN_SAVE_EXPOSURE:
-                            state[arm] = AutoFlatState.Saving
-                    else:
-                        # Sky is increasing in brightness
-                        if clamped_exposure < AUTOFLAT_MIN_SAVE_EXPOSURE:
-                            state[arm] = AutoFlatState.Complete
-                        elif state[arm] == AutoFlatState.Waiting \
-                                and counts > AUTOFLAT_MIN_SAVE_COUNTS:
-                            state[arm] = AutoFlatState.Saving
-
-                    if state[arm] != last_state:
-                        with observatory.daemons.onemetre_pipeline.connect() as pipeline:
-                            if state[arm] == AutoFlatState.Saving:
-                                pipeline.set_archive(arm, True)
-                            else:
-                                pipeline.set_archive(arm, False)
-
-                    if last_state != state[arm]:
-                        print(arm + ' ' + AutoFlatState.Names[last_state] + ' -> ' \
-                            + AutoFlatState.Names[state[arm]])
-
-                    if state[arm] != AutoFlatState.Complete:
+                    if state[arm] == AutoFlatState.Bias:
+                        bias[arm] = headers['MEDCNTS']
+                        print(arm + ' bias level is {:.0f} ADU'.format(headers['MEDCNTS']))
+                        # Take the first flat image
+                        state[arm] = AutoFlatState.Waiting
                         with daemon[arm].connect() as cam:
-                            cam.set_exposure(clamped_exposure)
+                            start_exp = AUTOFLAT_MIN_EXPOSURE if is_evening \
+                                else AUTOFLAT_MIN_SAVE_EXPOSURE
+                            cam.set_exposure(start_exp)
+                            cam.set_shutter(True)
                             cam.start_sequence(1)
-            except Exception as e:
-                print('failed to parse frame callback for arm ' + str(arm))
-                print(e)
-                if arm is not None:
-                    state[arm] = AutoFlatState.Complete
 
-        self._frame_watchers.append(received_frame)
-        try:
-            with self._autoflat_condition:
-                self._autoflat_active = True
-                # Give up early if the cameras are running
-                for arm in daemon:
-                    with daemon[arm].connect() as cam:
-                        if cam.report_status()['state'] != CameraStatus.Idle:
-                            return CommandStatus.CameraActive
+                    elif state[arm] == AutoFlatState.Waiting or state[arm] == AutoFlatState.Saving:
+                        exposure = headers['EXPTIME']
+                        counts = headers['MEDCNTS'] - bias[headers['INSTRARM']]
 
-                with observatory.daemons.onemetre_pipeline.connect() as pipeline:
-                    pipeline.set_intensity_stats(True)
-                    pipeline.set_output_frame_prefix('flat')
-                    pipeline.set_frame_type('FLAT')
+                        # If the count rate is too low then we scale the exposure by the max amount
+                        if counts > 0:
+                            new_exposure = scale * exposure * AUTOFLAT_TARGET_COUNTS / counts
+                        else:
+                            new_exposure = exposure * AUTOFLAT_MAX_EXPOSURE_DELTA
+
+                        # Clamp the exposure to a sensible range
+                        clamped_exposure = min(new_exposure, AUTOFLAT_MAX_EXPOSURE,
+                                               exposure * AUTOFLAT_MAX_EXPOSURE_DELTA)
+                        clamped_exposure = max(clamped_exposure, AUTOFLAT_MIN_EXPOSURE,
+                                               exposure / AUTOFLAT_MAX_EXPOSURE_DELTA)
+
+                        clamped_desc = ' (clamped from {:.2f}s)'.format(new_exposure) \
+                            if new_exposure > clamped_exposure else ''
+                        print(arm + ' exposure {:.2f}s counts {:.0f} ADU -> {:.2f}s{}'
+                              .format(exposure, counts, clamped_exposure, clamped_desc))
+
+                        if is_evening:
+                            # Sky is decreasing in brightness
+                            # TODO: Remove this once we account for sun elevation?
+                            for min_exposure in AUTOFLAT_EVENING_EXPOSURE_DELAYS:
+                                if new_exposure < min_exposure \
+                                        and counts > AUTOFLAT_MIN_SAVE_COUNTS:
+                                    delay = AUTOFLAT_EVENING_EXPOSURE_DELAYS[min_exposure]
+                                    print(arm + ' waiting ' + str(delay) + 's for it to get darker')
+                                    time.sleep(delay)
+
+                            if clamped_exposure == AUTOFLAT_MAX_EXPOSURE \
+                                    and counts < AUTOFLAT_MIN_SAVE_COUNTS:
+                                state[arm] = AutoFlatState.Complete
+                            elif state[arm] == AutoFlatState.Waiting \
+                                    and counts > AUTOFLAT_MIN_SAVE_COUNTS \
+                                    and new_exposure > AUTOFLAT_MIN_SAVE_EXPOSURE:
+                                state[arm] = AutoFlatState.Saving
+                        else:
+                            # Sky is increasing in brightness
+                            if clamped_exposure < AUTOFLAT_MIN_SAVE_EXPOSURE:
+                                state[arm] = AutoFlatState.Complete
+                            elif state[arm] == AutoFlatState.Waiting \
+                                    and counts > AUTOFLAT_MIN_SAVE_COUNTS:
+                                state[arm] = AutoFlatState.Saving
+
+                        if state[arm] != last_state:
+                            with observatory.daemons.onemetre_pipeline.connect() as pipeline:
+                                if state[arm] == AutoFlatState.Saving:
+                                    pipeline.set_archive(arm, True)
+                                else:
+                                    pipeline.set_archive(arm, False)
+
+                        if last_state != state[arm]:
+                            print(arm + ' ' + AutoFlatState.Names[last_state] + ' -> ' \
+                                + AutoFlatState.Names[state[arm]])
+
+                        if state[arm] != AutoFlatState.Complete:
+                            with daemon[arm].connect() as cam:
+                                cam.set_exposure(clamped_exposure)
+                                cam.start_sequence(1)
+                except Exception as e:
+                    print('failed to parse frame callback for arm ' + str(arm))
+                    print(e)
+                    if arm is not None:
+                        state[arm] = AutoFlatState.Complete
+
+            self._frame_watchers.append(received_frame)
+            try:
+                with self._telescope_condition:
+                    self._telescope_active = True
+                    # Give up early if the cameras are running
                     for arm in daemon:
-                        pipeline.set_archive(arm, False)
+                        with daemon[arm].connect() as cam:
+                            if cam.report_status()['state'] != CameraStatus.Idle:
+                                return CommandStatus.CameraActive
 
-                # TODO: Wait for sun to get to about the right elevation to save shutter cycles
-                # Acquire bias frame
-                for arm in daemon:
-                    with daemon[arm].connect() as cam:
-                        cam.set_shutter(False)
-                        cam.set_exposure(0)
-                        cam.start_sequence(1)
+                    with observatory.daemons.onemetre_pipeline.connect() as pipeline:
+                        pipeline.set_intensity_stats(True)
+                        pipeline.set_output_frame_prefix('flat')
+                        pipeline.set_frame_type('FLAT')
+                        for arm in daemon:
+                            pipeline.set_archive(arm, False)
 
-                while True:
-                    self._autoflat_condition.wait(5)
-                    if all([state[arm] == AutoFlatState.Complete for arm in state]):
-                        self._autoflat_active = False
+                    # TODO: Wait for sun to get to about the right elevation to save shutter cycles
+                    # Acquire bias frame
+                    for arm in daemon:
+                        with daemon[arm].connect() as cam:
+                            cam.set_shutter(False)
+                            cam.set_exposure(0)
+                            cam.start_sequence(1)
 
-                    if not self._autoflat_active:
-                        break
+                    while True:
+                        self._telescope_condition.wait(5)
+                        if all([state[arm] == AutoFlatState.Complete for arm in state]):
+                            self._telescope_active = False
 
-                with observatory.daemons.onemetre_pipeline.connect() as pipeline:
-                    pipeline.set_intensity_stats(False)
-            return CommandStatus.Succeeded
-        except Exception as e:
-            print('exception during autoflat setup:')
-            print(e)
-            return CommandStatus.Failed
-        finally:
-            self._frame_watchers.remove(received_frame)
+                        if not self._telescope_active:
+                            break
+
+                    with observatory.daemons.onemetre_pipeline.connect() as pipeline:
+                        pipeline.set_intensity_stats(False)
+                return CommandStatus.Succeeded
+            except Exception as e:
+                print('exception during autoflat setup:')
+                print(e)
+                return CommandStatus.Failed
+            finally:
+                self._frame_watchers.remove(received_frame)
 
     @Pyro4.expose
-    def stop_autoflat(self):
-        """Cancels an active autoflat task"""
-        self._autoflat_active = False
-        with self._autoflat_condition:
-            self._autoflat_condition.notify_all()
+    def stop_telescope(self):
+        """Cancels an active telescope task"""
+        self._telescope_active = False
+        with self._telescope_condition:
+            self._telescope_condition.notify_all()
 
         return CommandStatus.Succeeded
 

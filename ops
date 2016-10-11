@@ -110,7 +110,7 @@ def autoflat():
     except KeyboardInterrupt:
         # ctrl-c terminates the running command
         with observatory.daemons.onemetre_operations.connect() as ops:
-            return ops.stop_autoflat()
+            return ops.stop_telescope()
     return -1
 
 def print_status():
