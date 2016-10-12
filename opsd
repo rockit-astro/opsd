@@ -31,16 +31,17 @@ from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.wcs import WCS
 import Pyro4
+from warwick.observatory import TryLock
 import warwick.observatory as observatory
 
-# TODO: Convert to new backend when we are able to test
-DOME_HOST = '192.168.0.102'
-DOME_PORT = 9004
-DOME_NAME = 'dome_daemon'
-DOME_URI = 'PYRO:' + DOME_NAME + '@' + DOME_HOST + ':' + str(DOME_PORT)
-
-# Communications timeout when using the status and heartbeat commands (should be instant)
-DOME_PYRO_STATUSHEARTBEAT_TIMEOUT = 5
+DOME_DAEMON = observatory.daemons.onemetre_dome
+TEL_DAEMON = observatory.daemons.onemetre_telescope
+PIPELINE_DAEMON = observatory.daemons.onemetre_pipeline
+ENVIRONMENT_DAEMON = observatory.daemons.onemetre_environment
+CAM_DAEMON = {
+    'BLUE': observatory.daemons.onemetre_blue_camera,
+    'RED': observatory.daemons.onemetre_red_camera
+}
 
 # Communications timeout when opening or closing the dome (takes up to ~80 seconds)
 DOME_PYRO_OPENCLOSE_TIMEOUT = 120
@@ -148,21 +149,6 @@ class AutoFlatState:
     Bias, Waiting, Saving, Complete = range(4)
     Names = ['Bias', 'Waiting', 'Saving', 'Complete']
 
-class TryLock(object):
-    """Helper object for use with `with` statements"""
-    def __init__(self, lock):
-        self._lock = lock
-        self._locked = False
-
-    def __enter__(self):
-        self._locked = self._lock.acquire(False)
-        return self._locked
-
-    def __exit__(self, *args):
-        if self._locked:
-            self._lock.release()
-            self._locked = False
-
 class OperationsDaemon:
     """Daemon class that controls the overall observatory operations"""
     def __init__(self):
@@ -226,10 +212,7 @@ class OperationsDaemon:
                     ' to ' + OperationsMode.Names[self._dome_requested_mode])
 
                 try:
-                    with Pyro4.Proxy(DOME_URI) as dome:
-                        # pylint: disable=protected-access
-                        dome._pyroTimeout = DOME_PYRO_STATUSHEARTBEAT_TIMEOUT
-                        # pylint: enable=protected-access
+                    with DOME_DAEMON.connect() as dome:
                         if self._dome_requested_mode == OperationsMode.Automatic:
                             # TODO: Change this to lock to ops mode
                             ret = dome.configure_heartbeat(DOME_HEARTBEAT_TIMEOUT)
@@ -240,10 +223,9 @@ class OperationsDaemon:
                                 self.__dome_mode(OperationsMode.Error)
                         else:
                             # Switch from auto or error state back to manual
-                            with Pyro4.Proxy(DOME_URI) as dome:
-                                # TODO: Change this to unlock from ops mode
-                                # TODO: the dome daemon should disable the ops lock if it times out
-                                ret = dome.configure_heartbeat(0)
+                            # TODO: Change this to unlock from ops mode
+                            # TODO: the dome daemon should disable the ops lock if it times out
+                            ret = dome.configure_heartbeat(0)
 
                             if ret == DomeCommandStatus.Succeeded:
                                 self.__dome_mode(OperationsMode.Manual)
@@ -256,48 +238,42 @@ class OperationsDaemon:
 
             if self._dome_mode == OperationsMode.Automatic:
                 try:
-                    with Pyro4.Proxy(DOME_URI) as dome:
-                        # pylint: disable=protected-access
-                        dome._pyroTimeout = DOME_PYRO_STATUSHEARTBEAT_TIMEOUT
-                        # pylint: enable=protected-access
+                    with DOME_DAEMON.connect() as dome:
                         status = self.__dome_status(ParseDomeStatus(dome.status()))
-                        wants_status = self._dome_requested_status
-                        print('dome: is ' +  DomeStatus.Names[status] + ' and wants to be ' + \
-                            DomeStatus.Names[wants_status])
+                    wants_status = self._dome_requested_status
+                    print('dome: is ' +  DomeStatus.Names[status] + ' and wants to be ' + \
+                        DomeStatus.Names[wants_status])
 
-                        if status == DomeStatus.Timeout:
-                            print('dome: detected heartbeat timeout!')
-                            self.__dome_mode(OperationsMode.Error)
-                        elif wants_status == DomeStatus.Closed and status == DomeStatus.Open:
-                            print('dome: sending heartbeat ping before closing')
+                    if status == DomeStatus.Timeout:
+                        print('dome: detected heartbeat timeout!')
+                        self.__dome_mode(OperationsMode.Error)
+                    elif wants_status == DomeStatus.Closed and status == DomeStatus.Open:
+                        print('dome: sending heartbeat ping before closing')
+                        with DOME_DAEMON.connect() as dome:
                             dome.ping_heartbeat()
-                            print('dome: closing')
-                            self.__dome_status(DomeStatus.Moving)
-                            # pylint: disable=protected-access
-                            dome._pyroTimeout = DOME_PYRO_OPENCLOSE_TIMEOUT
+                        print('dome: closing')
+                        self.__dome_status(DomeStatus.Moving)
+                        with DOME_DAEMON.connect(timeout=DOME_PYRO_OPENCLOSE_TIMEOUT) as dome:
                             ret = dome.close_shutters(east=True, west=True)
-                            dome._pyroTimeout = DOME_PYRO_STATUSHEARTBEAT_TIMEOUT
-                            # pylint: enable=protected-access
-                            if ret == DomeCommandStatus.Succeeded:
-                                self.__dome_status(DomeStatus.Closed)
-                            else:
-                                self.__dome_mode(OperationsMode.Error)
-                        elif wants_status == DomeStatus.Open and status == DomeStatus.Closed:
-                            print('dome: sending heartbeat ping before opening')
+                        if ret == DomeCommandStatus.Succeeded:
+                            self.__dome_status(DomeStatus.Closed)
+                        else:
+                            self.__dome_mode(OperationsMode.Error)
+                    elif wants_status == DomeStatus.Open and status == DomeStatus.Closed:
+                        print('dome: sending heartbeat ping before opening')
+                        with DOME_DAEMON.connect() as dome:
                             dome.ping_heartbeat()
-                            print('dome: opening')
-                            self.__dome_status(DomeStatus.Moving)
-                            # pylint: disable=protected-access
-                            dome._pyroTimeout = DOME_PYRO_OPENCLOSE_TIMEOUT
+                        print('dome: opening')
+                        self.__dome_status(DomeStatus.Moving)
+                        with DOME_DAEMON.connect(timeout=DOME_PYRO_OPENCLOSE_TIMEOUT) as dome:
                             ret = dome.open_shutters(east=True, west=True)
-                            dome._pyroTimeout = DOME_PYRO_STATUSHEARTBEAT_TIMEOUT
-                            # pylint: enable=protected-access
-                            if ret == DomeCommandStatus.Succeeded:
-                                self.__dome_status(DomeStatus.Open)
-                            else:
-                                self.__dome_mode(OperationsMode.Error)
-                        elif status == wants_status:
-                            print('dome: sending heartbeat ping')
+                        if ret == DomeCommandStatus.Succeeded:
+                            self.__dome_status(DomeStatus.Open)
+                        else:
+                            self.__dome_mode(OperationsMode.Error)
+                    elif status == wants_status:
+                        print('dome: sending heartbeat ping')
+                        with DOME_DAEMON.connect() as dome:
                             dome.ping_heartbeat()
                 except Exception as e:
                     print('error: failed to communicate with the dome daemon: ', e)
@@ -318,7 +294,7 @@ class OperationsDaemon:
         while True:
             was_safe = environment_safe
             try:
-                with observatory.daemons.onemetre_environment.connect() as environment:
+                with ENVIRONMENT_DAEMON.connect() as environment:
                     status = environment.status()
                 environment_safe = status['can_observe']
                 if was_safe and not environment_safe:
@@ -427,11 +403,6 @@ class OperationsDaemon:
                 'RED': AutoFlatState.Bias
             }
 
-            daemon = {
-                'BLUE': observatory.daemons.onemetre_blue_camera,
-                'RED': observatory.daemons.onemetre_red_camera,
-            }
-
             # Account for the setting or rising sun
             is_evening = datetime.datetime.utcnow().hour > 12
             scale = AUTOFLAT_EVENING_SCALE if is_evening else AUTOFLAT_DAWN_SCALE
@@ -450,7 +421,7 @@ class OperationsDaemon:
 
                         # Take the first flat image
                         state[arm] = AutoFlatState.Waiting
-                        with daemon[arm].connect() as cam:
+                        with CAM_DAEMON[arm].connect() as cam:
                             start_exp = AUTOFLAT_MIN_EXPOSURE if is_evening \
                                 else AUTOFLAT_MIN_SAVE_EXPOSURE
                             cam.set_exposure(start_exp)
@@ -508,7 +479,7 @@ class OperationsDaemon:
                                 state[arm] = AutoFlatState.Saving
 
                         if state[arm] != last_state:
-                            with observatory.daemons.onemetre_pipeline.connect() as pipeline:
+                            with PIPELINE_DAEMON.connect() as pipeline:
                                 if state[arm] == AutoFlatState.Saving:
                                     pipeline.set_archive(arm, True)
                                 else:
@@ -522,7 +493,7 @@ class OperationsDaemon:
                                 AutoFlatState.Names[state[arm]]))
 
                         if state[arm] != AutoFlatState.Complete:
-                            with daemon[arm].connect() as cam:
+                            with CAM_DAEMON[arm].connect() as cam:
                                 cam.set_exposure(clamped_exposure)
                                 cam.start_sequence(1)
                 except Exception as e:
@@ -536,22 +507,22 @@ class OperationsDaemon:
                 with self._telescope_condition:
                     self._telescope_active = True
                     # Give up early if the cameras are running
-                    for arm in daemon:
-                        with daemon[arm].connect() as cam:
+                    for arm in CAM_DAEMON:
+                        with CAM_DAEMON[arm].connect() as cam:
                             if cam.report_status()['state'] != CameraStatus.Idle:
                                 return CommandStatus.CameraActive
 
-                    with observatory.daemons.onemetre_pipeline.connect() as pipeline:
+                    with PIPELINE_DAEMON.connect() as pipeline:
                         pipeline.set_intensity_stats(True)
                         pipeline.set_output_frame_prefix('flat')
                         pipeline.set_frame_type('FLAT')
-                        for arm in daemon:
+                        for arm in CAM_DAEMON:
                             pipeline.set_archive(arm, False)
 
                     # TODO: Wait for sun to get to about the right elevation to save shutter cycles
                     # Acquire bias frame
-                    for arm in daemon:
-                        with daemon[arm].connect() as cam:
+                    for arm in CAM_DAEMON:
+                        with CAM_DAEMON[arm].connect() as cam:
                             cam.set_shutter(False)
                             cam.set_exposure(0)
                             cam.start_sequence(1)
@@ -572,7 +543,7 @@ class OperationsDaemon:
             finally:
                 self._telescope_active = False
                 self._frame_watchers.remove(received_frame)
-                with observatory.daemons.onemetre_pipeline.connect() as pipeline:
+                with PIPELINE_DAEMON.connect() as pipeline:
                     pipeline.set_intensity_stats(False)
 
     @Pyro4.expose
@@ -581,13 +552,6 @@ class OperationsDaemon:
         with TryLock(self._telescope_lock) as success:
             if not success:
                 return CommandStatus.Blocked
-
-            daemon = {
-                'BLUE': observatory.daemons.onemetre_blue_camera,
-                'RED': observatory.daemons.onemetre_red_camera,
-            }
-
-            teld = observatory.daemons.onemetre_telescope
 
             # Coordinates extracted from the frame
             coordinates = {
@@ -636,19 +600,19 @@ class OperationsDaemon:
                 with self._telescope_condition:
                     self._telescope_active = True
                     # Give up early if the cameras are running
-                    for arm in daemon:
-                        with daemon[arm].connect() as cam:
+                    for arm in CAM_DAEMON:
+                        with CAM_DAEMON[arm].connect() as cam:
                             if cam.report_status()['state'] != CameraStatus.Idle:
                                 return CommandStatus.CameraActive
 
-                    with observatory.daemons.onemetre_pipeline.connect() as pipeline:
+                    with PIPELINE_DAEMON.connect() as pipeline:
                         pipeline.set_wcs(True)
-                        for arm in daemon:
+                        for arm in CAM_DAEMON:
                             pipeline.set_archive(arm, False)
 
                     # Move the telescope to the requested coordinates
                     # This will be accurate to within a few arcmin
-                    with teld.connect(timeout=AUTOACQUIRE_SLEW_TIMEOUT) as tel:
+                    with TEL_DAEMON.connect(timeout=AUTOACQUIRE_SLEW_TIMEOUT) as tel:
                         # TODO: Check telescope drive power
                         target_str = target.to_string('hmsdms', sep=':')
                         print('autoacquire: slewing to {}'.format(target_str))
@@ -666,11 +630,11 @@ class OperationsDaemon:
 
                     # Refine positioning by taking images and using the WCS to adjust
                     while True:
-                        for arm in daemon:
+                        for arm in CAM_DAEMON:
                             processed[arm] = False
                             coordinates[arm] = None
                             print('autoacquire: starting test image in ' + arm)
-                            with daemon[arm].connect() as cam:
+                            with CAM_DAEMON[arm].connect() as cam:
                                 # todo: reset windowing
                                 cam.set_shutter(True)
                                 cam.set_exposure(AUTOACQUIRE_EXPOSURE_LENGTH)
@@ -733,7 +697,7 @@ class OperationsDaemon:
                         observatory.log.info('opsd', 'autoacquire: offsetting telescope by {} {}'
                                              .format(delta_ra_str, delta_dec_str))
 
-                        with teld.connect(timeout=AUTOACQUIRE_SLEW_TIMEOUT) as tel:
+                        with TEL_DAEMON.connect(timeout=AUTOACQUIRE_SLEW_TIMEOUT) as tel:
                             telstatus = tel.offset_radec(delta_ra.radian, delta_dec.radian)
                             if telstatus != CommandStatus.Succeeded:
                                 print('autoacquire: failed to move telescope with error ' \
