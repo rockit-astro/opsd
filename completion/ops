@@ -4,7 +4,7 @@ _ops()
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="status json dome observing autoflat"
+    opts="status json dome observing autoflat acquire"
 
     case "${prev}" in
         dome)

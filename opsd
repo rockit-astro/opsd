@@ -27,6 +27,9 @@
 import datetime
 import threading
 import time
+from astropy.coordinates import SkyCoord
+from astropy import units as u
+from astropy.wcs import WCS
 import Pyro4
 import warwick.observatory as observatory
 
@@ -78,6 +81,19 @@ AUTOFLAT_EVENING_EXPOSURE_DELAYS = {
     2.5: 5
 }
 
+AUTOACQUIRE_EXPOSURE_LENGTH = 10
+
+# Additional maximum wait time for readout + pipeline processing
+AUTOACQUIRE_MAX_READOUT_PROCESS_TIME = 15
+
+# Aim for an accuracy of 1 arcsec
+AUTOACQUIRE_POINTING_THRESHOLD = 1.0
+
+# Offset in radians to transform red camera coordinates to blue camera coordinates
+AUTOACQUIRE_RED_CAMERA_OFFSET = (2.043859e-4 * u.radian, 4.899995e-6 * u.radian)
+
+AUTOACQUIRE_SLEW_TIMEOUT = 60
+
 # This should be kept in sync with the dictionary in ops
 class CommandStatus:
     """Numeric return codes"""
@@ -88,6 +104,9 @@ class CommandStatus:
     InErrorState = 3
 
     CameraActive = 11
+
+    CoordinateSolutionFailed = 12
+    TelescopeSlewFailed = 13
 
 class OperationsMode:
     """Operational status"""
@@ -546,6 +565,163 @@ class OperationsDaemon:
                 self._frame_watchers.remove(received_frame)
                 with observatory.daemons.onemetre_pipeline.connect() as pipeline:
                     pipeline.set_intensity_stats(False)
+
+    @Pyro4.expose
+    def acquire_field(self, ra_radians, dec_radians):
+        """Automatically home in on a target position"""
+        with TryLock(self._telescope_lock) as success:
+            if not success:
+                return CommandStatus.Blocked
+
+            daemon = {
+                'BLUE': observatory.daemons.onemetre_blue_camera,
+                'RED': observatory.daemons.onemetre_red_camera,
+            }
+
+            teld = observatory.daemons.onemetre_telescope
+
+            # Coordinates extracted from the frame
+            coordinates = {
+                'BLUE': None,
+                'RED': None,
+            }
+
+            processed = {
+                'BLUE': False,
+                'RED': False
+            }
+
+            target = SkyCoord(ra_radians, dec_radians, unit='radian')
+
+            def received_frame(headers):
+                """Callback to process an acquired frame. headers is a dictionary of header keys"""
+                arm = None
+                try:
+                    arm = headers['INSTRARM']
+
+                    # Read WCS cooordinates from frame and convert to (ra,dec) in radians at center
+                    if 'CTYPE1' in headers and 'CTYPE2' in headers:
+                        w = WCS(headers)
+                        # TODO: transform this to the center of the FOV (accounting for windowing)
+                        center_x = headers['NAXIS1'] / 2
+                        center_y = headers['NAXIS2'] / 2
+                        print('frame center: {}, {}'.format(center_x, center_y))
+                        ra_deg, dec_deg = w.all_pix2world(center_x, center_y, 0)
+
+                        pos = SkyCoord(ra_deg, dec_deg, unit='deg')
+                        print('solved {} field center: {}'.format(arm, pos))
+                        coordinates[arm] = pos
+                except Exception as e:
+                    print('failed to parse frame callback for arm ' + str(arm))
+                    print(e)
+                finally:
+                    processed[arm] = True
+
+                    # Wake up the main thread if all frames have been received
+                    if all([processed[arm] for arm in processed]):
+                        with self._telescope_condition:
+                            self._telescope_condition.notify_all()
+
+            self._frame_watchers.append(received_frame)
+            try:
+                with self._telescope_condition:
+                    self._telescope_active = True
+                    # Give up early if the cameras are running
+                    for arm in daemon:
+                        with daemon[arm].connect() as cam:
+                            if cam.report_status()['state'] != CameraStatus.Idle:
+                                return CommandStatus.CameraActive
+
+                    with observatory.daemons.onemetre_pipeline.connect() as pipeline:
+                        pipeline.set_wcs(True)
+                        for arm in daemon:
+                            pipeline.set_archive(arm, False)
+
+                    # Move the telescope to the requested coordinates
+                    # This will be accurate to within a few arcmin
+                    with teld.connect(timeout=AUTOACQUIRE_SLEW_TIMEOUT) as tel:
+                        # TODO: Check telescope drive power
+                        print('Slewing to {}'.format(target))
+                        telstatus = tel.track_radec(ra_radians, dec_radians)
+                        if telstatus != CommandStatus.Succeeded:
+                            print('failed to move telescope with error ' + str(telstatus))
+                            return CommandStatus.TelescopeSlewFailed
+
+                    # Wait a couple of seconds for the telescope position to stabilize
+                    time.sleep(2)
+
+                    # Refine positioning by taking images and using the WCS to adjust
+                    while True:
+                        for arm in daemon:
+                            processed[arm] = False
+                            coordinates[arm] = None
+                            print('starting test image in ' + arm)
+                            with daemon[arm].connect() as cam:
+                                # todo: reset windowing
+                                cam.set_shutter(True)
+                                cam.set_exposure(AUTOACQUIRE_EXPOSURE_LENGTH)
+                                cam.start_sequence(1)
+
+                                # Stagger exposure to work around conflicts with pyds9
+                                # TODO: remove this workaround
+                                time.sleep(1)
+
+                        # Wait for exposure + max timeout
+                        # Will be woken up early once all frames are received
+                        wait = AUTOACQUIRE_EXPOSURE_LENGTH + AUTOACQUIRE_MAX_READOUT_PROCESS_TIME
+                        self._telescope_condition.wait(wait)
+                        if not self._telescope_active:
+                            return CommandStatus.Failed
+
+                        print('Solved field centers:')
+                        print('BLUE: ', coordinates['BLUE'])
+                        print('RED: ', coordinates['RED'])
+
+                        position = None
+                        position_arm = None
+                        if coordinates['BLUE'] is not None:
+                            position = coordinates['BLUE']
+                            position_arm = 'BLUE'
+                        elif coordinates['RED'] is not None:
+                            c = coordinates['RED']
+                            o = AUTOACQUIRE_RED_CAMERA_OFFSET
+                            position = SkyCoord(c.ra + o[0], c.dec + o[1])
+                            position_arm = 'RED'
+
+                        if position is None:
+                            return CommandStatus.CoordinateSolutionFailed
+
+                        # TODO: Requires newer astropy?
+                        # offset = position.spherical_offsets_to(target)
+                        delta_ra = target.ra - position.ra
+                        delta_dec = target.dec - position.dec
+                        separation = position.separation(target).arcsecond
+
+                        # Apply offset or break if close enough
+                        print('applying offset from {}: {}, {}'.format(position_arm, delta_ra, delta_dec))
+                        if separation < AUTOACQUIRE_POINTING_THRESHOLD:
+                            print('reached target with delta {:.2f} arcsec'.format(separation))
+                            return CommandStatus.Succeeded
+
+                        with teld.connect(timeout=AUTOACQUIRE_SLEW_TIMEOUT) as tel:
+                            telstatus = tel.offset_radec(delta_ra.radian, delta_dec.radian)
+                            if telstatus != CommandStatus.Succeeded:
+                                print('failed to move telescope with error ' + str(telstatus))
+                                return CommandStatus.TelescopeSlewFailed
+
+                        # Wait a couple of seconds for the telescope position to stabilize
+                        time.sleep(2)
+
+                        if not self._telescope_active:
+                            return CommandStatus.Failed
+
+            except Exception as e:
+                print('exception during autoacquire:')
+                print(e)
+                return CommandStatus.Failed
+            finally:
+                self._telescope_active = False
+                self._frame_watchers.remove(received_frame)
 
     @Pyro4.expose
     def stop_telescope(self):

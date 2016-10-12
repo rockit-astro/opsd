@@ -17,10 +17,13 @@
 
 """Commandline client for communicating with the operations daemon"""
 
+# pylint: disable=invalid-name
+
 import datetime
 import json
 import os
 import sys
+from astropy.coordinates import SkyCoord
 import Pyro4
 import warwick.observatory as observatory
 
@@ -42,6 +45,8 @@ STATUS_CODES = {
     3: 'error: error state must first be cleared by switching to manual mode',
 
     11: 'error: camera is not idle',
+    12: 'error: acquisition image WCS solution failed',
+    13: 'error: telescope slew failed',
 
     # ops specific codes
     -100: 'error: terminated by user',
@@ -113,6 +118,27 @@ def autoflat():
             return ops.stop_telescope()
     return -1
 
+def acquire_field(args):
+    """Slews the telescope to a specified RA,Dec position and refines position based on WCS"""
+    if len(args) != 2:
+        print('usage: {} acquire <HH:MM:SS.S> <DD:MM:SS.S>'.format(SCRIPT_NAME))
+        return -1
+
+    try:
+        pos = SkyCoord(args[0], args[1], unit='hourangle,deg')
+    except ValueError as e:
+        print('error: ' + str(e))
+        return -1
+
+    try:
+        with observatory.daemons.onemetre_operations.connect(timeout=0) as ops:
+            return ops.acquire_field(pos.ra.radian, pos.dec.radian)
+    except KeyboardInterrupt:
+        # ctrl-c terminates the running command
+        with observatory.daemons.onemetre_operations.connect() as ops:
+            return ops.stop_telescope()
+    return -1
+
 def print_status():
     """Prints the latest ops data in machine-readable form"""
     status = None
@@ -175,6 +201,7 @@ def print_usage(name):
     print('   dome        toggle dome between manual and automatic control')
     print('   observing   toggle observing mode on or off')
     print('   autoflat    acquire flat field frames')
+    print('   acquire     acquire field to high positional accuracy')
     print()
 
     return 1
@@ -193,6 +220,8 @@ if __name__ == '__main__':
         run_command(lambda: set_observing(sys.argv[2:]))
     elif sys.argv[1] == 'autoflat':
         run_command(autoflat)
+    elif sys.argv[1] == 'acquire':
+        run_command(lambda: acquire_field(sys.argv[2:]))
 
     # Command not found
     sys.exit(print_usage(SCRIPT_NAME))
