@@ -605,14 +605,14 @@ class OperationsDaemon:
                         # TODO: transform this to the center of the FOV (accounting for windowing)
                         center_x = headers['NAXIS1'] / 2
                         center_y = headers['NAXIS2'] / 2
-                        print('frame center: {}, {}'.format(center_x, center_y))
                         ra_deg, dec_deg = w.all_pix2world(center_x, center_y, 0)
 
                         pos = SkyCoord(ra_deg, dec_deg, unit='deg')
-                        print('solved {} field center: {}'.format(arm, pos))
+                        pos_str = pos.to_string('hmsdms', sep=':')
+                        print('autoacquire: solved {} field center: {}'.format(arm, pos_str))
                         coordinates[arm] = pos
                 except Exception as e:
-                    print('failed to parse frame callback for arm ' + str(arm))
+                    print('autoacquire: failed to parse frame callback for arm ' + str(arm))
                     print(e)
                 finally:
                     processed[arm] = True
@@ -641,10 +641,15 @@ class OperationsDaemon:
                     # This will be accurate to within a few arcmin
                     with teld.connect(timeout=AUTOACQUIRE_SLEW_TIMEOUT) as tel:
                         # TODO: Check telescope drive power
-                        print('Slewing to {}'.format(target))
+                        target_str = target.to_string('hmsdms', sep=':')
+                        print('autoacquire: slewing to {}'.format(target_str))
+                        observatory.log.info('opsd', 'autoacquire: slewing telescope to {}'.format(
+                            target_str))
                         telstatus = tel.track_radec(ra_radians, dec_radians)
                         if telstatus != CommandStatus.Succeeded:
-                            print('failed to move telescope with error ' + str(telstatus))
+                            print('autoacquire: failed to move telescope with error ' \
+                                  + str(telstatus))
+                            observatory.log.info('opsd', 'autoacquire: slew failed')
                             return CommandStatus.TelescopeSlewFailed
 
                     # Wait a couple of seconds for the telescope position to stabilize
@@ -655,7 +660,7 @@ class OperationsDaemon:
                         for arm in daemon:
                             processed[arm] = False
                             coordinates[arm] = None
-                            print('starting test image in ' + arm)
+                            print('autoacquire: starting test image in ' + arm)
                             with daemon[arm].connect() as cam:
                                 # todo: reset windowing
                                 cam.set_shutter(True)
@@ -673,9 +678,17 @@ class OperationsDaemon:
                         if not self._telescope_active:
                             return CommandStatus.Failed
 
-                        print('Solved field centers:')
-                        print('BLUE: ', coordinates['BLUE'])
-                        print('RED: ', coordinates['RED'])
+                        blue_str = None
+                        if coordinates['BLUE'] is not None:
+                            blue_str = coordinates['BLUE'].to_string('hmsdms', sep=':')
+
+                        red_str = None
+                        if coordinates['RED'] is not None:
+                            red_str = coordinates['RED'].to_string('hmsdms', sep=':')
+
+                        print('autoacquire: solved field centers:')
+                        print('   BLUE: ', blue_str)
+                        print('   RED: ', red_str)
 
                         position = None
                         position_arm = None
@@ -698,15 +711,24 @@ class OperationsDaemon:
                         separation = position.separation(target).arcsecond
 
                         # Apply offset or break if close enough
-                        print('applying offset from {}: {}, {}'.format(position_arm, delta_ra, delta_dec))
                         if separation < AUTOACQUIRE_POINTING_THRESHOLD:
-                            print('reached target with delta {:.2f} arcsec'.format(separation))
+                            print('autoacquire: reached target with delta {:.2f} arcsec'.format(
+                                separation))
+                            observatory.log.info('opsd', 'autoacquire: pointing complete')
                             return CommandStatus.Succeeded
+
+                        delta_ra_str = delta_ra.to_string(u.hourangle, sep=':')
+                        delta_dec_str = delta_dec.to_string(sep=':')
+                        print('autoacquire: applying offset from {}: {}, {}'.format(
+                            position_arm, delta_ra_str, delta_dec_str))
+                        observatory.log.info('opsd', 'autoacquire: offsetting telescope by {} {}'
+                                             .format(delta_ra_str, delta_dec_str))
 
                         with teld.connect(timeout=AUTOACQUIRE_SLEW_TIMEOUT) as tel:
                             telstatus = tel.offset_radec(delta_ra.radian, delta_dec.radian)
                             if telstatus != CommandStatus.Succeeded:
-                                print('failed to move telescope with error ' + str(telstatus))
+                                print('autoacquire: failed to move telescope with error ' \
+                                      + str(telstatus))
                                 return CommandStatus.TelescopeSlewFailed
 
                         # Wait a couple of seconds for the telescope position to stabilize
@@ -716,7 +738,7 @@ class OperationsDaemon:
                             return CommandStatus.Failed
 
             except Exception as e:
-                print('exception during autoacquire:')
+                print('autoacquire: caught exception:')
                 print(e)
                 return CommandStatus.Failed
             finally:
