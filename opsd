@@ -445,7 +445,9 @@ class OperationsDaemon:
 
                     if state[arm] == AutoFlatState.Bias:
                         bias[arm] = headers['MEDCNTS']
-                        print(arm + ' bias level is {:.0f} ADU'.format(headers['MEDCNTS']))
+                        print(arm + ' bias level is {:.0f} ADU'.format(bias[arm]))
+                        observatory.log.info('opsd', '{} bias is {:.0f} ADU'.format(arm, bias[arm]))
+
                         # Take the first flat image
                         state[arm] = AutoFlatState.Waiting
                         with daemon[arm].connect() as cam:
@@ -475,6 +477,10 @@ class OperationsDaemon:
                             if new_exposure > clamped_exposure else ''
                         print(arm + ' exposure {:.2f}s counts {:.0f} ADU -> {:.2f}s{}'
                               .format(exposure, counts, clamped_exposure, clamped_desc))
+
+                        observatory.log.info('opsd', 'autoflat: {} {:.2f}s {:.0f} ADU -> {:.2f}s{}'
+                                             .format(arm, exposure, counts, clamped_exposure,
+                                                     clamped_desc))
 
                         if is_evening:
                             # Sky is decreasing in brightness
@@ -509,15 +515,18 @@ class OperationsDaemon:
                                     pipeline.set_archive(arm, False)
 
                         if last_state != state[arm]:
-                            print(arm + ' ' + AutoFlatState.Names[last_state] + ' -> ' \
-                                + AutoFlatState.Names[state[arm]])
+                            print('autoflat: ' + arm + ' ' + AutoFlatState.Names[last_state] \
+                                + ' -> ' + AutoFlatState.Names[state[arm]])
+                            observatory.log.info('opsd', 'autoflat: {} arm {} -> {}'.format(
+                                arm, AutoFlatState.Names[last_state],
+                                AutoFlatState.Names[state[arm]]))
 
                         if state[arm] != AutoFlatState.Complete:
                             with daemon[arm].connect() as cam:
                                 cam.set_exposure(clamped_exposure)
                                 cam.start_sequence(1)
                 except Exception as e:
-                    print('failed to parse frame callback for arm ' + str(arm))
+                    print('autoflat: failed to parse frame callback for arm ' + str(arm))
                     print(e)
                     if arm is not None:
                         state[arm] = AutoFlatState.Complete
@@ -557,7 +566,7 @@ class OperationsDaemon:
 
                 return CommandStatus.Succeeded
             except Exception as e:
-                print('exception during autoflat:')
+                print('autoflat: caught exception:')
                 print(e)
                 return CommandStatus.Failed
             finally:
