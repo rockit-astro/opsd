@@ -531,20 +531,21 @@ class OperationsDaemon:
                     while True:
                         self._telescope_condition.wait(5)
                         if all([state[arm] == AutoFlatState.Complete for arm in state]):
-                            self._telescope_active = False
+                            return CommandStatus.Succeeded
 
                         if not self._telescope_active:
-                            break
+                            return CommandStatus.Failed
 
-                    with observatory.daemons.onemetre_pipeline.connect() as pipeline:
-                        pipeline.set_intensity_stats(False)
                 return CommandStatus.Succeeded
             except Exception as e:
-                print('exception during autoflat setup:')
+                print('exception during autoflat:')
                 print(e)
                 return CommandStatus.Failed
             finally:
+                self._telescope_active = False
                 self._frame_watchers.remove(received_frame)
+                with observatory.daemons.onemetre_pipeline.connect() as pipeline:
+                    pipeline.set_intensity_stats(False)
 
     @Pyro4.expose
     def stop_telescope(self):
