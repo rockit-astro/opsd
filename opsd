@@ -90,6 +90,11 @@ AUTOACQUIRE_MAX_READOUT_PROCESS_TIME = 15
 # Aim for an accuracy of 1 arcsec
 AUTOACQUIRE_POINTING_THRESHOLD = 1.0
 
+# Number of attempts before we give up
+AUTOACQUIRE_ADJUST_ATTEMPTS = 5
+
+AUTOACQUIRE_WCS_ATTEMPTS = 3
+
 # Offset in radians to transform red camera coordinates to blue camera coordinates
 AUTOACQUIRE_RED_CAMERA_OFFSET = (2.043859e-4 * u.radian, 4.899995e-6 * u.radian)
 
@@ -625,10 +630,12 @@ class OperationsDaemon:
                             observatory.log.info('opsd', 'autoacquire: slew failed')
                             return CommandStatus.TelescopeSlewFailed
 
-                    # Wait a couple of seconds for the telescope position to stabilize
-                    time.sleep(2)
+                    # Wait a few of seconds for the telescope position to stabilize
+                    time.sleep(5)
 
                     # Refine positioning by taking images and using the WCS to adjust
+                    adjust_attempts = 0
+                    wcs_attempts = 0
                     while True:
                         for arm in CAM_DAEMON:
                             processed[arm] = False
@@ -674,14 +681,34 @@ class OperationsDaemon:
                             position = SkyCoord(c.ra + o[0], c.dec + o[1])
                             position_arm = 'RED'
 
-                        if position is None:
+                        if wcs_attempts >= AUTOACQUIRE_WCS_ATTEMPTS:
+                            observatory.log.info('opsd', 'autoacquire: WCS failed')
                             return CommandStatus.CoordinateSolutionFailed
 
-                        # TODO: Requires newer astropy?
+                        if position is None:
+                            wcs_attempts += 1
+                            print('autoacquire: WCS attempt {} of {} failed'.format(
+                                wcs_attempts, AUTOACQUIRE_WCS_ATTEMPTS))
+
+                            # return to start of loop to try another exposure
+                            continue
+                        else:
+                            wcs_attempts = 0
+
+                        if not self._telescope_active:
+                            return CommandStatus.Failed
+
+                        # TODO: Requires newer astropy!
                         # offset = position.spherical_offsets_to(target)
                         delta_ra = target.ra - position.ra
                         delta_dec = target.dec - position.dec
                         separation = position.separation(target).arcsecond
+
+                        if adjust_attempts > AUTOACQUIRE_ADJUST_ATTEMPTS:
+                            print('autoacquire: giving up after ' + str(adjust_attempts) \
+                                  + ' attempts with {:.2f} arcsec delta'.format(separation))
+                            observatory.log.info('opsd', 'autoacquire: pointing failed to converge')
+                            return CommandStatus.Failed
 
                         # Apply offset or break if close enough
                         if separation < AUTOACQUIRE_POINTING_THRESHOLD:
@@ -704,9 +731,9 @@ class OperationsDaemon:
                                       + str(telstatus))
                                 return CommandStatus.TelescopeSlewFailed
 
-                        # Wait a couple of seconds for the telescope position to stabilize
-                        time.sleep(2)
-
+                        # Wait a few of seconds for the telescope position to stabilize
+                        time.sleep(5)
+                        adjust_attempts += 1
                         if not self._telescope_active:
                             return CommandStatus.Failed
 
