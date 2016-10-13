@@ -38,6 +38,7 @@ DOME_DAEMON = observatory.daemons.onemetre_dome
 TEL_DAEMON = observatory.daemons.onemetre_telescope
 PIPELINE_DAEMON = observatory.daemons.onemetre_pipeline
 ENVIRONMENT_DAEMON = observatory.daemons.onemetre_environment
+POWER_DAEMON = observatory.daemons.onemetre_power
 CAM_DAEMON = {
     'BLUE': observatory.daemons.onemetre_blue_camera,
     'RED': observatory.daemons.onemetre_red_camera
@@ -610,6 +611,11 @@ class OperationsDaemon:
                             if cam.report_status()['state'] != CameraStatus.Idle:
                                 return CommandStatus.CameraActive
 
+                    # Give up early if the drive power is disabled
+                    with POWER_DAEMON.connect() as power:
+                        if not power.value('telescope_80v'):
+                            return CommandStatus.TelescopeSlewFailed
+
                     with PIPELINE_DAEMON.connect() as pipeline:
                         pipeline.set_wcs(True)
                         for arm in CAM_DAEMON:
@@ -618,7 +624,6 @@ class OperationsDaemon:
                     # Move the telescope to the requested coordinates
                     # This will be accurate to within a few arcmin
                     with TEL_DAEMON.connect(timeout=AUTOACQUIRE_SLEW_TIMEOUT) as tel:
-                        # TODO: Check telescope drive power
                         target_str = target.to_string('hmsdms', sep=':')
                         print('autoacquire: slewing to {}'.format(target_str))
                         observatory.log.info('opsd', 'autoacquire: slewing telescope to {}'.format(
