@@ -652,10 +652,6 @@ class OperationsDaemon:
                                 cam.set_exposure(AUTOACQUIRE_EXPOSURE_LENGTH)
                                 cam.start_sequence(1)
 
-                                # Stagger exposure to work around conflicts with pyds9
-                                # TODO: remove this workaround
-                                time.sleep(1)
-
                         # Wait for exposure + max timeout
                         # Will be woken up early once all frames are received
                         wait = AUTOACQUIRE_EXPOSURE_LENGTH + AUTOACQUIRE_MAX_READOUT_PROCESS_TIME
