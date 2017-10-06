@@ -9,7 +9,8 @@ adduser --uid "${USERID}" hostuser
 # Install dependencies
 yum -y clean all
 yum -y clean expire-cache
-yum -y install rpm-build make git
+yum -y install rpm-build make git epel-release
+yum -y install python34-devel
 
 # Run make command as the default user so that generated files aren't owned by root
 su hostuser -c "make"

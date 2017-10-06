@@ -19,14 +19,15 @@
 
 # pylint: disable=invalid-name
 # pylint: disable=broad-except
-# pylint: disable=too-few-public-methods
 # pylint: disable=too-many-branches
 # pylint: disable=too-many-statements
+# pylint: disable=too-many-return-statements
 # pylint: disable=too-many-instance-attributes
 # pylint: disable=too-many-locals
-# pylint: disable=too-many-return-statements
+# pylint: disable=too-few-public-methods
 
 import datetime
+import sys
 import threading
 import time
 from astropy.coordinates import SkyCoord
@@ -38,11 +39,26 @@ from warwick.observatory.common import (
     log,
     TryLock)
 
-DOME_DAEMON = daemons.onemetre_dome
+from warwick.w1m.operations import (
+    DomeController,
+    DomeStatus,
+    CommandStatus,
+    OperationsMode,
+    AutoFlatState
+)
+
+from warwick.w1m.environment import (
+    ParameterStatus
+)
+
+# Include more detailed exceptions
+sys.excepthook = Pyro4.util.excepthook
+
 TEL_DAEMON = daemons.onemetre_telescope
 PIPELINE_DAEMON = daemons.onemetre_pipeline
 ENVIRONMENT_DAEMON = daemons.onemetre_environment
 POWER_DAEMON = daemons.onemetre_power
+
 CAM_DAEMON = {
     'BLUE': daemons.onemetre_blue_camera,
     'RED': daemons.onemetre_red_camera
@@ -58,7 +74,7 @@ LOOP_DELAY = 10
 # The dome heartbeat is pinged once per LOOP_DELAY when the dome is under
 # automatic control and is fully open or fully closed.  This timeout should
 # be large enough to account for the time it takes to open and close the dome
-DOME_HEARTBEAT_TIMEOUT = 120
+DOME_HEARTBEAT_TIMEOUT = 119
 
 # Exposure fudge factor to account for changing sky brightness
 AUTOFLAT_EVENING_SCALE = 1.1
@@ -108,57 +124,9 @@ AUTOACQUIRE_RED_CAMERA_OFFSET = (2.043859e-4 * u.radian, 4.899995e-6 * u.radian)
 AUTOACQUIRE_SLEW_TIMEOUT = 60
 
 # This should be kept in sync with the dictionary in ops
-class CommandStatus:
-    """Numeric return codes"""
-    # General error codes
-    Succeeded = 0
-    Failed = 1
-    Blocked = 2
-    InErrorState = 3
-
-    CameraActive = 11
-
-    CoordinateSolutionFailed = 12
-    TelescopeSlewFailed = 13
-
-class OperationsMode:
-    """Operational status"""
-    Error, Automatic, Manual = range(3)
-    Names = ['Error', 'Automatic', 'Manual']
-
 class CameraStatus:
     """Camera status, from camd"""
     Disabled, Initializing, Idle, Acquiring, Reading, Aborting = range(6)
-
-class DomeStatus:
-    """Dome status, from domed"""
-    Closed, Open, Moving, Timeout = range(4)
-    Names = ['Closed', 'Open', 'Moving', 'Timeout']
-
-def ParseDomeStatus(status):
-    """Parses the return value from dome.status() into a DomeStatus"""
-    if status[4] <= 0:
-        return DomeStatus.Timeout
-    if status[1] == 0 and status[2] == 0:
-        return DomeStatus.Closed
-    if status[1] == 1 and status[2] == 1:
-        return DomeStatus.Open
-    return DomeStatus.Moving
-
-class DomeCommandStatus:
-    """Numeric return codes"""
-    # General error codes
-    Succeeded = 0
-    Failed = 1
-    Blocked = 2
-    HeartbeatTimedOut = 3
-    HeartbeatCloseInProgress = 4
-    EastShutterMustBeFullyOpen = 10
-
-class AutoFlatState:
-    """Possible states of the AutoFlat routine"""
-    Bias, Waiting, Saving, Complete = range(4)
-    Names = ['Bias', 'Waiting', 'Saving', 'Complete']
 
 class OperationsDaemon:
     """Daemon class that controls the overall observatory operations"""
@@ -167,19 +135,11 @@ class OperationsDaemon:
 
         self._observing = False
 
-        # "public" interface for changing dome state
-        self._dome_requested_mode = OperationsMode.Manual
-        self._dome_requested_status = DomeStatus.Closed
-
-        # internal dome state - take the lock writing or reading coherant state!
-        self._dome_lock = threading.Lock()
-        self._dome_mode = OperationsMode.Manual
-        self._dome_status = DomeStatus.Closed
-        self._dome_updated = datetime.datetime.utcnow()
-
-        domeloop = threading.Thread(target=self.__dome_loop)
-        domeloop.daemon = True
-        domeloop.start()
+        self._dome = DomeController(
+            daemons.onemetre_dome,
+            DOME_PYRO_OPENCLOSE_TIMEOUT,
+            DOME_HEARTBEAT_TIMEOUT,
+            LOOP_DELAY)
 
         # environment state - take the lock before writing or reading coherant state!
         self._environment_lock = threading.Lock()
@@ -194,103 +154,6 @@ class OperationsDaemon:
         runloop = threading.Thread(target=self.__ops_loop)
         runloop.daemon = True
         runloop.start()
-
-    def __dome_status(self, status):
-        """Reports status back to the main thread in a thread-safe manner"""
-        with self._dome_lock:
-            self._dome_status = status
-            self._dome_updated = datetime.datetime.utcnow()
-            return status
-
-    def __dome_mode(self, mode):
-        """Reports status back to the main thread in a thread-safe manner"""
-        with self._dome_lock:
-            self._dome_mode = mode
-            self._dome_updated = datetime.datetime.utcnow()
-            return mode
-
-    def __dome_loop(self):
-        """Thread that controls dome opening/closing to match requested state"""
-        while True:
-            # Handle requests from the user to change between manual and automatic mode
-            # Manual intervention is required to clear errors and return to automatic mode.
-            # If an error does occur the dome heartbeat will timeout, and it will close itself.
-            auto_failure = self._dome_mode == OperationsMode.Error and \
-                self._dome_requested_mode == OperationsMode.Automatic
-
-            if self._dome_requested_mode != self._dome_mode and not auto_failure:
-                print('dome: changing mode from ' + OperationsMode.Names[self._dome_mode] + \
-                    ' to ' + OperationsMode.Names[self._dome_requested_mode])
-
-                try:
-                    with DOME_DAEMON.connect() as dome:
-                        if self._dome_requested_mode == OperationsMode.Automatic:
-                            # TODO: Change this to lock to ops mode
-                            ret = dome.configure_heartbeat(DOME_HEARTBEAT_TIMEOUT)
-                            if ret == DomeCommandStatus.Succeeded:
-                                self.__dome_mode(OperationsMode.Automatic)
-                            else:
-                                print('error: failed to switch dome to auto with error: ', ret)
-                                self.__dome_mode(OperationsMode.Error)
-                        else:
-                            # Switch from auto or error state back to manual
-                            # TODO: Change this to unlock from ops mode
-                            # TODO: the dome daemon should disable the ops lock if it times out
-                            ret = dome.configure_heartbeat(0)
-
-                            if ret == DomeCommandStatus.Succeeded:
-                                self.__dome_mode(OperationsMode.Manual)
-                            else:
-                                print('error: failed to switch dome to manual with error: ', ret)
-                                self.__dome_mode(OperationsMode.Error)
-                except Exception as e:
-                    print('error: failed to communicate with the dome daemon: ', e)
-                    self.__dome_mode(OperationsMode.Error)
-
-            if self._dome_mode == OperationsMode.Automatic:
-                try:
-                    with DOME_DAEMON.connect() as dome:
-                        status = self.__dome_status(ParseDomeStatus(dome.status()))
-                    wants_status = self._dome_requested_status
-                    print('dome: is ' +  DomeStatus.Names[status] + ' and wants to be ' + \
-                        DomeStatus.Names[wants_status])
-
-                    if status == DomeStatus.Timeout:
-                        print('dome: detected heartbeat timeout!')
-                        self.__dome_mode(OperationsMode.Error)
-                    elif wants_status == DomeStatus.Closed and status == DomeStatus.Open:
-                        print('dome: sending heartbeat ping before closing')
-                        with DOME_DAEMON.connect() as dome:
-                            dome.ping_heartbeat()
-                        print('dome: closing')
-                        self.__dome_status(DomeStatus.Moving)
-                        with DOME_DAEMON.connect(timeout=DOME_PYRO_OPENCLOSE_TIMEOUT) as dome:
-                            ret = dome.close_shutters(east=True, west=True)
-                        if ret == DomeCommandStatus.Succeeded:
-                            self.__dome_status(DomeStatus.Closed)
-                        else:
-                            self.__dome_mode(OperationsMode.Error)
-                    elif wants_status == DomeStatus.Open and status == DomeStatus.Closed:
-                        print('dome: sending heartbeat ping before opening')
-                        with DOME_DAEMON.connect() as dome:
-                            dome.ping_heartbeat()
-                        print('dome: opening')
-                        self.__dome_status(DomeStatus.Moving)
-                        with DOME_DAEMON.connect(timeout=DOME_PYRO_OPENCLOSE_TIMEOUT) as dome:
-                            ret = dome.open_shutters(east=True, west=True)
-                        if ret == DomeCommandStatus.Succeeded:
-                            self.__dome_status(DomeStatus.Open)
-                        else:
-                            self.__dome_mode(OperationsMode.Error)
-                    elif status == wants_status:
-                        print('dome: sending heartbeat ping')
-                        with DOME_DAEMON.connect() as dome:
-                            dome.ping_heartbeat()
-                except Exception as e:
-                    print('error: failed to communicate with the dome daemon: ', e)
-                    self.__dome_mode(OperationsMode.Error)
-
-            time.sleep(LOOP_DELAY)
 
     def __environment_safe(self, safe):
         """Reports status back to the main thread in a thread-safe manner"""
@@ -307,7 +170,10 @@ class OperationsDaemon:
             try:
                 with ENVIRONMENT_DAEMON.connect() as environment:
                     status = environment.status()
-                environment_safe = status['can_observe']
+
+                environment_safe = not any(status[sensor]['status'] == ParameterStatus.Unsafe \
+                    for sensor in status)
+
                 if was_safe and not environment_safe:
                     log.warning('opsd', 'Environment has become unsafe')
                 elif not was_safe and environment_safe:
@@ -318,17 +184,23 @@ class OperationsDaemon:
                 log.info('opsd', 'Failed to query environmentd (' + str(e) + ')')
 
             self.__environment_safe(environment_safe)
-            if self._dome_requested_status == DomeStatus.Open and not environment_safe:
+
+            dome_status = self._dome.status()
+            if dome_status['requested_status'] == DomeStatus.Open and not environment_safe:
                 print('closing dome due to environment alert')
                 print('environment status is:')
                 print(status)
 
-            # Cancel observing if the weather turns bad
+            if dome_status['mode'] == OperationsMode.Error:
+                self._observing = False
+                log.warning('opsd', 'Observing condition disabled because of dome error')
+
             if not environment_safe and self._observing:
                 self._observing = False
-                log.info('opsd', 'Observing condition automatically disabled')
+                log.warning('opsd', 'Observing condition automatically disabled')
 
-            self._dome_requested_status = DomeStatus.Open if self._observing else DomeStatus.Closed
+
+            self._dome.request_status(DomeStatus.Open if self._observing else DomeStatus.Closed)
 
             # Check for requested status changes
             time.sleep(LOOP_DELAY)
@@ -340,12 +212,13 @@ class OperationsDaemon:
             if not success:
                 return CommandStatus.Blocked
 
-            # TODO: Require dome to be fully closed or open before switching to automatic
-            if automatic and self._dome_mode == OperationsMode.Error:
+            # Require dome to be fully closed or open before switching to automatic
+            dome_status = self._dome.status()
+            if automatic and dome_status['mode'] == OperationsMode.Error:
                 return CommandStatus.InErrorState
 
-            self._dome_requested_mode = OperationsMode.Automatic if automatic else \
-                OperationsMode.Manual
+            mode = OperationsMode.Automatic if automatic else OperationsMode.Manual
+            self._dome.request_mode(mode)
 
             log.info('opsd', 'Dome control manually changed to '
                      + ('automatic' if automatic else 'manual'))
@@ -359,7 +232,8 @@ class OperationsDaemon:
             if not success:
                 return CommandStatus.Blocked
 
-            if observing and self._dome_mode == OperationsMode.Error:
+            dome_status = self._dome.status()
+            if observing and dome_status['mode'] == OperationsMode.Error:
                 return CommandStatus.InErrorState
 
             self._observing = observing
@@ -371,21 +245,15 @@ class OperationsDaemon:
     @Pyro4.expose
     def status(self):
         """Query the latest status."""
-        data = {'observing': self._observing}
+        data = {
+            'observing': self._observing,
+            'dome': self._dome.status()
+        }
 
         with self._environment_lock:
             data.update({
                 'environment_safe': self._environment_safe,
                 'environment_updated': self._environment_updated.strftime('%Y-%m-%dT%H:%M:%SZ')
-            })
-
-        with self._dome_lock:
-            data.update({
-                'dome_mode': self._dome_mode,
-                'dome_status': self._dome_status,
-                'dome_updated': self._dome_updated.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                'dome_requested_mode': self._dome_requested_mode,
-                'dome_requested_status': self._dome_requested_status
             })
 
         return data

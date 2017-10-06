@@ -156,23 +156,24 @@ def print_status():
 
     print()
 
-    dome_date = datetime.datetime.strptime(status['dome_updated'], '%Y-%m-%dT%H:%M:%SZ')
+    dome = status['dome']
+    dome_date = datetime.datetime.strptime(dome['status_updated'], '%Y-%m-%dT%H:%M:%SZ')
     print('Dome status at ' + FMT_BOLD + dome_date.strftime('%H:%M:%S') + FMT_CLEAR + ':')
 
-    dome_mode = '    Control: ' + FMT_BOLD + OPS_MODES[status['dome_mode']] + FMT_CLEAR
-    if status['dome_mode'] != status['dome_requested_mode']:
-        dome_mode += ' (' + FMT_BOLD + OPS_MODES[status['dome_requested_mode']] + FMT_CLEAR + \
+    dome_mode = '    Control: ' + FMT_BOLD + OPS_MODES[dome['mode']] + FMT_CLEAR
+    if dome['mode'] != dome['requested_mode']:
+        dome_mode += ' (' + FMT_BOLD + OPS_MODES[dome['requested_mode']] + FMT_CLEAR + \
             ' queued)'
     print(dome_mode)
 
-    if status['dome_mode'] == 1:
+    if dome['mode'] == 1:
         observing = FMT_GREEN + 'ENABLED' if status['observing'] else FMT_RED + 'DISABLED'
         observing_status = '    Observing: ' + FMT_BOLD + observing + FMT_CLEAR
         print(observing_status)
-        dome_status = '    Shutters: ' + FMT_BOLD + DOME_STATUS_CODES[status['dome_status']] + \
+        dome_status = '    Shutters: ' + FMT_BOLD + DOME_STATUS_CODES[dome['status']] + \
             FMT_CLEAR
-        if status['dome_status'] != status['dome_requested_status']:
-            dome_status += ' (' + FMT_BOLD + DOME_STATUS_CODES[status['dome_requested_status']] + \
+        if dome['status'] != dome['requested_status']:
+            dome_status += ' (' + FMT_BOLD + DOME_STATUS_CODES[dome['requested_status']] + \
                 FMT_CLEAR + ' queued)'
         print(dome_status)
 
