@@ -25,7 +25,7 @@ import os
 import sys
 from astropy.coordinates import SkyCoord
 import Pyro4
-import warwick.observatory as observatory
+from warwick.observatory.common import daemons
 
 SCRIPT_NAME = os.path.basename(sys.argv[0])
 sys.excepthook = Pyro4.util.excepthook
@@ -89,9 +89,9 @@ def run_command(command):
 
 def dome_control(args):
     """Changes the dome between automatic and manual control"""
-    if len(args) > 0:
+    if args:
         if args[0] == 'auto' or args[0] == 'manual':
-            with observatory.daemons.onemetre_operations.connect() as ops:
+            with daemons.onemetre_operations.connect() as ops:
                 return ops.dome_control(args[0] == 'auto')
 
     print('usage: {} dome (auto|manual)'.format(SCRIPT_NAME))
@@ -99,9 +99,9 @@ def dome_control(args):
 
 def set_observing(args):
     """Enable or disable the global observing mode (opens the dome)"""
-    if len(args) > 0:
+    if args:
         if args[0] == 'enabled' or args[0] == 'disabled':
-            with observatory.daemons.onemetre_operations.connect() as ops:
+            with daemons.onemetre_operations.connect() as ops:
                 return ops.set_observing(args[0] == 'enabled')
 
     print('usage: {} observing (enabled|disabled)'.format(SCRIPT_NAME))
@@ -110,11 +110,11 @@ def set_observing(args):
 def autoflat():
     """Automatically runs the cameras (and eventually the telescope) to acquire flat frames"""
     try:
-        with observatory.daemons.onemetre_operations.connect(timeout=0) as ops:
+        with daemons.onemetre_operations.connect(timeout=0) as ops:
             return ops.autoflat()
     except KeyboardInterrupt:
         # ctrl-c terminates the running command
-        with observatory.daemons.onemetre_operations.connect() as ops:
+        with daemons.onemetre_operations.connect() as ops:
             return ops.stop_telescope()
     return -1
 
@@ -131,11 +131,11 @@ def acquire_field(args):
         return -1
 
     try:
-        with observatory.daemons.onemetre_operations.connect(timeout=0) as ops:
+        with daemons.onemetre_operations.connect(timeout=0) as ops:
             return ops.acquire_field(pos.ra.radian, pos.dec.radian)
     except KeyboardInterrupt:
         # ctrl-c terminates the running command
-        with observatory.daemons.onemetre_operations.connect() as ops:
+        with daemons.onemetre_operations.connect() as ops:
             return ops.stop_telescope()
     return -1
 
@@ -143,7 +143,7 @@ def print_status():
     """Prints the latest ops data in machine-readable form"""
     status = None
     try:
-        with observatory.daemons.onemetre_operations.connect() as ops:
+        with daemons.onemetre_operations.connect() as ops:
             status = ops.status()
     except Pyro4.errors.CommunicationError:
         print('error: unable to communicate with the operations daemon')
@@ -182,7 +182,7 @@ def print_json():
     """Prints the latest ops data in machine-readable form"""
     status = None
     try:
-        with observatory.daemons.onemetre_operations.connect() as ops:
+        with daemons.onemetre_operations.connect() as ops:
             status = ops.status()
     except Pyro4.errors.CommunicationError:
         print('error: unable to communicate with the operations daemon')
@@ -225,4 +225,3 @@ if __name__ == '__main__':
 
     # Command not found
     sys.exit(print_usage(SCRIPT_NAME))
-

@@ -23,6 +23,8 @@
 # pylint: disable=too-many-branches
 # pylint: disable=too-many-statements
 # pylint: disable=too-many-instance-attributes
+# pylint: disable=too-many-locals
+# pylint: disable=too-many-return-statements
 
 import datetime
 import threading
@@ -31,17 +33,19 @@ from astropy.coordinates import SkyCoord
 from astropy import units as u
 from astropy.wcs import WCS
 import Pyro4
-from warwick.observatory import TryLock
-import warwick.observatory as observatory
+from warwick.observatory.common import (
+    daemons,
+    log,
+    TryLock)
 
-DOME_DAEMON = observatory.daemons.onemetre_dome
-TEL_DAEMON = observatory.daemons.onemetre_telescope
-PIPELINE_DAEMON = observatory.daemons.onemetre_pipeline
-ENVIRONMENT_DAEMON = observatory.daemons.onemetre_environment
-POWER_DAEMON = observatory.daemons.onemetre_power
+DOME_DAEMON = daemons.onemetre_dome
+TEL_DAEMON = daemons.onemetre_telescope
+PIPELINE_DAEMON = daemons.onemetre_pipeline
+ENVIRONMENT_DAEMON = daemons.onemetre_environment
+POWER_DAEMON = daemons.onemetre_power
 CAM_DAEMON = {
-    'BLUE': observatory.daemons.onemetre_blue_camera,
-    'RED': observatory.daemons.onemetre_red_camera
+    'BLUE': daemons.onemetre_blue_camera,
+    'RED': daemons.onemetre_red_camera
 }
 
 # Communications timeout when opening or closing the dome (takes up to ~80 seconds)
@@ -97,7 +101,9 @@ AUTOACQUIRE_ADJUST_ATTEMPTS = 5
 AUTOACQUIRE_WCS_ATTEMPTS = 3
 
 # Offset in radians to transform red camera coordinates to blue camera coordinates
+# pylint: disable=no-member
 AUTOACQUIRE_RED_CAMERA_OFFSET = (2.043859e-4 * u.radian, 4.899995e-6 * u.radian)
+# pylint: enable=no-member
 
 AUTOACQUIRE_SLEW_TIMEOUT = 60
 
@@ -135,10 +141,9 @@ def ParseDomeStatus(status):
         return DomeStatus.Timeout
     if status[1] == 0 and status[2] == 0:
         return DomeStatus.Closed
-    elif status[1] == 1 and status[2] == 1:
+    if status[1] == 1 and status[2] == 1:
         return DomeStatus.Open
-    else:
-        return DomeStatus.Moving
+    return DomeStatus.Moving
 
 class DomeCommandStatus:
     """Numeric return codes"""
@@ -304,13 +309,13 @@ class OperationsDaemon:
                     status = environment.status()
                 environment_safe = status['can_observe']
                 if was_safe and not environment_safe:
-                    observatory.log.warning('opsd', 'Environment has become unsafe')
+                    log.warning('opsd', 'Environment has become unsafe')
                 elif not was_safe and environment_safe:
-                    observatory.log.info('opsd', 'Environment trigger timed out')
+                    log.info('opsd', 'Environment trigger timed out')
             except Exception as e:
                 environment_safe = False
                 print('error: failed to query environment: ', e)
-                observatory.log.info('opsd', 'Failed to query environmentd (' + str(e) + ')')
+                log.info('opsd', 'Failed to query environmentd (' + str(e) + ')')
 
             self.__environment_safe(environment_safe)
             if self._dome_requested_status == DomeStatus.Open and not environment_safe:
@@ -321,7 +326,7 @@ class OperationsDaemon:
             # Cancel observing if the weather turns bad
             if not environment_safe and self._observing:
                 self._observing = False
-                observatory.log.info('opsd', 'Observing condition automatically disabled')
+                log.info('opsd', 'Observing condition automatically disabled')
 
             self._dome_requested_status = DomeStatus.Open if self._observing else DomeStatus.Closed
 
@@ -342,8 +347,8 @@ class OperationsDaemon:
             self._dome_requested_mode = OperationsMode.Automatic if automatic else \
                 OperationsMode.Manual
 
-            observatory.log.info('opsd', 'Dome control manually changed to '
-                                 + ('automatic' if automatic else 'manual'))
+            log.info('opsd', 'Dome control manually changed to '
+                     + ('automatic' if automatic else 'manual'))
 
             return CommandStatus.Succeeded
 
@@ -358,8 +363,8 @@ class OperationsDaemon:
                 return CommandStatus.InErrorState
 
             self._observing = observing
-            observatory.log.info('opsd', 'Observing condition manually '
-                                 + ('enabled' if observing else 'disabled'))
+            log.info('opsd', 'Observing condition manually '
+                     + ('enabled' if observing else 'disabled'))
 
             return CommandStatus.Succeeded
 
@@ -423,7 +428,7 @@ class OperationsDaemon:
                     if state[arm] == AutoFlatState.Bias:
                         bias[arm] = headers['MEDCNTS']
                         print(arm + ' bias level is {:.0f} ADU'.format(bias[arm]))
-                        observatory.log.info('opsd', '{} bias is {:.0f} ADU'.format(arm, bias[arm]))
+                        log.info('opsd', '{} bias is {:.0f} ADU'.format(arm, bias[arm]))
 
                         # Take the first flat image
                         state[arm] = AutoFlatState.Waiting
@@ -455,9 +460,8 @@ class OperationsDaemon:
                         print(arm + ' exposure {:.2f}s counts {:.0f} ADU -> {:.2f}s{}'
                               .format(exposure, counts, clamped_exposure, clamped_desc))
 
-                        observatory.log.info('opsd', 'autoflat: {} {:.2f}s {:.0f} ADU -> {:.2f}s{}'
-                                             .format(arm, exposure, counts, clamped_exposure,
-                                                     clamped_desc))
+                        log.info('opsd', 'autoflat: {} {:.2f}s {:.0f} ADU -> {:.2f}s{}'
+                                 .format(arm, exposure, counts, clamped_exposure, clamped_desc))
 
                         if is_evening:
                             # Sky is decreasing in brightness
@@ -494,7 +498,7 @@ class OperationsDaemon:
                         if last_state != state[arm]:
                             print('autoflat: ' + arm + ' ' + AutoFlatState.Names[last_state] \
                                 + ' -> ' + AutoFlatState.Names[state[arm]])
-                            observatory.log.info('opsd', 'autoflat: {} arm {} -> {}'.format(
+                            log.info('opsd', 'autoflat: {} arm {} -> {}'.format(
                                 arm, AutoFlatState.Names[last_state],
                                 AutoFlatState.Names[state[arm]]))
 
@@ -626,13 +630,13 @@ class OperationsDaemon:
                     with TEL_DAEMON.connect(timeout=AUTOACQUIRE_SLEW_TIMEOUT) as tel:
                         target_str = target.to_string('hmsdms', sep=':')
                         print('autoacquire: slewing to {}'.format(target_str))
-                        observatory.log.info('opsd', 'autoacquire: slewing telescope to {}'.format(
+                        log.info('opsd', 'autoacquire: slewing telescope to {}'.format(
                             target_str))
                         telstatus = tel.track_radec(ra_radians, dec_radians)
                         if telstatus != CommandStatus.Succeeded:
                             print('autoacquire: failed to move telescope with error ' \
                                   + str(telstatus))
-                            observatory.log.info('opsd', 'autoacquire: slew failed')
+                            log.info('opsd', 'autoacquire: slew failed')
                             return CommandStatus.TelescopeSlewFailed
 
                     # Wait a few of seconds for the telescope position to stabilize
@@ -683,7 +687,7 @@ class OperationsDaemon:
                             position_arm = 'RED'
 
                         if wcs_attempts >= AUTOACQUIRE_WCS_ATTEMPTS:
-                            observatory.log.info('opsd', 'autoacquire: WCS failed')
+                            log.info('opsd', 'autoacquire: WCS failed')
                             return CommandStatus.CoordinateSolutionFailed
 
                         if position is None:
@@ -708,22 +712,24 @@ class OperationsDaemon:
                         if adjust_attempts > AUTOACQUIRE_ADJUST_ATTEMPTS:
                             print('autoacquire: giving up after ' + str(adjust_attempts) \
                                   + ' attempts with {:.2f} arcsec delta'.format(separation))
-                            observatory.log.info('opsd', 'autoacquire: pointing failed to converge')
+                            log.info('opsd', 'autoacquire: pointing failed to converge')
                             return CommandStatus.Failed
 
                         # Apply offset or break if close enough
                         if separation < AUTOACQUIRE_POINTING_THRESHOLD:
                             print('autoacquire: reached target with delta {:.2f} arcsec'.format(
                                 separation))
-                            observatory.log.info('opsd', 'autoacquire: pointing complete')
+                            log.info('opsd', 'autoacquire: pointing complete')
                             return CommandStatus.Succeeded
 
+                        # pylint: disable=no-member
                         delta_ra_str = delta_ra.to_string(u.hourangle, sep=':')
+                        # pylint: enable=no-member
                         delta_dec_str = delta_dec.to_string(sep=':')
                         print('autoacquire: applying offset from {}: {}, {}'.format(
                             position_arm, delta_ra_str, delta_dec_str))
-                        observatory.log.info('opsd', 'autoacquire: offsetting telescope by {} {}'
-                                             .format(delta_ra_str, delta_dec_str))
+                        log.info('opsd', 'autoacquire: offsetting telescope by {} {}'
+                                 .format(delta_ra_str, delta_dec_str))
 
                         with TEL_DAEMON.connect(timeout=AUTOACQUIRE_SLEW_TIMEOUT) as tel:
                             telstatus = tel.offset_radec(delta_ra.radian, delta_dec.radian)
@@ -756,5 +762,4 @@ class OperationsDaemon:
         return CommandStatus.Succeeded
 
 if __name__ == '__main__':
-    observatory.daemons.onemetre_operations.launch(OperationsDaemon())
-
+    daemons.onemetre_operations.launch(OperationsDaemon())
