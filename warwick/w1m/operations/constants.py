@@ -36,8 +36,3 @@ class OperationsMode:
     """Operational status"""
     Error, Automatic, Manual = range(3)
     Names = ['Error', 'Automatic', 'Manual']
-
-class AutoFlatState:
-    """Possible states of the AutoFlat routine"""
-    Bias, Waiting, Saving, Complete = range(4)
-    Names = ['Bias', 'Waiting', 'Saving', 'Complete']

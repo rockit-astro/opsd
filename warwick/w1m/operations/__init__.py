@@ -18,4 +18,5 @@
 """opsd common code"""
 
 from .dome_controller import DomeController, DomeStatus
-from .constants import CommandStatus, OperationsMode, AutoFlatState
+from .telescope_controller import TelescopeController, AutoFlatState
+from .constants import CommandStatus, OperationsMode
