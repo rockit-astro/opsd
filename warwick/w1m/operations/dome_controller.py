@@ -26,7 +26,6 @@
 
 import datetime
 import threading
-import time
 
 from warwick.observatory.common import log
 from warwick.w1m.dome import (
@@ -62,6 +61,8 @@ class DomeController(object):
     """Class managing automatic dome control for the operations daemon"""
     def __init__(self, daemon, open_close_timeout, heartbeat_timeout, loop_delay=10):
         self._lock = threading.Lock()
+        self._wait_condition = threading.Condition()
+
         self._daemon = daemon
         self._open_close_timeout = open_close_timeout
         self._heartbeat_timeout = heartbeat_timeout
@@ -197,8 +198,14 @@ class DomeController(object):
                     print('error: failed to communicate with the dome daemon: ', e)
                     self.__set_mode(OperationsMode.Error)
 
-            time.sleep(self._loop_delay)
+            # Wait for the next loop period, unless woken up early by __shortcut_loop_wait
+            with self._wait_condition:
+                self._wait_condition.wait(self._loop_delay)
 
+    def __shortcut_loop_wait(self):
+        """Makes the run loop continue immediately if it is currently sleeping"""
+        with self._wait_condition:
+            self._wait_condition.notify_all()
 
     def status(self):
         """Returns a tuple of the current dome status (Open/Closed/Moving/etc) and update time"""
@@ -216,8 +223,10 @@ class DomeController(object):
         """Request a dome status change (open/closed)"""
         with self._lock:
             self._requested_status = status
+            self.__shortcut_loop_wait()
 
     def request_mode(self, mode):
         """Request a dome mode change (automatic/manual)"""
         with self._lock:
             self._requested_mode = mode
+            self.__shortcut_loop_wait()

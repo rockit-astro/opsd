@@ -19,11 +19,11 @@
 
 # pylint: disable=invalid-name
 # pylint: disable=broad-except
+# pylint: disable=too-many-instance-attributes
 
 import datetime
 import sys
 import threading
-import time
 from astropy import units as u
 import Pyro4
 from warwick.observatory.common import (
@@ -113,7 +113,7 @@ class OperationsDaemon:
     """Daemon class that controls the overall observatory operations"""
     def __init__(self):
         self._command_lock = threading.Lock()
-
+        self._wait_condition = threading.Condition()
         self._observing = False
 
         self._dome = DomeController(
@@ -180,8 +180,14 @@ class OperationsDaemon:
 
             self._dome.request_status(DomeStatus.Open if self._observing else DomeStatus.Closed)
 
-            # Check for requested status changes
-            time.sleep(LOOP_DELAY)
+            # Wait for the next loop period, unless woken up early by __shortcut_loop_wait
+            with self._wait_condition:
+                self._wait_condition.wait(LOOP_DELAY)
+
+    def __shortcut_loop_wait(self):
+        """Makes the run loop continue immediately if it is currently sleeping"""
+        with self._wait_condition:
+            self._wait_condition.notify_all()
 
     @Pyro4.expose
     def dome_control(self, automatic):
@@ -215,6 +221,7 @@ class OperationsDaemon:
                 return CommandStatus.InErrorState
 
             self._observing = observing
+            self.__shortcut_loop_wait()
             log.info('opsd', 'Observing condition manually '
                      + ('enabled' if observing else 'disabled'))
 
