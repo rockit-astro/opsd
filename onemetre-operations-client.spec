@@ -7,10 +7,10 @@ License:   GPL-3.0
 Group:     Unspecified
 BuildArch: noarch
 %if 0%{?suse_version}
-Requires:  python3, python34-Pyro4, python34-warwick-observatory-common, python34-astropy
+Requires:  python3, python34-Pyro4, python34-warwick-observatory-common, python34-warwick-w1m-operations, python34-astropy
 %endif
 %if 0%{?centos_ver}
-Requires:  python34, python34-Pyro4, python34-warwick-observatory-common, python34-astropy
+Requires:  python34, python34-Pyro4, python34-warwick-observatory-common, python34-warwick-w1m-operations, python34-astropy
 %endif
 
 %description

@@ -26,6 +26,9 @@ import sys
 from astropy.coordinates import SkyCoord
 import Pyro4
 from warwick.observatory.common import daemons
+from warwick.w1m.operations import (
+    DehumidifierMode
+)
 
 SCRIPT_NAME = os.path.basename(sys.argv[0])
 sys.excepthook = Pyro4.util.excepthook
@@ -97,6 +100,16 @@ def dome_control(args):
     print('usage: {} dome (auto|manual)'.format(SCRIPT_NAME))
     return -1
 
+def dehumidifier_control(args):
+    """Changes the dehumidifier between automatic and manual control"""
+    if args:
+        if args[0] == 'auto' or args[0] == 'manual':
+            with daemons.onemetre_operations.connect() as ops:
+                return ops.dehumidifier_control(args[0] == 'auto')
+
+    print('usage: {} dehumidifier (auto|manual)'.format(SCRIPT_NAME))
+    return -1
+
 def set_observing(args):
     """Enable or disable the global observing mode (opens the dome)"""
     if args:
@@ -154,6 +167,14 @@ def print_status():
     print('    Conditions: ' + FMT_BOLD + (FMT_GREEN + 'SAFE' if status['environment_safe'] else \
         FMT_RED + 'NOT SAFE') + FMT_CLEAR)
 
+    dehumidifier_mode = FMT_BOLD + FMT_YELLOW + 'MANUAL' + FMT_CLEAR
+    if status['dehumidifier']['mode'] == DehumidifierMode.Automatic:
+        dehumidifier_active = status['dehumidifier']['active']
+        dehumidifier_mode = FMT_BOLD + FMT_GREEN + 'AUTOMATIC' + FMT_CLEAR + ' (' + FMT_BOLD
+        dehumidifier_mode += FMT_RED + 'ENABLED' if dehumidifier_active else FMT_GREEN + 'DISABLED'
+        dehumidifier_mode += FMT_CLEAR + ')'
+
+    print('   Dehumidfier: ' + dehumidifier_mode)
     print()
 
     dome = status['dome']
@@ -197,12 +218,13 @@ def print_usage(name):
     """Prints the utility help"""
     print('Usage: {} <command>'.format(name))
     print()
-    print('   json        print a machine-readable summary of the operations status')
-    print('   status      print a human-readable summary of the operations status')
-    print('   dome        toggle dome between manual and automatic control')
-    print('   observing   toggle observing mode on or off')
-    print('   autoflat    acquire flat field frames')
-    print('   acquire     acquire field to high positional accuracy')
+    print('   json         print a machine-readable summary of the operations status')
+    print('   status       print a human-readable summary of the operations status')
+    print('   dehumidifier toggle dehumidifier between manual and automatic control')
+    print('   dome         toggle dome between manual and automatic control')
+    print('   observing    toggle observing mode on or off')
+    print('   autoflat     acquire flat field frames')
+    print('   acquire      acquire field to high positional accuracy')
     print()
 
     return 1
@@ -217,6 +239,8 @@ if __name__ == '__main__':
         sys.exit(print_json())
     elif sys.argv[1] == 'dome':
         run_command(lambda: dome_control(sys.argv[2:]))
+    elif sys.argv[1] == 'dehumidifier':
+        run_command(lambda: dehumidifier_control(sys.argv[2:]))
     elif sys.argv[1] == 'observing':
         run_command(lambda: set_observing(sys.argv[2:]))
     elif sys.argv[1] == 'autoflat':
