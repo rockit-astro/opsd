@@ -1,5 +1,5 @@
 Name:      onemetre-operations-client
-Version:   2.0.1
+Version:   2.1.0
 Release:   0
 Url:       https://github.com/warwick-one-metre/opsd
 Summary:   Operations client for the Warwick one-metre telescope.

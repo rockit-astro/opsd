@@ -29,8 +29,9 @@ import Pyro4
 from warwick.observatory.common import (
     daemons,
     log,
+    IP,
     TryLock)
-
+from warwick.observatory.common.helpers import pyro_client_matches
 from warwick.w1m.operations import (
     DomeController,
     DomeStatus,
@@ -39,13 +40,18 @@ from warwick.w1m.operations import (
     OperationsMode,
     DehumidifierMode
 )
-
 from warwick.w1m.environment import (
     ParameterStatus
 )
 
 # Include more detailed exceptions
 sys.excepthook = Pyro4.util.excepthook
+
+# Machines that are allowed to issue operations commands
+CONTROL_IPS = [IP.OneMetreDome, IP.OneMetreTCS]
+
+# Machines that are allowed to notify processed frames
+PROCESSED_FRAME_IPS = [IP.OneMetreTCS]
 
 # Communications timeout when opening or closing the dome (takes up to ~80 seconds)
 DOME_PYRO_OPENCLOSE_TIMEOUT = 120
@@ -248,6 +254,9 @@ class OperationsDaemon:
     @Pyro4.expose
     def dome_control(self, automatic):
         """Switch the dome between manual (observer) and automatic (opsd) control"""
+        if not pyro_client_matches(CONTROL_IPS):
+            return CommandStatus.InvalidControlIP
+
         with TryLock(self._command_lock) as success:
             if not success:
                 return CommandStatus.Blocked
@@ -268,6 +277,9 @@ class OperationsDaemon:
     @Pyro4.expose
     def dehumidifier_control(self, mode):
         """Enable or disable automatic dehumidifier control"""
+        if not pyro_client_matches(CONTROL_IPS):
+            return CommandStatus.InvalidControlIP
+
         with TryLock(self._command_lock) as success:
             if not success:
                 return CommandStatus.Blocked
@@ -281,6 +293,9 @@ class OperationsDaemon:
     @Pyro4.expose
     def set_observing(self, observing):
         """Enable or disable the global observing mode (opens the dome)"""
+        if not pyro_client_matches(CONTROL_IPS):
+            return CommandStatus.InvalidControlIP
+
         with TryLock(self._command_lock) as success:
             if not success:
                 return CommandStatus.Blocked
@@ -320,21 +335,33 @@ class OperationsDaemon:
     def notify_processed_frame(self, headers):
         """Called by the pipeline daemon to notify that a new frame has completed processing
            headers is a dictionary holding the key-value pairs from the fits header"""
+        if not pyro_client_matches(PROCESSED_FRAME_IPS):
+            return
+
         self._telescope.notify_processed_frame(headers)
 
     @Pyro4.expose
     def autoflat(self):
         """Automatically runs the cameras (and eventually the telescope) to acquire flat frames"""
+        if not pyro_client_matches(CONTROL_IPS):
+            return CommandStatus.InvalidControlIP
+
         return self._telescope.autoflat()
 
     @Pyro4.expose
     def acquire_field(self, ra_radians, dec_radians):
         """Automatically home in on a target position"""
+        if not pyro_client_matches(CONTROL_IPS):
+            return CommandStatus.InvalidControlIP
+
         return self._telescope.acquire_field(ra_radians, dec_radians)
 
     @Pyro4.expose
     def stop_telescope(self):
         """Cancels an active telescope task"""
+        if not pyro_client_matches(CONTROL_IPS):
+            return CommandStatus.InvalidControlIP
+
         return self._telescope.stop()
 
 if __name__ == '__main__':

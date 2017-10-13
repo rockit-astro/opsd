@@ -26,6 +26,7 @@ class CommandStatus:
     Failed = 1
     Blocked = 2
     InErrorState = 3
+    InvalidControlIP = 10
 
     CameraActive = 11
     CoordinateSolutionFailed = 12
@@ -36,6 +37,7 @@ class CommandStatus:
         1: 'error: command failed',
         2: 'error: another command is already running',
         3: 'error: error state must first be cleared by switching to manual mode',
+        10: 'error: command not accepted from this IP',
 
         11: 'error: camera is not idle',
         12: 'error: acquisition image WCS solution failed',
