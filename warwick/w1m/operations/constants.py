@@ -28,9 +28,29 @@ class CommandStatus:
     InErrorState = 3
 
     CameraActive = 11
-
     CoordinateSolutionFailed = 12
     TelescopeSlewFailed = 13
+
+    _messages = {
+        # General error codes
+        1: 'error: command failed',
+        2: 'error: another command is already running',
+        3: 'error: error state must first be cleared by switching to manual mode',
+
+        11: 'error: camera is not idle',
+        12: 'error: acquisition image WCS solution failed',
+        13: 'error: telescope slew failed',
+
+        -100: 'error: terminated by user',
+        -101: 'error: unable to communicate with operations daemon'
+    }
+
+    @classmethod
+    def message(cls, error_code):
+        """Returns a human readable string describing an error code"""
+        if error_code in cls._messages:
+            return cls._messages[error_code]
+        return 'error: Unknown error code {}'.format(error_code)
 
 class OperationsMode:
     """Operational status"""

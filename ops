@@ -27,7 +27,8 @@ from astropy.coordinates import SkyCoord
 import Pyro4
 from warwick.observatory.common import daemons
 from warwick.w1m.operations import (
-    DehumidifierMode
+    DehumidifierMode,
+    CommandStatus
 )
 
 SCRIPT_NAME = os.path.basename(sys.argv[0])
@@ -39,22 +40,6 @@ FMT_CYAN = u'\033[96m'
 FMT_YELLOW = u'\033[93m'
 FMT_BOLD = u'\033[1m'
 FMT_CLEAR = u'\033[0m'
-
-# This should be kept in sync with the class in domed
-STATUS_CODES = {
-    # General error codes
-    1: 'error: command failed',
-    2: 'error: another command is already running',
-    3: 'error: error state must first be cleared by switching to manual mode',
-
-    11: 'error: camera is not idle',
-    12: 'error: acquisition image WCS solution failed',
-    13: 'error: telescope slew failed',
-
-    # ops specific codes
-    -100: 'error: terminated by user',
-    -101: 'error: unable to communicate with operations daemon'
-}
 
 OPS_MODES = {
     0: FMT_RED + 'ERROR',
@@ -84,10 +69,8 @@ def run_command(command):
         ret = -101
 
     # Print message associated with error codes, except for -1 (error handled locally)
-    if ret in STATUS_CODES:
-        print(STATUS_CODES[ret])
-    elif ret != -1 and ret != 0:
-        print('Returned unknown status code: {0}'.format(ret))
+    if ret != -1 and ret != 0:
+        print(CommandStatus.message(ret))
     sys.exit(ret)
 
 def dome_control(args):
