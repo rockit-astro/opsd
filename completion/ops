@@ -7,8 +7,7 @@ _ops()
     opts="status json dome dehumidifier observing autoflat acquire"
 
     case "${prev}" in
-        dome)
-        dehumidifier)
+        dome|dehumidifier)
             opts="auto manual"
             ;;
         observing)
