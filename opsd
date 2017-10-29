@@ -150,9 +150,10 @@ class OperationsDaemon:
         self._environment_updated = datetime.datetime.utcnow()
         self._environment_safe = False
 
-        self._dehumidifier_mode = DehumidifierMode.Manual
+        self._dehumidifier_mode = DehumidifierMode.Automatic
         self._dehumidifier_active = False
         self._dehumidifier_error = False
+        self._dehumidifier_humidity_error = True
 
         runloop = threading.Thread(target=self.__ops_loop)
         runloop.daemon = True
@@ -164,6 +165,18 @@ class OperationsDaemon:
         humidity = environment_latest(env['roomalert'], 'internal_humidity', age) or \
             environment_latest(env['vaisala'], 'relative_humidity', age) or \
             environment_latest(env['superwasp'], 'ext_humidity', age)
+
+        if humidity is None:
+            if not self._dehumidifier_humidity_error:
+                log.warning('opsd', 'Lost contact with all humidity sensors')
+                self._dehumidifier_humidity_error = True
+
+            # Can't do anything more without valid humidity data
+            return
+
+        if self._dehumidifier_humidity_error:
+            log.info('opsd', 'Restored contact with humidity sensor')
+            self._dehumidifier_humidity_error = False
 
         # Implement hysteresis to avoid flickering on/off when humidity is on thelimit
         limit = 'disable_below' if self._dehumidifier_active else 'enable_above'
