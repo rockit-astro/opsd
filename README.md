@@ -12,7 +12,7 @@ See [Software Infrastructure](https://github.com/warwick-one-metre/docs/wiki/Sof
 
 ### Software Setup
 
-After installing `onemetre-ops-server`, the `opsd` must be enabled using:
+After installing `onemetre-operations-server`, the `opsd` must be enabled using:
 ```
 sudo systemctl enable opsd.service
 ```
