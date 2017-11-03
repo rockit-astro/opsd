@@ -125,9 +125,12 @@ AUTOACQUIRE_CONFIG = {
 
 def environment_latest(device, sensor, max_age):
     """Returns the latest value of an environment sensor if it is recent enough, or None"""
-    date = datetime.datetime.strptime(device['measurement_end'], '%Y-%m-%dT%H:%M:%SZ')
-    if sensor in device['data'] and datetime.datetime.utcnow() - date < max_age:
-        return device['data'][sensor]['latest']
+    try:
+        date = datetime.datetime.strptime(device['measurement_end'], '%Y-%m-%dT%H:%M:%SZ')
+        if sensor in device['data'] and datetime.datetime.utcnow() - date < max_age:
+            return device['data'][sensor]['latest']
+    except:
+        pass
     return None
 
 class OperationsDaemon:
