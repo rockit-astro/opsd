@@ -129,7 +129,7 @@ def environment_latest(device, sensor, max_age):
         date = datetime.datetime.strptime(device['measurement_end'], '%Y-%m-%dT%H:%M:%SZ')
         if sensor in device['data'] and datetime.datetime.utcnow() - date < max_age:
             return device['data'][sensor]['latest']
-    except:
+    except Exception:
         pass
     return None
 
