@@ -67,8 +67,8 @@ DOME_HEARTBEAT_TIMEOUT = 119
 
 # Humidity limits for automatic dehumidifier control
 DEHUMIDIFIER_CONFIG = {
-    'enable_above': 65,
-    'disable_below': 60
+    'enable_above': 70,
+    'disable_below': 65
 }
 
 AUTOFLAT_CONFIG = {
