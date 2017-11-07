@@ -181,9 +181,10 @@ class OperationsDaemon:
             log.info('opsd', 'Restored contact with humidity sensor')
             self._dehumidifier_humidity_error = False
 
-        # Implement hysteresis to avoid flickering on/off when humidity is on thelimit
+        # Implement hysteresis to avoid flickering on/off when humidity is on the limit
+        # Also force-disable when the observing condition is set
         limit = 'disable_below' if self._dehumidifier_active else 'enable_above'
-        active = humidity > DEHUMIDIFIER_CONFIG[limit]
+        active = not self._observing and humidity > DEHUMIDIFIER_CONFIG[limit]
 
         if active != self._dehumidifier_active:
             if active:
