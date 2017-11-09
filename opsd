@@ -40,9 +40,8 @@ from warwick.w1m.operations import (
     OperationsMode,
     DehumidifierMode
 )
-from warwick.w1m.environment import (
-    ParameterStatus
-)
+from warwick.w1m.environment import ParameterStatus
+from warwick.w1m.power import SwitchStatus
 
 # Include more detailed exceptions
 sys.excepthook = Pyro4.util.excepthook
@@ -197,8 +196,11 @@ class OperationsDaemon:
         self._dehumidifier_active = active
         try:
             with daemons.onemetre_power.connect() as power:
-                active = power.value('dehumidifier')
-                if active != self._dehumidifier_active:
+                dehumidifier_power = power.value('dehumidifier')
+                if dehumidifier_power == SwitchStatus.Unknown:
+                    raise Exception("Dehumidifier status unknown")
+
+                if (dehumidifier_power == SwitchStatus.On) != self._dehumidifier_active:
                     success = power.switch('dehumidifier', self._dehumidifier_active)
                     if not success:
                         raise Exception('Failed to switch dehumidifier')
