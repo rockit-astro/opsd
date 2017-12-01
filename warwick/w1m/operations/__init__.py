@@ -19,4 +19,5 @@
 
 from .dome_controller import DomeController, DomeStatus
 from .telescope_controller import TelescopeController, AutoFlatState
+from .environment import EnvironmentWatcher
 from .constants import CommandStatus, OperationsMode, DehumidifierMode

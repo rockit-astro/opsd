@@ -208,7 +208,7 @@ class DomeController(object):
             self._wait_condition.notify_all()
 
     def status(self):
-        """Returns a tuple of the current dome status (Open/Closed/Moving/etc) and update time"""
+        """Returns a dictionary with the current dome status"""
         with self._lock:
             return {
                 'mode': self._mode,

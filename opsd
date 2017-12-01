@@ -21,7 +21,6 @@
 # pylint: disable=broad-except
 # pylint: disable=too-many-instance-attributes
 
-import datetime
 import sys
 import threading
 from astropy import units as u
@@ -36,11 +35,12 @@ from warwick.w1m.operations import (
     DomeController,
     DomeStatus,
     TelescopeController,
+    EnvironmentWatcher,
     CommandStatus,
     OperationsMode,
     DehumidifierMode
 )
-from warwick.w1m.environment import ParameterStatus
+
 from warwick.w1m.power import SwitchStatus
 
 # Include more detailed exceptions
@@ -121,17 +121,6 @@ AUTOACQUIRE_CONFIG = {
     'slew_timeout': 60,
 }
 
-
-def environment_latest(device, sensor, max_age):
-    """Returns the latest value of an environment sensor if it is recent enough, or None"""
-    try:
-        date = datetime.datetime.strptime(device['measurement_end'], '%Y-%m-%dT%H:%M:%SZ')
-        if sensor in device['data'] and datetime.datetime.utcnow() - date < max_age:
-            return device['data'][sensor]['latest']
-    except Exception:
-        pass
-    return None
-
 class OperationsDaemon:
     """Daemon class that controls the overall observatory operations"""
     def __init__(self):
@@ -146,11 +135,7 @@ class OperationsDaemon:
             LOOP_DELAY)
 
         self._telescope = TelescopeController(AUTOFLAT_CONFIG, AUTOACQUIRE_CONFIG)
-
-        # environment state - take the lock before writing or reading coherant state!
-        self._environment_lock = threading.Lock()
-        self._environment_updated = datetime.datetime.utcnow()
-        self._environment_safe = False
+        self._environment = EnvironmentWatcher()
 
         self._dehumidifier_mode = DehumidifierMode.Automatic
         self._dehumidifier_active = False
@@ -161,12 +146,9 @@ class OperationsDaemon:
         runloop.daemon = True
         runloop.start()
 
-    def __update_dehumidifier(self, env):
+    def __update_dehumidifier(self):
         # Use external sensors if internal humidity isn't available
-        age = datetime.timedelta(seconds=30)
-        humidity = environment_latest(env['roomalert'], 'internal_humidity', age) or \
-            environment_latest(env['vaisala'], 'relative_humidity', age) or \
-            environment_latest(env['superwasp'], 'ext_humidity', age)
+        humidity = self._environment.internal_humidity or self._environment.external_humidity
 
         if humidity is None:
             if not self._dehumidifier_humidity_error:
@@ -216,28 +198,8 @@ class OperationsDaemon:
 
     def __ops_loop(self):
         """Main operations run loop."""
-        environment_safe = False
         while True:
-            was_safe = environment_safe
-            try:
-                with daemons.onemetre_environment.connect() as environment:
-                    environment_status = environment.status()
-
-                environment_safe = not any(environment_status[sensor]['status'] == \
-                    ParameterStatus.Unsafe for sensor in environment_status)
-
-                if was_safe and not environment_safe:
-                    log.warning('opsd', 'Environment has become unsafe')
-                elif not was_safe and environment_safe:
-                    log.info('opsd', 'Environment trigger timed out')
-            except Exception as e:
-                environment_safe = False
-                print('error: failed to query environment: ', e)
-                log.info('opsd', 'Failed to query environmentd (' + str(e) + ')')
-
-            with self._environment_lock:
-                self._environment_safe = environment_safe
-                self._environment_updated = datetime.datetime.utcnow()
+            self._environment.update()
 
             dome_status = self._dome.status()
             if dome_status['mode'] == OperationsMode.Error:
@@ -245,19 +207,17 @@ class OperationsDaemon:
                 print('Observing condition disabled (dome error)')
                 log.warning('opsd', 'Observing condition disabled (dome error)')
 
-            if not environment_safe and self._observing:
+            if not self._environment.safe and self._observing:
                 self._observing = False
-                unsafe_params = [sensor for sensor in environment_status
-                                 if environment_status[sensor]['status'] == ParameterStatus.Unsafe]
                 print('Observing condition disabled (environment: '
-                      + ', '.join(unsafe_params) + ')')
+                      + ', '.join(self._environment.unsafe_categories) + ')')
                 log.warning('opsd', 'Observing condition disabled (environment: '
-                            + ', '.join(unsafe_params) + ')')
+                            + ', '.join(self._environment.unsafe_categories) + ')')
 
             self._dome.request_status(DomeStatus.Open if self._observing else DomeStatus.Closed)
 
             if self._dehumidifier_mode == DehumidifierMode.Automatic:
-                self.__update_dehumidifier(environment_status)
+                self.__update_dehumidifier()
             else:
                 self._dehumidifier_active = False
 
@@ -333,22 +293,15 @@ class OperationsDaemon:
     @Pyro4.expose
     def status(self):
         """Query the latest status."""
-        data = {
+        return {
             'observing': self._observing,
             'dehumidifier': {
                 'mode': self._dehumidifier_mode,
                 'active': self._dehumidifier_active
             },
-            'dome': self._dome.status()
+            'dome': self._dome.status(),
+            'environment': self._environment.status()
         }
-
-        with self._environment_lock:
-            data.update({
-                'environment_safe': self._environment_safe,
-                'environment_updated': self._environment_updated.strftime('%Y-%m-%dT%H:%M:%SZ')
-            })
-
-        return data
 
     @Pyro4.expose
     def notify_processed_frame(self, headers):
