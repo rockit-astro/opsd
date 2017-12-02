@@ -54,7 +54,7 @@ DOME_STATUS_CODES = {
 }
 
 CONDITIONS = ['wind', 'median_wind', 'temperature', 'humidity', 'internal_humidity', 'dewpt',
-              'rain', 'secsys', 'netping', 'main_ups', 'dome_ups', 'diskspace']
+              'rain', 'secsys', 'netping', 'main_ups', 'dome_ups', 'diskspace', 'sun']
 
 CONDITION_NAMES = {
     'wind': 'Wind',
@@ -68,7 +68,8 @@ CONDITION_NAMES = {
     'netping': 'Network',
     'main_ups': 'Main UPS',
     'dome_ups': 'Dome UPS',
-    'diskspace': 'Disk Space'
+    'diskspace': 'Disk Space',
+    'sun': 'Sun'
 }
 
 CONDITION_STATUS_COLORS = [
