@@ -52,6 +52,8 @@ class ConditionWatcher:
             param = data[self._device][self._parameter]
             if param['unsafe']:
                 self.status = ConditionStatus.Unsafe
+            elif param['warning']:
+                self.status = ConditionStatus.Warning
             elif param['current']:
                 self.status = ConditionStatus.Safe
 
