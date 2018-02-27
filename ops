@@ -23,13 +23,15 @@ import datetime
 import json
 import os
 import sys
-from astropy.coordinates import SkyCoord
 import Pyro4
 from warwick.observatory.common import daemons
 from warwick.w1m.operations import (
     DehumidifierMode,
-    CommandStatus
+    CommandStatus,
+    validate_schedule
 )
+
+daemons.onemetre_operations.host = '127.0.0.1'
 
 SCRIPT_NAME = os.path.basename(sys.argv[0])
 sys.excepthook = Pyro4.util.excepthook
@@ -99,17 +101,27 @@ def run_command(command):
 def dome_control(args):
     """Changes the dome between automatic and manual control"""
     if args:
-        if args[0] == 'auto' or args[0] == 'manual':
+        if args[0] in ['auto', 'manual']:
             with daemons.onemetre_operations.connect() as ops:
                 return ops.dome_control(args[0] == 'auto')
 
     print('usage: {} dome (auto|manual)'.format(SCRIPT_NAME))
     return -1
 
+def tel_control(args):
+    """Changes the telescope between automatic and manual control"""
+    if args:
+        if args[0] in ['auto', 'manual']:
+            with daemons.onemetre_operations.connect() as ops:
+                return ops.tel_control(args[0] == 'auto')
+
+    print('usage: {} tel (auto|manual)'.format(SCRIPT_NAME))
+    return -1
+
 def dehumidifier_control(args):
     """Changes the dehumidifier between automatic and manual control"""
     if args:
-        if args[0] == 'auto' or args[0] == 'manual':
+        if args[0] in ['auto', 'manual']:
             with daemons.onemetre_operations.connect() as ops:
                 return ops.dehumidifier_control(args[0] == 'auto')
 
@@ -126,36 +138,58 @@ def set_observing(args):
     print('usage: {} observing (enabled|disabled)'.format(SCRIPT_NAME))
     return -1
 
-def autoflat():
-    """Automatically runs the cameras (and eventually the telescope) to acquire flat frames"""
+def validate_schedule_json(args):
+    """checks a schedule file for errors"""
+    if len(args) != 1:
+        print('usage: {} schedule <observation json>'.format(SCRIPT_NAME))
+        return -1
+
     try:
-        with daemons.onemetre_operations.connect(timeout=0) as ops:
-            return ops.autoflat()
-    except KeyboardInterrupt:
-        # ctrl-c terminates the running command
-        with daemons.onemetre_operations.connect() as ops:
-            return ops.stop_telescope()
+        with open(args[0], 'r') as infile:
+            schedule = json.load(infile)
+    except FileNotFoundError:
+        print('error: file ' + args[0] + ' not found')
+        return -1
+    except Exception as e:
+        print('error: invalid json file')
+        print('error was: ' + str(e))
+        return -1
+
+    valid, errors = validate_schedule(schedule)
+    status = FMT_GREEN + 'PASSED' if valid else FMT_RED + 'FAILED'
+    print('Validation ' + FMT_BOLD + status + FMT_CLEAR)
+    for e in errors:
+        print('   ' + e)
+
     return -1
 
-def acquire_field(args):
-    """Slews the telescope to a specified RA,Dec position and refines position based on WCS"""
-    if len(args) != 2:
-        print('usage: {} acquire <HH:MM:SS.S> <DD:MM:SS.S>'.format(SCRIPT_NAME))
+def schedule(args):
+    """Schedule observations for a nights observing"""
+    if len(args) != 1:
+        print('usage: {} schedule <observation json>'.format(SCRIPT_NAME))
         return -1
 
     try:
-        pos = SkyCoord(args[0], args[1], unit='hourangle,deg')
-    except ValueError as e:
-        print('error: ' + str(e))
+        with open(args[0], 'r') as infile:
+            schedule = json.load(infile)
+    except FileNotFoundError:
+        print('error: file ' + args[0] + ' not found')
+        return -1
+    except Exception as e:
+        print('error: invalid json file')
+        print('error was: ' + str(e))
         return -1
 
-    try:
-        with daemons.onemetre_operations.connect(timeout=0) as ops:
-            return ops.acquire_field(pos.ra.radian, pos.dec.radian)
-    except KeyboardInterrupt:
-        # ctrl-c terminates the running command
-        with daemons.onemetre_operations.connect() as ops:
-            return ops.stop_telescope()
+    with daemons.onemetre_operations.connect() as ops:
+        return ops.schedule_observations(schedule)
+
+    return -1
+
+def stop_telescope():
+    """Schedule observations for a nights observing"""
+    with daemons.onemetre_operations.connect() as ops:
+        return ops.stop_telescope()
+
     return -1
 
 def print_status():
@@ -214,6 +248,23 @@ def print_status():
                 FMT_CLEAR + ' queued)'
         print(dome_status)
 
+    tel = status['telescope']
+    tel_date = datetime.datetime.strptime(tel['status_updated'], '%Y-%m-%dT%H:%M:%SZ')
+    print('Telescope status at ' + FMT_BOLD + tel_date.strftime('%H:%M:%S') + FMT_CLEAR + ':')
+
+    tel_mode = '    Control: ' + FMT_BOLD + OPS_MODES[tel['mode']] + FMT_CLEAR
+    if tel['mode'] != tel['requested_mode']:
+        tel_mode += ' (' + FMT_BOLD + OPS_MODES[tel['requested_mode']] + FMT_CLEAR + \
+            ' queued)'
+    print(tel_mode)
+
+    if 'action_name' in tel:
+        print('    Action name: ' + FMT_BOLD + tel['action_name'] + FMT_CLEAR)
+        if tel['action_task']:
+            print('    Action task: ' + FMT_BOLD + tel['action_task'] + FMT_CLEAR)
+    elif tel['mode'] == 1:
+        print('    Action name: ' + FMT_BOLD + 'IDLE' + FMT_CLEAR)
+
     return 0
 
 def print_conditions(condition, params):
@@ -243,9 +294,10 @@ def print_usage(name):
     print('   status       print a human-readable summary of the operations status')
     print('   dehumidifier toggle dehumidifier between manual and automatic control')
     print('   dome         toggle dome between manual and automatic control')
+    print('   tel          toggle telescope between manual and automatic control')
     print('   observing    toggle observing mode on or off')
-    print('   autoflat     acquire flat field frames')
-    print('   acquire      acquire field to high positional accuracy')
+    print('   validate     checks a schedule file for errors')
+    print('   schedule     schedule observations for the night')
     print()
 
     return 1
@@ -258,16 +310,20 @@ if __name__ == '__main__':
         sys.exit(print_status())
     elif sys.argv[1] == 'json':
         sys.exit(print_json())
+    elif sys.argv[1] == 'stop':
+        sys.exit(stop_telescope())
     elif sys.argv[1] == 'dome':
         run_command(lambda: dome_control(sys.argv[2:]))
+    elif sys.argv[1] == 'tel':
+        run_command(lambda: tel_control(sys.argv[2:]))
     elif sys.argv[1] == 'dehumidifier':
         run_command(lambda: dehumidifier_control(sys.argv[2:]))
     elif sys.argv[1] == 'observing':
         run_command(lambda: set_observing(sys.argv[2:]))
-    elif sys.argv[1] == 'autoflat':
-        run_command(autoflat)
-    elif sys.argv[1] == 'acquire':
-        run_command(lambda: acquire_field(sys.argv[2:]))
+    elif sys.argv[1] == 'validate':
+        run_command(lambda: validate_schedule_json(sys.argv[2:]))
+    elif sys.argv[1] == 'schedule':
+        run_command(lambda: schedule(sys.argv[2:]))
 
     # Command not found
     sys.exit(print_usage(SCRIPT_NAME))

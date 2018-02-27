@@ -32,6 +32,8 @@ class CommandStatus:
     CoordinateSolutionFailed = 12
     TelescopeSlewFailed = 13
 
+    InvalidSchedule = 21
+
     _messages = {
         # General error codes
         1: 'error: command failed',
@@ -42,6 +44,8 @@ class CommandStatus:
         11: 'error: camera is not idle',
         12: 'error: acquisition image WCS solution failed',
         13: 'error: telescope slew failed',
+
+        21: 'error: invalid schedule definition',
 
         -100: 'error: terminated by user',
         -101: 'error: unable to communicate with operations daemon'

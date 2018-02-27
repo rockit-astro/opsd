@@ -17,8 +17,9 @@
 
 """opsd common code"""
 
-from .dome_controller import DomeController, DomeStatus
-from .telescope_controller import TelescopeController
-from .environment import EnvironmentWatcher
-from .constants import CommandStatus, OperationsMode, DehumidifierMode
-from .schedule import validate_schedule, parse_schedule_actions
+from .telescope_action import TelescopeAction, TelescopeActionStatus
+from .skyflats import SkyFlats
+from .initialize import Initialize
+from .shutdown import Shutdown
+from .wait import Wait
+from .test_horizon_image import TestHorizonImage

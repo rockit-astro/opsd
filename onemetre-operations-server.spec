@@ -7,11 +7,11 @@ License:   GPL-3.0
 Group:     Unspecified
 BuildArch: noarch
 %if 0%{?suse_version}
-Requires:  python3, python34-Pyro4, python34-warwick-observatory-common, python34-warwick-w1m-operations, python34-warwick-w1m-environment, python34-warwick-w1m-dome, observatory-log-client, %{?systemd_requires}
+Requires:  python3, python34-strict-rfc3339, python34-Pyro4, python34-warwick-observatory-common, python34-warwick-w1m-operations, python34-warwick-w1m-pipeline, python34-warwick-w1m-environment, python34-warwick-w1m-dome, python34-warwick-w1m-camera, observatory-log-client, %{?systemd_requires}
 BuildRequires: systemd-rpm-macros
 %endif
 %if 0%{?centos_ver}
-Requires:  python34, python34-Pyro4, python34-warwick-observatory-common, python34-warwick-w1m-operations, python34-warwick-w1m-environment, python34-warwick-w1m-dome, observatory-log-client, %{?systemd_requires}
+Requires:  python34, python34-strict-rfc3339, python34-Pyro4, python34-warwick-observatory-common, python34-warwick-w1m-operations, python34-warwick-w1m-pipeline, python34-warwick-w1m-environment, python34-warwick-w1m-dome, python34-warwick-w1m-camera, observatory-log-client, %{?systemd_requires}
 %endif
 
 %description

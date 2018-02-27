@@ -4,7 +4,7 @@ _ops()
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="status json dome dehumidifier observing autoflat acquire"
+    opts="status json dome dehumidifier observing autoflat acquire schedule validate"
 
     case "${prev}" in
         dome|dehumidifier)
@@ -12,6 +12,12 @@ _ops()
             ;;
         observing)
             opts="enabled disabled"
+            ;;
+        schedule|validate)
+            # Fall back to readline completion for files (from the -o default)
+            compopt -o default
+            COMPREPLY=()
+            return 0
             ;;
         *)
             ;;

@@ -19,6 +19,7 @@ License:        GPL3
 Summary:        Common backend code for the Warwick one-metre telescope operations daemon
 Url:            https://github.com/warwick-one-metre/
 BuildArch:      noarch
+Requires:       python34-astroplan, python34-jsonschema
 
 %description
 Part of the observatory software for the Warwick one-meter telescope.
