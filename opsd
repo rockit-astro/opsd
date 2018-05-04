@@ -30,28 +30,25 @@ from warwick.observatory.common import (
     IP,
     TryLock)
 from warwick.observatory.common.helpers import pyro_client_matches
-from warwick.w1m.operations import (
+from warwick.rasa.operations import (
     DomeController,
     DomeStatus,
     TelescopeController,
     EnvironmentWatcher,
     CommandStatus,
     OperationsMode,
-    DehumidifierMode,
     parse_schedule_actions,
     validate_schedule,
 )
-
-from warwick.w1m.power import SwitchStatus
 
 # Include more detailed exceptions
 sys.excepthook = Pyro4.util.excepthook
 
 # Machines that are allowed to issue operations commands
-CONTROL_IPS = [IP.OneMetreDome, IP.OneMetreTCS]
+CONTROL_IPS = [IP.RASAMain]
 
 # Machines that are allowed to notify processed frames
-PROCESSED_FRAME_IPS = [IP.OneMetreTCS]
+PROCESSED_FRAME_IPS = [IP.RASAMain]
 
 # Communications timeout when opening or closing the dome (takes up to ~80 seconds)
 DOME_PYRO_OPENCLOSE_TIMEOUT = 120
@@ -65,12 +62,6 @@ LOOP_DELAY = 10
 # be large enough to account for the time it takes to open and close the dome
 DOME_HEARTBEAT_TIMEOUT = 119
 
-# Humidity limits for automatic dehumidifier control
-DEHUMIDIFIER_CONFIG = {
-    'enable_above': 70,
-    'disable_below': 65
-}
-
 class OperationsDaemon:
     """Daemon class that controls the overall observatory operations"""
     def __init__(self):
@@ -79,7 +70,7 @@ class OperationsDaemon:
         self._observing = False
 
         self._dome = DomeController(
-            daemons.onemetre_dome,
+            daemons.rasa_dome,
             DOME_PYRO_OPENCLOSE_TIMEOUT,
             DOME_HEARTBEAT_TIMEOUT,
             LOOP_DELAY)
@@ -87,64 +78,9 @@ class OperationsDaemon:
         self._telescope = TelescopeController()
         self._environment = EnvironmentWatcher()
 
-        self._dehumidifier_mode = DehumidifierMode.Automatic
-        self._dehumidifier_active = False
-        self._dehumidifier_error = False
-        self._dehumidifier_humidity_error = True
-
         runloop = threading.Thread(target=self.__ops_loop)
         runloop.daemon = True
         runloop.start()
-
-    def __update_dehumidifier(self):
-        # Use external sensors if internal humidity isn't available
-        humidity = self._environment.internal_humidity or self._environment.external_humidity
-
-        if humidity is None:
-            if not self._dehumidifier_humidity_error:
-                log.warning('opsd', 'Lost contact with all humidity sensors')
-                self._dehumidifier_humidity_error = True
-
-            # Can't do anything more without valid humidity data
-            return
-
-        if self._dehumidifier_humidity_error:
-            log.info('opsd', 'Restored contact with humidity sensor')
-            self._dehumidifier_humidity_error = False
-
-        # Implement hysteresis to avoid flickering on/off when humidity is on the limit
-        # Also force-disable when the observing condition is set
-        limit = 'disable_below' if self._dehumidifier_active else 'enable_above'
-        active = not self._observing and humidity > DEHUMIDIFIER_CONFIG[limit]
-
-        if active != self._dehumidifier_active:
-            if active:
-                log.warning('opsd', 'Dehumidifier enabled (humidity: {}% > {}%)'.format(
-                    humidity, DEHUMIDIFIER_CONFIG[limit]))
-            else:
-                log.info('opsd', 'Dehumidifier disabled (humidity: {}% < {}%)'.format(
-                    humidity, DEHUMIDIFIER_CONFIG[limit]))
-
-        self._dehumidifier_active = active
-        try:
-            with daemons.onemetre_power.connect() as power:
-                dehumidifier_power = power.value('dehumidifier')
-                if dehumidifier_power == SwitchStatus.Unknown:
-                    raise Exception("Dehumidifier status unknown")
-
-                if (dehumidifier_power == SwitchStatus.On) != self._dehumidifier_active:
-                    success = power.switch('dehumidifier', self._dehumidifier_active)
-                    if not success:
-                        raise Exception('Failed to switch dehumidifier')
-
-            if self._dehumidifier_error:
-                log.info('opsd', 'Restored contact with dehumidifier')
-                self._dehumidifier_error = False
-        except Exception as e:
-            print('error: failed to update dehumidifier: ', e)
-            if not self._dehumidifier_error:
-                log.error('opsd', 'Lost contact with dehumidifier')
-            self._dehumidifier_error = True
 
     def __ops_loop(self):
         """Main operations run loop."""
@@ -165,11 +101,6 @@ class OperationsDaemon:
                             + ', '.join(self._environment.unsafe_conditions) + ')')
 
             self._dome.request_status(DomeStatus.Open if self._observing else DomeStatus.Closed)
-
-            if self._dehumidifier_mode == DehumidifierMode.Automatic:
-                self.__update_dehumidifier()
-            else:
-                self._dehumidifier_active = False
 
             # Wait for the next loop period, unless woken up early by __shortcut_loop_wait
             with self._wait_condition:
@@ -227,22 +158,6 @@ class OperationsDaemon:
             return CommandStatus.Succeeded
 
     @Pyro4.expose
-    def dehumidifier_control(self, mode):
-        """Enable or disable automatic dehumidifier control"""
-        if not pyro_client_matches(CONTROL_IPS):
-            return CommandStatus.InvalidControlIP
-
-        with TryLock(self._command_lock) as success:
-            if not success:
-                return CommandStatus.Blocked
-
-            self._dehumidifier_mode = mode
-            self.__shortcut_loop_wait()
-            log.info('opsd', 'Dehumidifier control set to '
-                     + ('automatic' if mode == DehumidifierMode.Automatic else 'manual'))
-            return CommandStatus.Succeeded
-
-    @Pyro4.expose
     def set_observing(self, observing):
         """Enable or disable the global observing mode (opens the dome)"""
         if not pyro_client_matches(CONTROL_IPS):
@@ -268,10 +183,6 @@ class OperationsDaemon:
         """Query the latest status."""
         return {
             'observing': self._observing,
-            'dehumidifier': {
-                'mode': self._dehumidifier_mode,
-                'active': self._dehumidifier_active
-            },
             'dome': self._dome.status(),
             'telescope': self._telescope.status(),
             'environment': self._environment.status()
@@ -309,4 +220,4 @@ class OperationsDaemon:
         return CommandStatus.Succeeded
 
 if __name__ == '__main__':
-    daemons.onemetre_operations.launch(OperationsDaemon())
+    daemons.rasa_operations.launch(OperationsDaemon())

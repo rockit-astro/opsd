@@ -35,7 +35,7 @@ from warwick.rasa.camera import (
     CommandStatus as CamCommandStatus,
     configure_validation_schema as camera_schema)
 from warwick.rasa.telescope import CommandStatus as TelCommandStatus
-from warwick.w1m.pipeline import (
+from warwick.rasa.pipeline import (
     configure_standard_validation_schema as pipeline_schema)
 
 from . import TelescopeAction, TelescopeActionStatus
@@ -71,7 +71,7 @@ class TestHorizonImage(TelescopeAction):
                     'type': 'integer',
                     'minimum': 0
                 },
-                'blue': camera_schema('blue'),
+                'rasa': camera_schema('rasa'),
                 'pipeline': pipeline_schema()
             }
         }
@@ -87,7 +87,7 @@ class TestHorizonImage(TelescopeAction):
 
         self.set_task('Slewing')
         try:
-            with daemons.onemetre_telescope.connect(timeout=SLEW_TIMEOUT) as teld:
+            with daemons.rasa_telescope.connect(timeout=SLEW_TIMEOUT) as teld:
                 status = teld.slew_altaz(self.config['alt'], self.config['az'])
                 if not self.aborted and status != TelCommandStatus.Succeeded:
                     print('Failed to slew telescope')
@@ -113,7 +113,7 @@ class TestHorizonImage(TelescopeAction):
         self.set_task('Preparing camera')
 
         try:
-            with daemons.onemetre_pipeline.connect() as pipeline:
+            with daemons.rasa_pipeline.connect() as pipeline:
                 pipeline.configure(self.config['pipeline'])
         except Pyro4.errors.CommunicationError:
             print('Failed to communicate with pipeline daemon')
@@ -128,8 +128,8 @@ class TestHorizonImage(TelescopeAction):
             return
 
         try:
-            with daemons.onemetre_blue_camera.connect() as cam:
-                status = cam.configure(self.config['blue'])
+            with daemons.rasa_camera.connect() as cam:
+                status = cam.configure(self.config['rasa'])
                 if status == CamCommandStatus.Succeeded:
                     status = cam.start_sequence(self.config['count'])
 
@@ -164,7 +164,7 @@ class TestHorizonImage(TelescopeAction):
 
             # Check camera for error status
             try:
-                with daemons.onemetre_blue_camera.connect() as camd:
+                with daemons.rasa_camera.connect() as camd:
                     status = camd.report_status()
             except Pyro4.errors.CommunicationError:
                 print('Failed to communicate with camera daemon')
@@ -194,7 +194,7 @@ class TestHorizonImage(TelescopeAction):
         """Aborted by a weather alert or user action"""
         super().abort()
         try:
-            with daemons.onemetre_telescope.connect() as teld:
+            with daemons.rasa_telescope.connect() as teld:
                 teld.stop()
         except Pyro4.errors.CommunicationError:
             print('Failed to communicate with telescope daemon')
@@ -203,7 +203,7 @@ class TestHorizonImage(TelescopeAction):
             print(e)
 
         try:
-            with daemons.onemetre_blue_camera.connect() as camd:
+            with daemons.rasa_camera.connect() as camd:
                 camd.stop_sequence()
         except Pyro4.errors.CommunicationError:
             print('Failed to communicate with camera daemon')

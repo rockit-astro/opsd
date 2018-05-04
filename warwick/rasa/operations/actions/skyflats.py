@@ -33,11 +33,11 @@ import Pyro4
 from warwick.observatory.common import (
     daemons,
     log)
-from warwick.w1m.camera import (
+from warwick.rasa.camera import (
     configure_validation_schema as camera_schema)
-from warwick.w1m.pipeline import (
+from warwick.rasa.pipeline import (
     configure_flats_validation_schema as pipeline_schema)
-from warwick.w1m.telescope import CommandStatus as TelCommandStatus
+from warwick.rasa.telescope import CommandStatus as TelCommandStatus
 
 from . import TelescopeAction, TelescopeActionStatus
 
@@ -204,7 +204,7 @@ class InstrumentArm:
 
             if self.state != last_state:
                 try:
-                    with daemons.onemetre_pipeline.connect() as pipeline:
+                    with daemons.rasa_pipeline.connect() as pipeline:
                         pipeline.set_archive(self.name, self.state == AutoFlatState.Saving)
                 except Pyro4.errors.CommunicationError:
                     print('Failed to communicate with pipeline daemon')
@@ -247,12 +247,10 @@ class SkyFlats(TelescopeAction):
         self._wait_condition = threading.Condition()
 
         self._instrument_arms = {
-            'BLUE': InstrumentArm('BLUE',
-                                  daemons.onemetre_blue_camera,
-                                  self.config.get('blue', {}),
+            'RASA': InstrumentArm('RASA',
+                                  daemons.rasa_camera,
+                                  self.config.get('rasa', {}),
                                   self.config['evening']),
-            #'RED': InstrumentArm(
-            #    'RED', daemons.onemetre_red_camera, self.config['red'], self.config['evening']),
         }
 
     @classmethod
@@ -266,8 +264,9 @@ class SkyFlats(TelescopeAction):
                 'evening': {
                     'type': 'boolean'
                 },
-                'blue': camera_schema('blue'),
-                'red': camera_schema('red'),
+                'rasa': camera_schema('rasa'),
+                #'blue': camera_schema('blue'),
+                #'red': camera_schema('red'),
                 'pipeline': pipeline_schema()
             }
         }
@@ -279,7 +278,7 @@ class SkyFlats(TelescopeAction):
         try:
             # The anti-solar point is opposite the sun at 75 degrees
             # TODO: Calculate azimuth of sun + 180 deg
-            with daemons.onemetre_telescope.connect(timeout=SLEW_TIMEOUT) as teld:
+            with daemons.rasa_telescope.connect(timeout=SLEW_TIMEOUT) as teld:
                 status = teld.slew_altaz(math.radians(75), math.radians(90))
                 if not self.aborted and status != TelCommandStatus.Succeeded:
                     print('Failed to slew telescope')
@@ -304,7 +303,7 @@ class SkyFlats(TelescopeAction):
         # Configure pipeline and camera for flats
         # Archiving will be enabled when the brightness is inside the required range
         try:
-            with daemons.onemetre_pipeline.connect() as pipeline:
+            with daemons.rasa_pipeline.connect() as pipeline:
                 pipeline_config = {}
                 pipeline_config.update(self.config['pipeline'])
                 pipeline_config.update({

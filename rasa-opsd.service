@@ -8,8 +8,8 @@ After=network-online.target
 Restart=on-failure
 Type=simple
 ExecStart=/usr/bin/env python3.4 -u /usr/bin/opsd
-ExecStartPost=/usr/bin/env python3.4 -u /usr/bin/obslog info opsd Started by systemd
-ExecStopPost=/usr/bin/env python3.4 -u /usr/bin/obslog info opsd Stopped by systemd
+ExecStartPost=/usr/bin/env python3.4 -u /usr/bin/obslog info rasa_opsd Started by systemd
+ExecStopPost=/usr/bin/env python3.4 -u /usr/bin/obslog info rasa_opsd Stopped by systemd
 StandardOutput=syslog
 StandardError=syslog
 

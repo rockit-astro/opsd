@@ -1,21 +1,15 @@
-Name:      onemetre-operations-server
-Version:   2.1.6
+Name:      rasa-operations-server
+Version:   2.2.0
 Release:   0
 Url:       https://github.com/warwick-one-metre/opsd
 Summary:   Operations server for the Warwick one-metre telescope.
 License:   GPL-3.0
 Group:     Unspecified
 BuildArch: noarch
-%if 0%{?suse_version}
-Requires:  python3, python34-strict-rfc3339, python34-Pyro4, python34-warwick-observatory-common, python34-warwick-w1m-operations, python34-warwick-w1m-pipeline, python34-warwick-w1m-environment, python34-warwick-w1m-dome, python34-warwick-w1m-camera, observatory-log-client, %{?systemd_requires}
-BuildRequires: systemd-rpm-macros
-%endif
-%if 0%{?centos_ver}
-Requires:  python34, python34-strict-rfc3339, python34-Pyro4, python34-warwick-observatory-common, python34-warwick-w1m-operations, python34-warwick-w1m-pipeline, python34-warwick-w1m-environment, python34-warwick-w1m-dome, python34-warwick-w1m-camera, observatory-log-client, %{?systemd_requires}
-%endif
+Requires:  python34, python34-strict-rfc3339, python34-jsonschema, python34-Pyro4, python34-warwick-observatory-common, python34-warwick-w1m-operations, python34-warwick-w1m-pipeline, python34-warwick-w1m-environment, python34-warwick-w1m-dome, python34-warwick-w1m-camera, observatory-log-client, %{?systemd_requires}
 
 %description
-Part of the observatory software for the Warwick one-meter telescope.
+Part of the observatory software for the RASA prototype telescope.
 
 opsd is the daemon that controls the top-level automatic observatory control.
 
@@ -26,41 +20,19 @@ mkdir -p %{buildroot}%{_unitdir}
 %{__install} %{_sourcedir}/opsd %{buildroot}%{_bindir}
 %{__install} %{_sourcedir}/opsd.service %{buildroot}%{_unitdir}
 
-%pre
-%if 0%{?suse_version}
-%service_add_pre opsd.service
-%endif
-
 %post
-%if 0%{?suse_version}
-%service_add_post opsd.service
-%endif
-%if 0%{?centos_ver}
-%systemd_post opsd.service
-%endif
+%systemd_post rasa-opsd.service
 
 %preun
-%if 0%{?suse_version}
-%stop_on_removal opsd.service
-%service_del_preun opsd.service
-%endif
-%if 0%{?centos_ver}
-%systemd_preun opsd.service
-%endif
+%systemd_preun rasa-opsd.service
 
 %postun
-%if 0%{?suse_version}
-%restart_on_update opsd.service
-%service_del_postun opsd.service
-%endif
-%if 0%{?centos_ver}
-%systemd_postun_with_restart opsd.service
-%endif
+%systemd_postun_with_restart rasa-opsd.service
 
 %files
 %defattr(0755,root,root,-)
 %{_bindir}/opsd
 %defattr(-,root,root,-)
-%{_unitdir}/opsd.service
+%{_unitdir}/rasa-opsd.service
 
 %changelog

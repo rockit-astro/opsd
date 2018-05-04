@@ -62,8 +62,3 @@ class OperationsMode:
     """Operational status"""
     Error, Automatic, Manual = range(3)
     Names = ['Error', 'Automatic', 'Manual']
-
-class DehumidifierMode:
-    """Dehumidifier control status"""
-    Manual, Automatic = range(2)
-    Names = ['Manual', 'Automatic']

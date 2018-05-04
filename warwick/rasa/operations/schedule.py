@@ -175,6 +175,9 @@ def validate_schedule(json):
 
     return not errors, errors
 
+def schedule_is_tonight(json):
+    """Returns true if a given schedule is valid to execute tonight"""
+
 def parse_schedule_actions(json):
     """Parses a json object into a list of TelescopeActions
        to be run by the telescope control thread"""

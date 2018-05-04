@@ -25,13 +25,11 @@ import os
 import sys
 import Pyro4
 from warwick.observatory.common import daemons
-from warwick.w1m.operations import (
-    DehumidifierMode,
+from warwick.rasa.operations import (
     CommandStatus,
     validate_schedule
 )
 
-daemons.onemetre_operations.host = '127.0.0.1'
 
 SCRIPT_NAME = os.path.basename(sys.argv[0])
 sys.excepthook = Pyro4.util.excepthook
@@ -102,7 +100,7 @@ def dome_control(args):
     """Changes the dome between automatic and manual control"""
     if args:
         if args[0] in ['auto', 'manual']:
-            with daemons.onemetre_operations.connect() as ops:
+            with daemons.rasa_operations.connect() as ops:
                 return ops.dome_control(args[0] == 'auto')
 
     print('usage: {} dome (auto|manual)'.format(SCRIPT_NAME))
@@ -112,27 +110,17 @@ def tel_control(args):
     """Changes the telescope between automatic and manual control"""
     if args:
         if args[0] in ['auto', 'manual']:
-            with daemons.onemetre_operations.connect() as ops:
+            with daemons.rasa_operations.connect() as ops:
                 return ops.tel_control(args[0] == 'auto')
 
     print('usage: {} tel (auto|manual)'.format(SCRIPT_NAME))
-    return -1
-
-def dehumidifier_control(args):
-    """Changes the dehumidifier between automatic and manual control"""
-    if args:
-        if args[0] in ['auto', 'manual']:
-            with daemons.onemetre_operations.connect() as ops:
-                return ops.dehumidifier_control(args[0] == 'auto')
-
-    print('usage: {} dehumidifier (auto|manual)'.format(SCRIPT_NAME))
     return -1
 
 def set_observing(args):
     """Enable or disable the global observing mode (opens the dome)"""
     if args:
         if args[0] == 'enabled' or args[0] == 'disabled':
-            with daemons.onemetre_operations.connect() as ops:
+            with daemons.rasa_operations.connect() as ops:
                 return ops.set_observing(args[0] == 'enabled')
 
     print('usage: {} observing (enabled|disabled)'.format(SCRIPT_NAME))
@@ -180,14 +168,14 @@ def schedule(args):
         print('error was: ' + str(e))
         return -1
 
-    with daemons.onemetre_operations.connect() as ops:
+    with daemons.rasa_operations.connect() as ops:
         return ops.schedule_observations(schedule)
 
     return -1
 
 def stop_telescope():
     """Schedule observations for a nights observing"""
-    with daemons.onemetre_operations.connect() as ops:
+    with daemons.rasa_operations.connect() as ops:
         return ops.stop_telescope()
 
     return -1
@@ -196,7 +184,7 @@ def print_status():
     """Prints the latest ops data in machine-readable form"""
     status = None
     try:
-        with daemons.onemetre_operations.connect() as ops:
+        with daemons.rasa_operations.connect() as ops:
             status = ops.status()
     except Pyro4.errors.CommunicationError:
         print('error: unable to communicate with the operations daemon')
@@ -215,16 +203,6 @@ def print_status():
 
     for c in CONDITIONS:
         print_conditions(c, status['environment']['conditions'][c])
-    print()
-
-    dehumidifier_mode = FMT_BOLD + FMT_YELLOW + 'MANUAL' + FMT_CLEAR
-    if status['dehumidifier']['mode'] == DehumidifierMode.Automatic:
-        dehumidifier_active = status['dehumidifier']['active']
-        dehumidifier_mode = FMT_BOLD + FMT_GREEN + 'AUTOMATIC' + FMT_CLEAR + ' (' + FMT_BOLD
-        dehumidifier_mode += FMT_RED + 'ENABLED' if dehumidifier_active else FMT_GREEN + 'DISABLED'
-        dehumidifier_mode += FMT_CLEAR + ')'
-
-    print('Dehumidfier: ' + dehumidifier_mode)
     print()
 
     dome = status['dome']
@@ -276,7 +254,7 @@ def print_json():
     """Prints the latest ops data in machine-readable form"""
     status = None
     try:
-        with daemons.onemetre_operations.connect() as ops:
+        with daemons.rasa_operations.connect() as ops:
             status = ops.status()
     except Pyro4.errors.CommunicationError:
         print('error: unable to communicate with the operations daemon')
@@ -292,7 +270,6 @@ def print_usage(name):
     print()
     print('   json         print a machine-readable summary of the operations status')
     print('   status       print a human-readable summary of the operations status')
-    print('   dehumidifier toggle dehumidifier between manual and automatic control')
     print('   dome         toggle dome between manual and automatic control')
     print('   tel          toggle telescope between manual and automatic control')
     print('   observing    toggle observing mode on or off')
@@ -316,8 +293,6 @@ if __name__ == '__main__':
         run_command(lambda: dome_control(sys.argv[2:]))
     elif sys.argv[1] == 'tel':
         run_command(lambda: tel_control(sys.argv[2:]))
-    elif sys.argv[1] == 'dehumidifier':
-        run_command(lambda: dehumidifier_control(sys.argv[2:]))
     elif sys.argv[1] == 'observing':
         run_command(lambda: set_observing(sys.argv[2:]))
     elif sys.argv[1] == 'validate':

@@ -12,19 +12,19 @@
 # license that conforms to the Open Source Definition (Version 1.9)
 # published by the Open Source Initiative.
 
-Name:           python34-warwick-w1m-operations
+Name:           python34-warwick-rasa-operations
 Version:        2.0.2
 Release:        0
 License:        GPL3
-Summary:        Common backend code for the Warwick one-metre telescope operations daemon
+Summary:        Common backend code for the RASA prototype telescope operations daemon
 Url:            https://github.com/warwick-one-metre/
 BuildArch:      noarch
 Requires:       python34-astroplan, python34-jsonschema
 
 %description
-Part of the observatory software for the Warwick one-meter telescope.
+Part of the observatory software for the RASA prototype telescope.
 
-python3-warwick-w1m-operations holds the common operations code.
+python3-warwick-rasa-operations holds the common operations code.
 
 %prep
 

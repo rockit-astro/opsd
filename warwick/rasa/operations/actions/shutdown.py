@@ -42,7 +42,7 @@ class Shutdown(TelescopeAction):
         try:
             self.set_task('Parking Telescope')
 
-            with daemons.onemetre_telescope.connect(timeout=STOW_TIMEOUT) as teld:
+            with daemons.rasa_telescope.connect(timeout=STOW_TIMEOUT) as teld:
                 status = teld.slew_altaz(STOW_ALTAZ[0], STOW_ALTAZ[1])
                 if status != CommandStatus.Succeeded:
                     print('Failed to park telescope')
@@ -56,22 +56,6 @@ class Shutdown(TelescopeAction):
             print('Unknown error while parking telescope')
             print(e)
             log.error('opsd', 'Unknown error while parking telescope')
-            self.status = TelescopeActionStatus.Error
-
-        try:
-            with daemons.onemetre_power.connect() as powerd:
-                if not powerd.switch('telescope_80v', False):
-                    print('Failed to disable telescope drive power')
-                    log.error('opsd', 'Failed to disable telescope drive power')
-                    self.status = TelescopeActionStatus.Error
-        except Pyro4.errors.CommunicationError:
-            print('Failed to communicate with power daemon')
-            log.error('opsd', 'Failed to communicate with power daemon')
-            self.status = TelescopeActionStatus.Error
-        except Exception as e:
-            print('Unknown error with power')
-            print(e)
-            log.error('opsd', 'Unknown error with power')
             self.status = TelescopeActionStatus.Error
 
         self.status = TelescopeActionStatus.Complete

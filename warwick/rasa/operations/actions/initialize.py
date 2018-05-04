@@ -27,8 +27,8 @@ import Pyro4
 from warwick.observatory.common import (
     daemons,
     log)
-from warwick.w1m.camera import CommandStatus as CamCommandStatus
-from warwick.w1m.telescope import CommandStatus as TelCommandStatus
+from warwick.rasa.camera import CommandStatus as CamCommandStatus
+from warwick.rasa.telescope import CommandStatus as TelCommandStatus
 from . import TelescopeAction, TelescopeActionStatus
 
 # Position to park the telescope after homing
@@ -46,8 +46,7 @@ class Initialize(TelescopeAction):
     def __init__(self):
         super().__init__('Initializing', {})
         self._camera_daemons = {
-            'BLUE': daemons.onemetre_blue_camera,
-            #'RED': daemons.onemetre_red_camera
+            'RASA': daemons.rasa_camera
         }
 
         self._cooling_condition = threading.Condition()
@@ -122,30 +121,16 @@ class Initialize(TelescopeAction):
         try:
             self.set_task('Initializing Telescope')
 
-            with daemons.onemetre_power.connect() as powerd:
-                if not powerd.switch('telescope_80v', True):
-                    print('Failed to enable telescope drive power')
-                    log.error('opsd', 'Failed to enable telescope drive power')
-                    return False
-
-            with daemons.onemetre_telescope.connect() as teld:
+            with daemons.rasa_telescope.connect(timeout=HOME_TIMEOUT) as teld:
                 status = teld.initialize()
                 if status not in [TelCommandStatus.Succeeded,
-                                  TelCommandStatus.TelescopeNotUninitialized]:
+                                  TelCommandStatus.TelescopeNotDisabled]:
                     print('Failed to initialize telescope')
                     log.error('opsd', 'Failed to initialize telescope')
                     return False
 
-            self.set_task('Homing Telescope')
-            with daemons.onemetre_telescope.connect(timeout=HOME_TIMEOUT) as teld:
-                status = teld.find_homes()
-                if status != TelCommandStatus.Succeeded:
-                    print('Failed to home telescope')
-                    log.error('opsd', 'Failed to home telescope')
-                    return False
-
             # Park back in the stow position
-            with daemons.onemetre_telescope.connect(timeout=STOW_TIMEOUT) as teld:
+            with daemons.rasa_telescope.connect(timeout=STOW_TIMEOUT) as teld:
                 status = teld.slew_altaz(STOW_ALTAZ[0], STOW_ALTAZ[1])
                 if status != TelCommandStatus.Succeeded:
                     print('Failed to park telescope')

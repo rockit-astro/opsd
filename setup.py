@@ -17,11 +17,11 @@
 
 from distutils.core import setup
 
-setup(name='warwick.w1m.operations',
+setup(name='warwick.rasa.operations',
       version='0',
-      packages = ['warwick.w1m.operations'],
+      packages = ['warwick.rasa.operations'],
       author='Paul Chote',
-      description='Common code for the W1m operations daemon',
+      description='Common code for the RASA operations daemon',
       license='GNU GPLv3',
       author_email='p.chote@warwick.ac.uk',
       url="https://github.com/warwick-one-metre/opsd",
