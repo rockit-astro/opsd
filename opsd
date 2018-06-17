@@ -216,7 +216,9 @@ class OperationsDaemon:
             return CommandStatus.InvalidSchedule
 
         # TODO: Schedule dome times
-        self._telescope.queue_actions(parse_schedule_actions(schedule))
+        if not self._telescope.queue_actions(parse_schedule_actions(schedule)):
+            return CommandStatus.Failed
+
         return CommandStatus.Succeeded
 
 if __name__ == '__main__':

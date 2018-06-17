@@ -167,12 +167,19 @@ class TelescopeController(object):
             self.__shortcut_loop_wait()
 
     def queue_actions(self, actions):
-        """Append TelescopeActions to the action queue"""
+        """Append TelescopeActions to the action queue
+           Returns True on success or False if the
+           telescope is not under automatic control.
+        """
         with self._action_lock:
+            if self._mode != OperationsMode.Automatic:
+                return False
+
             for action in actions:
                 print('queuing', action.name)
                 self._action_queue.appendleft(action)
             self.__shortcut_loop_wait()
+        return True
 
     def notify_processed_frame(self, headers):
         """Called by the pipeline daemon to notify that a new frame has completed processing
