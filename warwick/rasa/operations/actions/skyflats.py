@@ -64,7 +64,7 @@ CONFIG = {
     'sun_altitude_check_interval': 30,
 
     # Exposure fudge factor to account for changing sky brightness
-    'evening_scale': 1.1,
+    'evening_scale': 1.065,
     'dawn_scale': 0.9,
 
     # Clamp exposure time deltas to this range (e.g. 5 -> 15 or 5 -> 1.6)
@@ -84,8 +84,8 @@ CONFIG = {
     'target_counts': 30000,
 
     # Delays to apply between evening flats to save shutter cycles
-    # These delays are cumulative, so if the next exposure is calculated to be 0.9
-    # 0.9 seconds the routine will wait 5 + 25 = 30 seconds before starting it
+    # These delays are cumulative, so if the next exposure is calculated to be 1.2
+    # 0.9 seconds the routine will wait 60 + 30 = 90 seconds before starting it
     'evening_exposure_delays': {
         1: 60,
         2.5: 30
@@ -300,8 +300,8 @@ class SkyFlats(TelescopeAction):
                 s = teld.report_status()
 
             # pylint: disable=no-member
-            location = EarthLocation(lat=s['site_latitude']*u.deg,
-                                     lon=s['site_longitude']*u.deg,
+            location = EarthLocation(lat=s['site_latitude']*u.rad,
+                                     lon=s['site_longitude']*u.rad,
                                      height=s['site_elevation']*u.m)
             # pylint: enable=no-member
 
@@ -339,6 +339,7 @@ class SkyFlats(TelescopeAction):
                     return
                 if sun_altitude < CONFIG['max_sun_altitude']:
                     break
+                print('{:.1f} > {:.1f} - keep waiting'.format(sun_altitude, CONFIG['max_sun_altitude']))
             else:
                 if sun_altitude > CONFIG['max_sun_altitude']:
                     print('autoflat: sun already too high - continuing')
@@ -347,6 +348,7 @@ class SkyFlats(TelescopeAction):
                     return
                 if sun_altitude > CONFIG['min_sun_altitude']:
                     break
+                print('{:.1f} < {:.1f} - keep waiting'.format(sun_altitude, CONFIG['min_sun_altitude']))
 
             with self._wait_condition:
                 self._wait_condition.wait(CONFIG['sun_altitude_check_interval'])
