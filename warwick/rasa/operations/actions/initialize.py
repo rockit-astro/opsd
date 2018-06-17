@@ -85,7 +85,7 @@ class Initialize(TelescopeAction):
            Returns True on success, False on error
         """
         # Wait for cameras to cool if required
-        self.set_task('Cooling')
+        self.set_task('Cooling cameras')
         locked = {k: False for k in self._camera_daemons}
 
         while not self.aborted:
@@ -129,7 +129,7 @@ class Initialize(TelescopeAction):
                     log.error('opsd', 'Failed to initialize telescope')
                     return False
 
-            # Park back in the stow position
+            self.set_task('Slewing to park position')
             with daemons.rasa_telescope.connect(timeout=STOW_TIMEOUT) as teld:
                 status = teld.slew_altaz(STOW_ALTAZ[0], STOW_ALTAZ[1])
                 if status != TelCommandStatus.Succeeded:
