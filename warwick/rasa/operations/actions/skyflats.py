@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with opsd.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Telescope action to acquire flats in the evening"""
+"""Telescope action to acquire sky flats"""
 
 # pylint: disable=broad-except
 # pylint: disable=invalid-name
@@ -29,6 +29,14 @@ import datetime
 import math
 import threading
 import Pyro4
+
+from astropy.coordinates import (
+    get_sun,
+    EarthLocation,
+    AltAz
+)
+from astropy.time import Time
+from astropy import units as u
 
 from warwick.observatory.common import (
     daemons,
@@ -50,6 +58,11 @@ class AutoFlatState:
     Codes = ['B', 'W', 'S', 'C', 'E']
 
 CONFIG = {
+    # Range of sun angles where we can acquire useful data
+    'max_sun_altitude': -6,
+    'min_sun_altitude': -10,
+    'sun_altitude_check_interval': 30,
+
     # Exposure fudge factor to account for changing sky brightness
     'evening_scale': 1.1,
     'dawn_scale': 0.9,
@@ -65,19 +78,26 @@ CONFIG = {
     'min_save_exposure': 2.5,
 
     # Exposures with less counts than this lack the signal to noise ratio that we desire
-    'min_save_counts': 20000,
+    'min_save_counts': 15000,
 
     # Target flat counts to aim for
-    'target_counts': 35000,
+    'target_counts': 30000,
 
     # Delays to apply between evening flats to save shutter cycles
     # These delays are cumulative, so if the next exposure is calculated to be 0.9
     # 0.9 seconds the routine will wait 5 + 25 = 30 seconds before starting it
     'evening_exposure_delays': {
-        1: 25,
-        2.5: 5
+        1: 60,
+        2.5: 30
     }
 }
+
+def sun_position(location):
+    """Returns current (alt, az) of sun in degrees for the given location"""
+    now = Time(datetime.datetime.utcnow(), format='datetime', scale='utc')
+    frame = AltAz(obstime=now, location=location)
+    sun = get_sun(now).transform_to(frame)
+    return (sun.alt.value, sun.az.value)
 
 class InstrumentArm:
     """Holds arm-specific flat state"""
@@ -87,23 +107,22 @@ class InstrumentArm:
         self.state = AutoFlatState.Bias
         self._daemon = daemon
         self._camera_config = camera_config
-        self._updated = datetime.datetime.utcnow()
-        self._last_exposure = 0
+        self._expected_next_exposure = datetime.datetime.utcnow()
         self._is_evening = is_evening
         self._scale = CONFIG['evening_scale'] if is_evening else CONFIG['dawn_scale']
         self._start_exposure = CONFIG['min_exposure'] if is_evening else CONFIG['min_save_exposure']
 
     def start(self):
+        """Starts the flat sequence for this arm"""
         self.__take_image(0, 0)
 
     def check_timeout(self):
-        """Sets error state if more than <last exposure> + 30 seconds has elapsed
-           since take_flat was called"""
+        """Sets error state if an expected frame is more than 30 seconds late"""
         if self.state not in [AutoFlatState.Waiting, AutoFlatState.Saving]:
             return
 
-        delta = (datetime.datetime.utcnow() - self._updated).total_seconds()
-        if delta > self._last_exposure + 30:
+        delta = (datetime.datetime.utcnow() - self._expected_next_exposure).total_seconds()
+        if delta > 30:
             print(self.name + ' camera exposure timed out')
             log.error('opsd', self.name + ' camera exposure timed out')
             self.state = AutoFlatState.Error
@@ -113,8 +132,8 @@ class InstrumentArm:
            if exposure is 0 then it will reset the camera
            configuration and take a bias with the shutter closed
         """
-        self._updated = datetime.datetime.utcnow()
-        self._last_exposure = exposure
+        self._expected_next_exposure = datetime.datetime.utcnow() \
+            + datetime.timedelta(seconds=exposure + delay)
         try:
             with self._daemon.connect() as cam:
                 if exposure == 0:
@@ -182,12 +201,13 @@ class InstrumentArm:
 
             if self._is_evening:
                 # Sky is decreasing in brightness
-                # TODO: Remove this once we account for sun elevation?
                 for min_exposure in CONFIG['evening_exposure_delays']:
                     if new_exposure < min_exposure and counts > CONFIG['min_save_counts']:
-                        delay_exposure = CONFIG['evening_exposure_delays'][min_exposure]
-                        print(self.name + ' waiting ' + str(delay_exposure) + \
-                              's for it to get darker')
+                        delay_exposure += CONFIG['evening_exposure_delays'][min_exposure]
+
+                if delay_exposure > 0:
+                    print(self.name + ' waiting ' + str(delay_exposure) + \
+                          's for it to get darker')
 
                 if clamped_exposure == CONFIG['max_exposure'] \
                         and counts < CONFIG['min_save_counts']:
@@ -242,6 +262,7 @@ class InstrumentArm:
         self.state = AutoFlatState.Error
 
 class SkyFlats(TelescopeAction):
+    """Telescope action to acquire sky flats"""
     def __init__(self, config):
         super().__init__('Sky Flats', config)
         self._wait_condition = threading.Condition()
@@ -265,8 +286,6 @@ class SkyFlats(TelescopeAction):
                     'type': 'boolean'
                 },
                 'rasa': camera_schema('rasa'),
-                #'blue': camera_schema('blue'),
-                #'red': camera_schema('red'),
                 'pipeline': pipeline_schema()
             }
         }
@@ -276,10 +295,22 @@ class SkyFlats(TelescopeAction):
 
         self.set_task('Slewing to antisolar point')
         try:
+            # Query site location from the telescope
+            with daemons.rasa_telescope.connect() as teld:
+                s = teld.report_status()
+
+            # pylint: disable=no-member
+            location = EarthLocation(lat=s['site_latitude']*u.deg,
+                                     lon=s['site_longitude']*u.deg,
+                                     height=s['site_elevation']*u.m)
+            # pylint: enable=no-member
+
             # The anti-solar point is opposite the sun at 75 degrees
-            # TODO: Calculate azimuth of sun + 180 deg
+            sun_altaz = sun_position(location)
+            print('Sun position is', sun_altaz)
+
             with daemons.rasa_telescope.connect(timeout=SLEW_TIMEOUT) as teld:
-                status = teld.slew_altaz(math.radians(75), math.radians(90))
+                status = teld.slew_altaz(math.radians(75), math.radians(sun_altaz[1] + 180))
                 if not self.aborted and status != TelCommandStatus.Succeeded:
                     print('Failed to slew telescope')
                     log.error('opsd', 'Failed to slew telescope')
@@ -297,8 +328,33 @@ class SkyFlats(TelescopeAction):
             self.status = TelescopeActionStatus.Error
             return
 
-        # TODO: Wait for the sun elevation to reach the target
         self.set_task('Waiting for sun')
+        while not self.aborted:
+            sun_altitude = sun_position(location)[0]
+            if self.config['evening']:
+                if sun_altitude < CONFIG['min_sun_altitude']:
+                    print('autoflat: sun already too low - continuing')
+                    log.info('opsd', 'autoflat: sun already too low - continuing')
+                    self.status = TelescopeActionStatus.Complete
+                    return
+                if sun_altitude < CONFIG['max_sun_altitude']:
+                    break
+            else:
+                if sun_altitude > CONFIG['max_sun_altitude']:
+                    print('autoflat: sun already too high - continuing')
+                    log.info('opsd', 'autoflat: sun already too high - continuing')
+                    self.status = TelescopeActionStatus.Complete
+                    return
+                if sun_altitude > CONFIG['min_sun_altitude']:
+                    break
+
+            with self._wait_condition:
+                self._wait_condition.wait(CONFIG['sun_altitude_check_interval'])
+
+        # Last chance to bail out before starting the main logic
+        if self.aborted:
+            self.status = TelescopeActionStatus.Error
+            return
 
         # Configure pipeline and camera for flats
         # Archiving will be enabled when the brightness is inside the required range
@@ -359,6 +415,9 @@ class SkyFlats(TelescopeAction):
         super().abort()
         for arm in self._instrument_arms.values():
             arm.abort()
+
+        with self._wait_condition:
+            self._wait_condition.notify_all()
 
     def received_frame(self, headers):
         """Callback to process an acquired frame. headers is a dictionary of header keys"""
