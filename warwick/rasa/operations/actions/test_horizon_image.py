@@ -15,7 +15,7 @@
 # You should have received a copy of the GNU General Public License
 # along with opsd.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Telescope action to wait for a specified amount of time"""
+"""Telescope action to cycle exposures at a fixed pointing"""
 
 # pylint: disable=broad-except
 # pylint: disable=invalid-name
@@ -31,7 +31,6 @@ from warwick.observatory.common import (
     daemons,
     log)
 from warwick.rasa.camera import (
-    CameraStatus,
     CommandStatus as CamCommandStatus,
     configure_validation_schema as camera_schema)
 from warwick.rasa.telescope import CommandStatus as TelCommandStatus
@@ -43,11 +42,13 @@ from . import TelescopeAction, TelescopeActionStatus
 SLEW_TIMEOUT = 120
 
 class TestHorizonImage(TelescopeAction):
-    """Telescope action to power on and prepare the telescope for observing"""
+    """Telescope action to cycle exposures at a fixed pointing"""
     def __init__(self, config):
         super().__init__('Test Horizon Image', config)
         self._acquired_images = 0
         self._wait_condition = threading.Condition()
+        self._exposures = self.config['exposures']
+        self._exposure_index = 0
 
     @classmethod
     def validation_schema(cls):
@@ -70,6 +71,13 @@ class TestHorizonImage(TelescopeAction):
                 'count': {
                     'type': 'integer',
                     'minimum': 0
+                },
+                'exposures': {
+                    'type': 'array',
+                    'items': {
+                        'type': 'number',
+                        'minimum': 0
+                    }
                 },
                 'rasa': camera_schema('rasa'),
                 'pipeline': pipeline_schema()
@@ -129,9 +137,13 @@ class TestHorizonImage(TelescopeAction):
 
         try:
             with daemons.rasa_camera.connect() as cam:
-                status = cam.configure(self.config['rasa'])
+                cam_config = {}
+                cam_config.update(self.config['rasa'])
+                cam_config['exposure'] = self._exposures[0]
+
+                status = cam.configure(cam_config)
                 if status == CamCommandStatus.Succeeded:
-                    status = cam.start_sequence(self.config['count'])
+                    status = cam.start_sequence(1)
 
                 if status != CamCommandStatus.Succeeded:
                     print('Failed to start exposure sequence')
@@ -162,22 +174,6 @@ class TestHorizonImage(TelescopeAction):
             if self._acquired_images == self.config['count'] or self.aborted:
                 break
 
-            # Check camera for error status
-            try:
-                with daemons.rasa_camera.connect() as camd:
-                    status = camd.report_status()
-            except Pyro4.errors.CommunicationError:
-                print('Failed to communicate with camera daemon')
-                break
-            except Exception as e:
-                print('Unknown error while stopping camera')
-                print(e)
-                break
-
-            if status['state'] not in [CameraStatus.Acquiring, CameraStatus.Reading]:
-                print('Camera is in unexpected state', CameraStatus.label(status['state']))
-                break
-
         if not self.aborted and self._acquired_images == self.config['count']:
             self.status = TelescopeActionStatus.Complete
         else:
@@ -185,7 +181,36 @@ class TestHorizonImage(TelescopeAction):
 
     def received_frame(self, headers):
         """Received a frame from the pipeline"""
-        print(headers)
+
+        # Take the next image if required
+        if self._acquired_images + 1 < self.config['count']:
+            try:
+                with daemons.rasa_camera.connect() as cam:
+                    self._exposure_index += 1
+                    if self._exposure_index >= len(self._exposures):
+                        self._exposure_index = 0
+
+                    status = cam.set_exposure(self._exposures[self._exposure_index])
+                    if status == CamCommandStatus.Succeeded:
+                        status = cam.start_sequence(1)
+
+                    if status != CamCommandStatus.Succeeded:
+                        print('Failed to start exposure sequence')
+                        log.error('opsd', 'Failed to start exposure sequence')
+                        self.status = TelescopeActionStatus.Error
+                        return
+            except Pyro4.errors.CommunicationError:
+                print('Failed to communicate with camera daemon')
+                log.error('opsd', 'Failed to communicate with camera daemon')
+                self.status = TelescopeActionStatus.Error
+                return
+            except Exception as e:
+                print('Unknown error with camera')
+                print(e)
+                log.error('opsd', 'Unknown error with camera')
+                self.status = TelescopeActionStatus.Error
+                return
+
         with self._wait_condition:
             self._acquired_images += 1
             self._wait_condition.notify_all()
