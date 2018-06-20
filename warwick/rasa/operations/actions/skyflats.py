@@ -64,7 +64,7 @@ CONFIG = {
     'sun_altitude_check_interval': 30,
 
     # Exposure fudge factor to account for changing sky brightness
-    'evening_scale': 1.065,
+    'evening_scale': 1.07,
     'dawn_scale': 0.9,
 
     # Clamp exposure time deltas to this range (e.g. 5 -> 15 or 5 -> 1.6)
