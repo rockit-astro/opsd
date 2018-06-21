@@ -78,13 +78,6 @@ class TestHorizonImage(TelescopeAction):
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
-        self.set_task('Waiting before slew')
-        with self._wait_condition:
-            self._wait_condition.wait(5)
-        if self.aborted:
-            self.status = TelescopeActionStatus.Error
-            return
-
         self.set_task('Slewing')
         try:
             with daemons.rasa_telescope.connect(timeout=SLEW_TIMEOUT) as teld:
@@ -174,9 +167,32 @@ class TestHorizonImage(TelescopeAction):
                 print(e)
                 break
 
-            if status['state'] not in [CameraStatus.Acquiring, CameraStatus.Reading]:
+            if status['state'] not in [CameraStatus.Acquiring, CameraStatus.Reading, CameraStatus.Waiting]:
                 print('Camera is in unexpected state', CameraStatus.label(status['state']))
+                if status['state'] == CameraStatus.Idle:
+                    print('Retrying exposure')
+                    continue
                 break
+
+        try:
+            with daemons.rasa_telescope.connect() as teld:
+                status = teld.stop()
+                if not self.aborted and status != TelCommandStatus.Succeeded:
+                    print('Failed to slew telescope')
+                    log.error('opsd', 'Failed to stop telescope')
+                    self.status = TelescopeActionStatus.Error
+                    return
+        except Pyro4.errors.CommunicationError:
+            print('Failed to communicate with telescope daemon')
+            log.error('opsd', 'Failed to communicate with telescope daemon')
+            self.status = TelescopeActionStatus.Error
+            return
+        except Exception as e:
+            print('Unknown error while slewing telescope')
+            print(e)
+            log.error('opsd', 'Unknown error while slewing telescope')
+            self.status = TelescopeActionStatus.Error
+            return
 
         if not self.aborted and self._acquired_images == self.config['count']:
             self.status = TelescopeActionStatus.Complete
@@ -185,7 +201,6 @@ class TestHorizonImage(TelescopeAction):
 
     def received_frame(self, headers):
         """Received a frame from the pipeline"""
-        print(headers)
         with self._wait_condition:
             self._acquired_images += 1
             self._wait_condition.notify_all()
