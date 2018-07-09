@@ -170,6 +170,7 @@ class TestHorizonImage(TelescopeAction):
             if status['state'] not in [CameraStatus.Acquiring, CameraStatus.Reading, CameraStatus.Waiting]:
                 print('Camera is in unexpected state', CameraStatus.label(status['state']))
                 if status['state'] == CameraStatus.Idle:
+                    # TODO: Actually retry the exposure
                     print('Retrying exposure')
                     continue
                 break
