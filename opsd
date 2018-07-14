@@ -91,13 +91,13 @@ class OperationsDaemon:
             if dome_status['mode'] == OperationsMode.Error:
                 self._observing = False
                 print('Observing condition disabled (dome error)')
-                log.warning('opsd', 'Observing condition disabled (dome error)')
+                log.warning('rasa_opsd', 'Observing condition disabled (dome error)')
 
             if not self._environment.safe and self._observing:
                 self._observing = False
                 print('Observing condition disabled (environment: '
                       + ', '.join(self._environment.unsafe_conditions) + ')')
-                log.warning('opsd', 'Observing condition disabled (environment: '
+                log.warning('rasa_opsd', 'Observing condition disabled (environment: '
                             + ', '.join(self._environment.unsafe_conditions) + ')')
 
             self._dome.request_status(DomeStatus.Open if self._observing else DomeStatus.Closed)
@@ -129,7 +129,7 @@ class OperationsDaemon:
             mode = OperationsMode.Automatic if automatic else OperationsMode.Manual
             self._dome.request_mode(mode)
 
-            log.info('opsd', 'Dome control manually changed to '
+            log.info('rasa_opsd', 'Dome control manually changed to '
                      + ('automatic' if automatic else 'manual'))
 
             return CommandStatus.Succeeded
@@ -152,7 +152,7 @@ class OperationsDaemon:
             mode = OperationsMode.Automatic if automatic else OperationsMode.Manual
             self._telescope.request_mode(mode)
 
-            log.info('opsd', 'Telescope control manually changed to '
+            log.info('rasa_opsd', 'Telescope control manually changed to '
                      + ('automatic' if automatic else 'manual'))
 
             return CommandStatus.Succeeded
@@ -173,7 +173,7 @@ class OperationsDaemon:
 
             self._observing = observing
             self.__shortcut_loop_wait()
-            log.info('opsd', 'Observing condition manually '
+            log.info('rasa_opsd', 'Observing condition manually '
                      + ('enabled' if observing else 'disabled'))
 
             return CommandStatus.Succeeded

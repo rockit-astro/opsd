@@ -46,16 +46,16 @@ class Shutdown(TelescopeAction):
                 status = teld.slew_altaz(STOW_ALTAZ[0], STOW_ALTAZ[1])
                 if status != CommandStatus.Succeeded:
                     print('Failed to park telescope')
-                    log.error('opsd', 'Failed to park telescope')
+                    log.error(self.log_name, 'Failed to park telescope')
                     self.status = TelescopeActionStatus.Error
         except Pyro4.errors.CommunicationError:
             print('Failed to communicate with telescope daemon')
-            log.error('opsd', 'Failed to communicate with telescope daemon')
+            log.error(self.log_name, 'Failed to communicate with telescope daemon')
             self.status = TelescopeActionStatus.Error
         except Exception as e:
             print('Unknown error while parking telescope')
             print(e)
-            log.error('opsd', 'Unknown error while parking telescope')
+            log.error(self.log_name, 'Unknown error while parking telescope')
             self.status = TelescopeActionStatus.Error
 
         self.status = TelescopeActionStatus.Complete

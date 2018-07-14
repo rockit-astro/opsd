@@ -76,6 +76,7 @@ class DomeController(object):
         self._status = DomeStatus.Closed
         self._status_updated = datetime.datetime.utcnow()
         self._requested_status = DomeStatus.Closed
+        self._log_name = 'rasa_opsd'
 
         loop = threading.Thread(target=self.__loop)
         loop.daemon = True
@@ -119,12 +120,12 @@ class DomeController(object):
                             ret = dome.set_heartbeat_timer(self._heartbeat_timeout)
                             if ret == DomeCommandStatus.Succeeded:
                                 self.__set_mode(OperationsMode.Automatic)
-                                log.info('opsd', 'Dome switched to Automatic mode')
+                                log.info(self._log_name, 'Dome switched to Automatic mode')
                             else:
                                 print('error: failed to switch dome to auto with ' \
                                     + DomeCommandStatus.message(ret))
                                 self.__set_mode(OperationsMode.Error)
-                                log.info('opsd', 'Failed to switch dome to Automatic mode')
+                                log.info(self._log_name, 'Failed to switch dome to Automatic mode')
                         else:
                             # Switch from auto or error state back to manual
                             # TODO: Change this to unlock from ops mode
@@ -133,17 +134,17 @@ class DomeController(object):
 
                             if ret == DomeCommandStatus.Succeeded:
                                 self.__set_mode(OperationsMode.Manual)
-                                log.error('opsd', 'Dome switched to Manual mode')
+                                log.error(self._log_name, 'Dome switched to Manual mode')
                             else:
                                 print('error: failed to switch dome to manual with ' \
                                     + DomeCommandStatus.message(ret))
                                 self.__set_mode(OperationsMode.Error)
-                                log.error('opsd', 'Failed to switch dome to Manual mode')
+                                log.error(self._log_name, 'Failed to switch dome to Manual mode')
                     if self._daemon_error:
-                        log.info('opsd', 'Restored contact with Dome daemon')
+                        log.info(self._log_name, 'Restored contact with Dome daemon')
                 except Exception as e:
                     if not self._daemon_error:
-                        log.error('opsd', 'Lost contact with Dome daemon')
+                        log.error(self._log_name, 'Lost contact with Dome daemon')
                         self._daemon_error = True
 
                     print('error: failed to communicate with the dome daemon: ', e)
@@ -192,7 +193,7 @@ class DomeController(object):
                             dome.set_heartbeat_timer(self._heartbeat_timeout)
                 except Exception as e:
                     if not self._daemon_error:
-                        log.error('opsd', 'Lost contact with Dome daemon')
+                        log.error(self._log_name, 'Lost contact with Dome daemon')
                         self._daemon_error = True
 
                     print('error: failed to communicate with the dome daemon: ', e)

@@ -60,23 +60,23 @@ class Initialize(TelescopeAction):
                 if status not in [CamCommandStatus.Succeeded,
                                   CamCommandStatus.CameraNotUninitialized]:
                     print('Failed to initialize ' + name + ' camera')
-                    log.error('opsd', 'Failed to initialize ' + name + ' camera')
+                    log.error(self.log_name, 'Failed to initialize ' + name + ' camera')
                     return False
 
                 # Calling configure with an empty dictionary resets everything to defaults
                 if cam.configure({}) != CamCommandStatus.Succeeded:
                     print('Failed to reset ' + name + ' camera to defaults')
-                    log.error('opsd', 'Failed to reset ' + name + ' camera to defaults')
+                    log.error(self.log_name, 'Failed to reset ' + name + ' camera to defaults')
                     return False
 
         except Pyro4.errors.CommunicationError:
             print('Failed to communicate with ' + name + ' camera daemon')
-            log.error('opsd', 'Failed to communicate with ' + name + ' camera daemon')
+            log.error(self.log_name, 'Failed to communicate with ' + name + ' camera daemon')
             return False
         except Exception as e:
             print('Unknown error with ' + name + ' camera')
             print(e)
-            log.error('opsd', 'Unknown error with ' + name + ' camera')
+            log.error(self.log_name, 'Unknown error with ' + name + ' camera')
             return False
         return True
 
@@ -95,18 +95,19 @@ class Initialize(TelescopeAction):
                         status = cam.report_status()
                         if 'temperature_locked' not in status:
                             print('Failed to check tempearture on ' + arm + ' camera')
-                            log.error('opsd', 'Failed to check temperature on ' + arm + ' camera')
+                            log.error(self.log_name, 'Failed to check temperature on ' + arm +
+                                      ' camera')
                             return False
 
                         locked[arm] = status['temperature_locked']
             except Pyro4.errors.CommunicationError:
                 print('Failed to communicate with ' + arm + ' camera daemon')
-                log.error('opsd', 'Failed to communicate with ' + arm + ' camera daemon')
+                log.error(self.log_name, 'Failed to communicate with ' + arm + ' camera daemon')
                 return False
             except Exception as e:
                 print('Unknown error with ' + arm + ' camera')
                 print(e)
-                log.error('opsd', 'Unknown error with ' + arm + ' camera')
+                log.error(self.log_name, 'Unknown error with ' + arm + ' camera')
                 return False
 
             if all([locked[k] for k in locked]):
@@ -126,7 +127,7 @@ class Initialize(TelescopeAction):
                 if status not in [TelCommandStatus.Succeeded,
                                   TelCommandStatus.TelescopeNotDisabled]:
                     print('Failed to initialize telescope')
-                    log.error('opsd', 'Failed to initialize telescope')
+                    log.error(self.log_name, 'Failed to initialize telescope')
                     return False
 
             self.set_task('Slewing to park position')
@@ -134,16 +135,16 @@ class Initialize(TelescopeAction):
                 status = teld.slew_altaz(STOW_ALTAZ[0], STOW_ALTAZ[1])
                 if status != TelCommandStatus.Succeeded:
                     print('Failed to park telescope')
-                    log.error('opsd', 'Failed to park telescope')
+                    log.error(self.log_name, 'Failed to park telescope')
                     return False
         except Pyro4.errors.CommunicationError:
             print('Failed to communicate with telescope daemon')
-            log.error('opsd', 'Failed to communicate with telescope daemon')
+            log.error(self.log_name, 'Failed to communicate with telescope daemon')
             return False
         except Exception as e:
             print('Unknown error with telescope')
             print(e)
-            log.error('opsd', 'Unknown error with telescope')
+            log.error(self.log_name, 'Unknown error with telescope')
             return False
         return True
 

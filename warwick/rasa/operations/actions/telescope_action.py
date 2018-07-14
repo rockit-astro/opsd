@@ -31,6 +31,7 @@ class TelescopeAction(object):
         self.name = name
         self.config = config
         self.task = None
+        self.log_name = 'rasa_opsd'
 
         # The current status of the action, queried by the controller thread
         # This should only change to Complete or Error immediately before

@@ -19,6 +19,7 @@
 
 # pylint: disable=broad-except
 # pylint: disable=invalid-name
+# pylint: disable=too-many-arguments
 # pylint: disable=too-many-return-statements
 # pylint: disable=too-few-public-methods
 # pylint: disable=too-many-branches
@@ -101,11 +102,12 @@ def sun_position(location):
 
 class InstrumentArm:
     """Holds arm-specific flat state"""
-    def __init__(self, name, daemon, camera_config, is_evening):
+    def __init__(self, name, daemon, camera_config, is_evening, log_name):
         self.name = name
         self.bias = 0
         self.state = AutoFlatState.Bias
         self._daemon = daemon
+        self._log_name = log_name
         self._camera_config = camera_config
         self._expected_next_exposure = datetime.datetime.utcnow()
         self._is_evening = is_evening
@@ -124,7 +126,7 @@ class InstrumentArm:
         delta = (datetime.datetime.utcnow() - self._expected_next_exposure).total_seconds()
         if delta > 30:
             print(self.name + ' camera exposure timed out')
-            log.error('opsd', self.name + ' camera exposure timed out')
+            log.error(self._log_name, self.name + ' camera exposure timed out')
             self.state = AutoFlatState.Error
 
     def __take_image(self, exposure, delay):
@@ -153,12 +155,12 @@ class InstrumentArm:
                 cam.start_sequence(1)
         except Pyro4.errors.CommunicationError:
             print('Failed to communicate with ' + self.name + ' camera daemon')
-            log.error('opsd', 'Failed to communicate with ' + self.name + ' camera daemon')
+            log.error(self._log_name, 'Failed to communicate with ' + self.name + ' camera daemon')
             self.state = AutoFlatState.Error
         except Exception as e:
             print('Unknown error with ' + self.name + ' camera')
             print(e)
-            log.error('opsd', 'Unknown error with ' + self.name + ' camera')
+            log.error(self._log_name, 'Unknown error with ' + self.name + ' camera')
             self.state = AutoFlatState.Error
 
     def received_frame(self, headers):
@@ -169,7 +171,7 @@ class InstrumentArm:
         if self.state == AutoFlatState.Bias:
             self.bias = headers['MEDCNTS']
             print(self.name + ' bias level is {:.0f} ADU'.format(self.bias))
-            log.info('opsd', '{} bias is {:.0f} ADU'.format(self.name, self.bias))
+            log.info(self._log_name, '{} bias is {:.0f} ADU'.format(self.name, self.bias))
 
             # Take the first flat image
             self.state = AutoFlatState.Waiting
@@ -196,7 +198,7 @@ class InstrumentArm:
             print(self.name + ' exposure {:.2f}s counts {:.0f} ADU -> {:.2f}s{}'
                   .format(exposure, counts, clamped_exposure, clamped_desc))
 
-            log.info('opsd', 'autoflat: {} {:.2f}s {:.0f} ADU -> {:.2f}s{}'
+            log.info(self._log_name, 'autoflat: {} {:.2f}s {:.0f} ADU -> {:.2f}s{}'
                      .format(self.name, exposure, counts, clamped_exposure, clamped_desc))
 
             if self._is_evening:
@@ -228,19 +230,19 @@ class InstrumentArm:
                         pipeline.set_archive(self.name, self.state == AutoFlatState.Saving)
                 except Pyro4.errors.CommunicationError:
                     print('Failed to communicate with pipeline daemon')
-                    log.error('opsd', 'Failed to communicate with pipeline daemon')
+                    log.error(self._log_name, 'Failed to communicate with pipeline daemon')
                     self.state = AutoFlatState.Error
                     return
                 except Exception as e:
                     print('Unknown error while configuring pipeline')
                     print(e)
-                    log.error('opsd', 'Unknown error while configuring pipeline')
+                    log.error(self._log_name, 'Unknown error while configuring pipeline')
                     self.state = AutoFlatState.Error
                     return
 
                 print('autoflat: ' + self.name + ' ' + AutoFlatState.Names[last_state] \
                     + ' -> ' + AutoFlatState.Names[self.state])
-                log.info('opsd', 'autoflat: {} arm {} -> {}'.format(
+                log.info(self._log_name, 'autoflat: {} arm {} -> {}'.format(
                     self.name, AutoFlatState.Names[last_state], AutoFlatState.Names[self.state]))
 
             if self.state != AutoFlatState.Complete:
@@ -254,11 +256,12 @@ class InstrumentArm:
                     cam.stop_sequence()
             except Pyro4.errors.CommunicationError:
                 print('Failed to communicate with ' + self.name + ' camera daemon')
-                log.error('opsd', 'Failed to communicate with ' + self.name + ' camera daemon')
+                log.error(self._log_name, 'Failed to communicate with ' + self.name +
+                          ' camera daemon')
             except Exception as e:
                 print('Unknown error with ' + self.name + ' camera')
                 print(e)
-                log.error('opsd', 'Unknown error with ' + self.name + ' camera')
+                log.error(self._log_name, 'Unknown error with ' + self.name + ' camera')
         self.state = AutoFlatState.Error
 
 class SkyFlats(TelescopeAction):
@@ -268,10 +271,8 @@ class SkyFlats(TelescopeAction):
         self._wait_condition = threading.Condition()
 
         self._instrument_arms = {
-            'RASA': InstrumentArm('RASA',
-                                  daemons.rasa_camera,
-                                  self.config.get('rasa', {}),
-                                  self.config['evening']),
+            'RASA': InstrumentArm('RASA', daemons.rasa_camera, self.config.get('rasa', {}),
+                                  self.config['evening'], self.log_name),
         }
 
     @classmethod
@@ -313,18 +314,18 @@ class SkyFlats(TelescopeAction):
                 status = teld.slew_altaz(math.radians(75), math.radians(sun_altaz[1] + 180))
                 if not self.aborted and status != TelCommandStatus.Succeeded:
                     print('Failed to slew telescope')
-                    log.error('opsd', 'Failed to slew telescope')
+                    log.error(self.log_name, 'Failed to slew telescope')
                     self.status = TelescopeActionStatus.Error
                     return
         except Pyro4.errors.CommunicationError:
             print('Failed to communicate with telescope daemon')
-            log.error('opsd', 'Failed to communicate with telescope daemon')
+            log.error(self.log_name, 'Failed to communicate with telescope daemon')
             self.status = TelescopeActionStatus.Error
             return
         except Exception as e:
             print('Unknown error while slewing telescope')
             print(e)
-            log.error('opsd', 'Unknown error while slewing telescope')
+            log.error(self.log_name, 'Unknown error while slewing telescope')
             self.status = TelescopeActionStatus.Error
             return
 
@@ -334,21 +335,23 @@ class SkyFlats(TelescopeAction):
             if self.config['evening']:
                 if sun_altitude < CONFIG['min_sun_altitude']:
                     print('autoflat: sun already too low - continuing')
-                    log.info('opsd', 'autoflat: sun already too low - continuing')
+                    log.info(self.log_name, 'autoflat: sun already too low - continuing')
                     self.status = TelescopeActionStatus.Complete
                     return
                 if sun_altitude < CONFIG['max_sun_altitude']:
                     break
-                print('{:.1f} > {:.1f} - keep waiting'.format(sun_altitude, CONFIG['max_sun_altitude']))
+                print('{:.1f} > {:.1f} - keep waiting'.format(sun_altitude,
+                                                              CONFIG['max_sun_altitude']))
             else:
                 if sun_altitude > CONFIG['max_sun_altitude']:
                     print('autoflat: sun already too high - continuing')
-                    log.info('opsd', 'autoflat: sun already too high - continuing')
+                    log.info(self.log_name, 'autoflat: sun already too high - continuing')
                     self.status = TelescopeActionStatus.Complete
                     return
                 if sun_altitude > CONFIG['min_sun_altitude']:
                     break
-                print('{:.1f} < {:.1f} - keep waiting'.format(sun_altitude, CONFIG['min_sun_altitude']))
+                print('{:.1f} < {:.1f} - keep waiting'.format(sun_altitude,
+                                                              CONFIG['min_sun_altitude']))
 
             with self._wait_condition:
                 self._wait_condition.wait(CONFIG['sun_altitude_check_interval'])
@@ -371,13 +374,13 @@ class SkyFlats(TelescopeAction):
                 pipeline.configure(pipeline_config)
         except Pyro4.errors.CommunicationError:
             print('Failed to communicate with pipeline daemon')
-            log.error('opsd', 'Failed to communicate with pipeline daemon')
+            log.error(self.log_name, 'Failed to communicate with pipeline daemon')
             self.status = TelescopeActionStatus.Error
             return
         except Exception as e:
             print('Unknown error while configuring pipeline')
             print(e)
-            log.error('opsd', 'Unknown error while configuring pipeline')
+            log.error(self.log_name, 'Unknown error while configuring pipeline')
             self.status = TelescopeActionStatus.Error
             return
 

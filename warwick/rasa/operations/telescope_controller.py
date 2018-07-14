@@ -52,6 +52,8 @@ class TelescopeController(object):
         self._mode_updated = datetime.datetime.utcnow()
         self._requested_mode = OperationsMode.Manual
 
+        self._log_name = 'rasa_opsd'
+
         self._run_thread = threading.Thread(target=self.__run)
         self._run_thread.daemon = True
         self._run_thread.start()
@@ -74,7 +76,7 @@ class TelescopeController(object):
                             print('switching to manual mode - aborting queue')
                             if self._active_action is not None:
                                 self._active_action.abort()
-                            log.info('opsd', 'Aborting action queue')
+                            log.info(self._log_name, 'Aborting action queue')
                             self._action_queue.clear()
                         elif self._active_action is None:
                             print('queue aborted - switching to manual')
@@ -116,8 +118,8 @@ class TelescopeController(object):
                         status = self._active_action.status
                         if status == TelescopeActionStatus.Error:
                             print('action is error - aborting queue')
-                            log.error('opsd', 'Action failed: ' + self._active_action.name)
-                            log.info('opsd', 'Aborting action queue and parking telescope')
+                            log.error(self._log_name, 'Action failed: ' + self._active_action.name)
+                            log.info(self._log_name, 'Aborting action queue and parking telescope')
                             self._action_queue.clear()
                             self._mode = OperationsMode.Error
 

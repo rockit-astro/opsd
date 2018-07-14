@@ -122,6 +122,7 @@ class EnvironmentWatcher(object):
         self.wants_dehumidifier = False
         self.updated = datetime.datetime.utcnow()
         self._lock = threading.Lock()
+        self._log_name = 'rasa_opsd'
 
         self._conditions = {}
         for c in CONDITIONS:
@@ -176,9 +177,9 @@ class EnvironmentWatcher(object):
                 self.updated = datetime.datetime.utcnow()
 
             if was_safe and not safe:
-                log.warning('opsd', 'Environment has become unsafe')
+                log.warning(self._log_name, 'Environment has become unsafe')
             elif not was_safe and safe:
-                log.info('opsd', 'Environment trigger timed out')
+                log.info(self._log_name, 'Environment trigger timed out')
         except Exception as e:
             with self._lock:
                 self.safe = False
@@ -191,7 +192,7 @@ class EnvironmentWatcher(object):
                 self.updated = datetime.datetime.utcnow()
 
             print('error: failed to query environment: ', e)
-            log.info('opsd', 'Failed to query environmentd (' + str(e) + ')')
+            log.info(self._log_name, 'Failed to query environmentd (' + str(e) + ')')
 
     def status(self):
         """Returns a dictionary with the current environment status"""

@@ -84,18 +84,18 @@ class TestHorizonImage(TelescopeAction):
                 status = teld.slew_altaz(self.config['alt'], self.config['az'])
                 if not self.aborted and status != TelCommandStatus.Succeeded:
                     print('Failed to slew telescope')
-                    log.error('opsd', 'Failed to slew telescope')
+                    log.error(self.log_name, 'Failed to slew telescope')
                     self.status = TelescopeActionStatus.Error
                     return
         except Pyro4.errors.CommunicationError:
             print('Failed to communicate with telescope daemon')
-            log.error('opsd', 'Failed to communicate with telescope daemon')
+            log.error(self.log_name, 'Failed to communicate with telescope daemon')
             self.status = TelescopeActionStatus.Error
             return
         except Exception as e:
             print('Unknown error while slewing telescope')
             print(e)
-            log.error('opsd', 'Unknown error while slewing telescope')
+            log.error(self.log_name, 'Unknown error while slewing telescope')
             self.status = TelescopeActionStatus.Error
             return
 
@@ -110,13 +110,13 @@ class TestHorizonImage(TelescopeAction):
                 pipeline.configure(self.config['pipeline'])
         except Pyro4.errors.CommunicationError:
             print('Failed to communicate with pipeline daemon')
-            log.error('opsd', 'Failed to communicate with pipeline daemon')
+            log.error(self.log_name, 'Failed to communicate with pipeline daemon')
             self.status = TelescopeActionStatus.Error
             return
         except Exception as e:
             print('Unknown error while configuring pipeline')
             print(e)
-            log.error('opsd', 'Unknown error while configuring pipeline')
+            log.error(self.log_name, 'Unknown error while configuring pipeline')
             self.status = TelescopeActionStatus.Error
             return
 
@@ -128,18 +128,18 @@ class TestHorizonImage(TelescopeAction):
 
                 if status != CamCommandStatus.Succeeded:
                     print('Failed to start exposure sequence')
-                    log.error('opsd', 'Failed to start exposure sequence')
+                    log.error(self.log_name, 'Failed to start exposure sequence')
                     self.status = TelescopeActionStatus.Error
                     return
         except Pyro4.errors.CommunicationError:
             print('Failed to communicate with camera daemon')
-            log.error('opsd', 'Failed to communicate with camera daemon')
+            log.error(self.log_name, 'Failed to communicate with camera daemon')
             self.status = TelescopeActionStatus.Error
             return
         except Exception as e:
             print('Unknown error with camera')
             print(e)
-            log.error('opsd', 'Unknown error with camera')
+            log.error(self.log_name, 'Unknown error with camera')
             self.status = TelescopeActionStatus.Error
             return
 
@@ -180,18 +180,18 @@ class TestHorizonImage(TelescopeAction):
                 status = teld.stop()
                 if not self.aborted and status != TelCommandStatus.Succeeded:
                     print('Failed to slew telescope')
-                    log.error('opsd', 'Failed to stop telescope')
+                    log.error(self.log_name, 'Failed to stop telescope')
                     self.status = TelescopeActionStatus.Error
                     return
         except Pyro4.errors.CommunicationError:
             print('Failed to communicate with telescope daemon')
-            log.error('opsd', 'Failed to communicate with telescope daemon')
+            log.error(self.log_name, 'Failed to communicate with telescope daemon')
             self.status = TelescopeActionStatus.Error
             return
         except Exception as e:
             print('Unknown error while slewing telescope')
             print(e)
-            log.error('opsd', 'Unknown error while slewing telescope')
+            log.error(self.log_name, 'Unknown error while slewing telescope')
             self.status = TelescopeActionStatus.Error
             return
 
