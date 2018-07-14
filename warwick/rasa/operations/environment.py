@@ -25,7 +25,9 @@
 # pylint: disable=broad-except
 
 import datetime
+import sys
 import threading
+import traceback
 
 from warwick.observatory.common import (
     daemons,
@@ -83,7 +85,7 @@ CONDITIONS = [
     ConditionWatcher('humidity', 'vaisala', 'relative_humidity', 'W1m'),
     ConditionWatcher('humidity', 'goto_vaisala', 'relative_humidity', 'GOTO'),
     ConditionWatcher('humidity', 'superwasp', 'ext_humidity', 'SWASP'),
-    ConditionWatcher('internal_humidity', 'roomalert', 'internal_humidity', 'W1m'),
+    ConditionWatcher('internal_humidity', 'goto_roomalert', 'dome2_internal_humidity', 'RASA'),
 
     # Dew point
     ConditionWatcher('dewpt', 'vaisala', 'dew_point_delta', 'W1m'),
@@ -94,18 +96,13 @@ CONDITIONS = [
     ConditionWatcher('rain', 'vaisala', 'accumulated_rain', 'W1m'),
     ConditionWatcher('rain', 'goto_vaisala', 'accumulated_rain', 'GOTO'),
 
-    # Security system
-    ConditionWatcher('secsys', 'roomalert', 'security_system_safe', 'W1m'),
-
     # Network
     ConditionWatcher('netping', 'netping', 'google', 'Google'),
     ConditionWatcher('netping', 'netping', 'ngtshead', 'NGTSHead'),
 
     # Power
-    ConditionWatcher('main_ups', 'power', 'main_ups_status', 'Status'),
-    ConditionWatcher('main_ups', 'power', 'main_ups_battery_remaining', 'Battery'),
-    ConditionWatcher('dome_ups', 'power', 'dome_ups_status', 'Status'),
-    ConditionWatcher('dome_ups', 'power', 'dome_ups_battery_remaining', 'Battery'),
+    ConditionWatcher('ups', 'power', 'ups_status', 'Status'),
+    ConditionWatcher('ups', 'power', 'ups_battery_remaining', 'Battery'),
 
     # Disk space
     ConditionWatcher('diskspace', 'diskspace', 'data_fs_available_bytes', 'Bytes'),
@@ -141,7 +138,7 @@ class EnvironmentWatcher(object):
         '''Queries environmentd for new data and updates flags'''
         was_safe = self.safe
         try:
-            with daemons.onemetre_environment.connect() as environment:
+            with daemons.rasa_environment.connect() as environment:
                 data = environment.status()
 
             safe = True
@@ -191,8 +188,9 @@ class EnvironmentWatcher(object):
                 self.external_humidity = None
                 self.updated = datetime.datetime.utcnow()
 
-            print('error: failed to query environment: ', e)
-            log.info(self._log_name, 'Failed to query environmentd (' + str(e) + ')')
+            print('error: failed to query environment:')
+            traceback.print_exc(file=sys.stdout)
+            log.info(self._log_name, 'Failed to query environment (' + str(e) + ')')
 
     def status(self):
         """Returns a dictionary with the current environment status"""
