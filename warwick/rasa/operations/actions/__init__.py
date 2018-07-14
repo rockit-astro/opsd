@@ -18,6 +18,7 @@
 """opsd common code"""
 
 from .telescope_action import TelescopeAction, TelescopeActionStatus
+from .focussweep import FocusSweep
 from .skyflats import SkyFlats
 from .initialize import Initialize
 from .shutdown import Shutdown
