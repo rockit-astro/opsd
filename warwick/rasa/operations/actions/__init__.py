@@ -20,6 +20,7 @@
 from .telescope_action import TelescopeAction, TelescopeActionStatus
 from .focussweep import FocusSweep
 from .imageset import ImageSet
+from .offset_telescope import OffsetTelescope
 from .slew_telescope import SlewTelescope
 from .skyflats import SkyFlats
 from .initialize import Initialize

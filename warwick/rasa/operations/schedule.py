@@ -28,7 +28,14 @@ import ephem
 import jsonschema
 
 # Action types
-from .actions import FocusSweep, ImageSet, SlewTelescope, SkyFlats, TestHorizonImage, Wait
+from .actions import (
+    FocusSweep,
+    ImageSet,
+    OffsetTelescope,
+    SlewTelescope,
+    SkyFlats,
+    TestHorizonImage,
+    Wait)
 
 # Measured from GPS receiver
 SITE_LATITUDE = 28.7603135
@@ -39,6 +46,7 @@ ACTION_TYPES = {
     'FocusSweep': FocusSweep,
     'SkyFlats': SkyFlats,
     'ImageSet': ImageSet,
+    'OffsetTelescope': OffsetTelescope,
     'SlewTelescope': SlewTelescope,
     'TestHorizonImage': TestHorizonImage,
     'Wait': Wait
