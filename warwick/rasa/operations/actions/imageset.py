@@ -24,60 +24,21 @@
 # pylint: disable=too-many-branches
 # pylint: disable=too-many-statements
 
-import sys
 import threading
-import traceback
 import Pyro4
 from warwick.observatory.common import (
     daemons,
     log)
 from warwick.rasa.camera import (
     CameraStatus,
-    CommandStatus as CamCommandStatus,
     configure_validation_schema as camera_schema)
 from warwick.rasa.pipeline import (
     configure_standard_validation_schema as pipeline_schema)
 
+from .camera_helpers import take_images, get_camera_status
 from . import TelescopeAction, TelescopeActionStatus
 
 VALID_CAMERA_STATES = [CameraStatus.Acquiring, CameraStatus.Reading, CameraStatus.Waiting]
-
-# TODO: Pull this out to a shared helpers file
-def take_images(log_name, count=1, config=None):
-    try:
-        with daemons.rasa_camera.connect() as cam:
-            if config:
-                status = cam.configure(config)
-
-            if not config or status == CamCommandStatus.Succeeded:
-                status = cam.start_sequence(count)
-
-            if status != CamCommandStatus.Succeeded:
-                print('Failed to start exposure sequence')
-                log.error(log_name, 'Failed to start exposure sequence')
-                return False
-            return True
-    except Pyro4.errors.CommunicationError:
-        print('Failed to communicate with camera daemon')
-        log.error(log_name, 'Failed to communicate with camera daemon')
-        return False
-    except Exception:
-        print('Unknown error with camera')
-        traceback.print_exc(file=sys.stdout)
-        log.error(log_name, 'Unknown error with camera')
-        return False
-
-def get_camera_status(log_name):
-    try:
-        with daemons.rasa_camera.connect() as camd:
-            return camd.report_status()
-    except Pyro4.errors.CommunicationError:
-        print('Failed to communicate with camera daemon')
-        return None
-    except Exception:
-        print('Unknown error while querying camera status')
-        traceback.print_exc(file=sys.stdout)
-        return None
 
 class ImageSet(TelescopeAction):
     """Telescope action to take a set of images without controlling the telescope"""

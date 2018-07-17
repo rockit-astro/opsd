@@ -25,57 +25,10 @@
 # pylint: disable=too-many-statements
 
 import math
-import sys
-import traceback
-import Pyro4
-from warwick.observatory.common import (
-    daemons,
-    log)
-from warwick.rasa.telescope import CommandStatus as TelCommandStatus
-
 from . import TelescopeAction, TelescopeActionStatus
+from .telescope_helpers import tel_slew_radec, tel_stop
 
 SLEW_TIMEOUT = 120
-
-def tel_slew_radec(log_name, ra, dec, tracking, slew_timeout):
-    """Slew the telescope to a given RA, Dec"""
-    try:
-        with daemons.rasa_telescope.connect(timeout=slew_timeout) as teld:
-            if tracking:
-                status = teld.track_radec(ra, dec)
-            else:
-                status = teld.slew_radec(ra, dec)
-
-            if status != TelCommandStatus.Succeeded:
-                print('Failed to slew telescope')
-                log.error(log_name, 'Failed to slew telescope')
-                return False
-            return True
-    except Pyro4.errors.CommunicationError:
-        print('Failed to communicate with telescope daemon')
-        log.error(log_name, 'Failed to communicate with telescope daemon')
-        return False
-    except Exception:
-        print('Unknown error while slewing telescope')
-        traceback.print_exc(file=sys.stdout)
-        log.error(log_name, 'Unknown error while slewing telescope')
-        return False
-
-def tel_stop(log_name):
-    """Stop the telescope tracking or movement"""
-    try:
-        with daemons.rasa_telescope.connect() as teld:
-            teld.stop()
-        return True
-    except Pyro4.errors.CommunicationError:
-        print('Failed to communicate with telescope daemon')
-        log.error(log_name, 'Failed to communicate with telescope daemon')
-        return False
-    except Exception:
-        print('Unknown error while stopping telescope')
-        traceback.print_exc(file=sys.stdout)
-        log.error(log_name, 'Unknown error while stopping telescope')
-        return False
 
 class SlewTelescope(TelescopeAction):
     """Telescope action to slew the telescope to a given ra, dec"""

@@ -32,65 +32,17 @@ from warwick.observatory.common import (
     daemons,
     log)
 from warwick.rasa.camera import (
-    CommandStatus as CamCommandStatus,
     configure_validation_schema as camera_schema)
-from warwick.rasa.focuser import CommandStatus as FocCommandStatus
 from warwick.rasa.telescope import CommandStatus as TelCommandStatus
 from warwick.rasa.pipeline import (
     configure_standard_validation_schema as pipeline_schema)
 
+from .camera_helpers import take_images
+from .telescope_helpers import set_focus
 from . import TelescopeAction, TelescopeActionStatus
 
 SLEW_TIMEOUT = 120
 FOCUS_TIMEOUT = 300
-
-def set_focus(channel, position, log_name):
-    try:
-        with daemons.rasa_focus.connect(timeout=FOCUS_TIMEOUT) as focusd:
-            print('moving focus {} to {}'.format(channel, position))
-            status = focusd.set_focus(channel, position)
-            if status != FocCommandStatus.Succeeded:
-                print('Failed to set focuser position')
-                log.error(log_name, 'Failed to set focuser position')
-                return False
-            print('done')
-            return True
-    except Pyro4.errors.CommunicationError:
-        print('Failed to communicate with focuser daemon')
-        log.error(log_name, 'Failed to communicate with focuser daemon')
-        return False
-    except Exception as e:
-        print('Unknown error while configuring focuser')
-        print(e)
-        log.error(log_name, 'Unknown error while configuring focuser')
-        return False
-
-def start_exposure(config, log_name):
-    try:
-        with daemons.rasa_camera.connect() as cam:
-            if config:
-                print('configuring camera')
-                status = cam.configure(config)
-
-            print('{} {}'.format(not config, status == CamCommandStatus.Succeeded))
-            if not config or status == CamCommandStatus.Succeeded:
-                print('starting sequence')
-                status = cam.start_sequence(1)
-
-            if status != CamCommandStatus.Succeeded:
-                print('Failed to start exposure sequence')
-                log.error(log_name, 'Failed to start exposure sequence')
-                return False
-            return True
-    except Pyro4.errors.CommunicationError:
-        print('Failed to communicate with camera daemon')
-        log.error(log_name, 'Failed to communicate with camera daemon')
-        return False
-    except Exception as e:
-        print('Unknown error with camera')
-        print(e)
-        log.error(log_name, 'Unknown error with camera')
-        return False
 
 class FocusSweep(TelescopeAction):
     """Telescope action to do a focus sweep on a defined field"""
@@ -197,12 +149,12 @@ class FocusSweep(TelescopeAction):
         # Move focuser to the start of the focus range
         current_focus = self.config['start']
 
-        if not set_focus(self.config['channel'], current_focus, self.log_name):
+        if not set_focus(self.log_name, self.config['channel'], current_focus, FOCUS_TIMEOUT):
             self.status = TelescopeActionStatus.Error
             return
 
         # Configure the camera then take the first exposure to start the process
-        if not start_exposure(self.config['rasa'], self.log_name):
+        if not take_images(self.log_name, 1, self.config['rasa']):
             self.status = TelescopeActionStatus.Error
             return
 
@@ -226,11 +178,12 @@ class FocusSweep(TelescopeAction):
             # The last measurement has finished - move on to the next
             if current_focus in self._focus_measurements:
                 current_focus += self.config['step']
-                if not set_focus(self.config['channel'], current_focus, self.log_name):
+                if not set_focus(self.log_name, self.config['channel'], current_focus,
+                                 FOCUS_TIMEOUT):
                     self.status = TelescopeActionStatus.Error
                     return
 
-                if not start_exposure(self.config['rasa'], self.log_name):
+                if not take_images(self.log_name, 1, self.config['rasa']):
                     self.status = TelescopeActionStatus.Error
                     return
 
@@ -239,7 +192,7 @@ class FocusSweep(TelescopeAction):
 
             elif datetime.datetime.utcnow() > expected_next_exposure:
                 print('Exposure timed out - retrying')
-                if not start_exposure(self.config['rasa'], self.log_name):
+                if not take_images(self.log_name, 1, self.config['rasa']):
                     self.status = TelescopeActionStatus.Error
                     return
 
