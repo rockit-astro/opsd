@@ -232,12 +232,19 @@ def print_status():
     if tel['mode'] != tel['requested_mode']:
         tel_mode += ' (' + FMT_BOLD + OPS_MODES[tel['requested_mode']] + FMT_CLEAR + \
             ' queued)'
+
     print(tel_mode)
 
     if 'action_name' in tel:
-        print('    Action name: ' + FMT_BOLD + tel['action_name'] + FMT_CLEAR)
+        name = '       Name: ' + FMT_BOLD + tel['action_name'] + FMT_CLEAR
+        
+        if tel['action_number'] > 0:
+            name += ' (' + str(tel['action_number']) + ' of ' + str(tel['action_count']) + ')'
+        print(name)
+
+
         if tel['action_task']:
-            print('    Action task: ' + FMT_BOLD + tel['action_task'] + FMT_CLEAR)
+            print('       Task: ' + FMT_BOLD + tel['action_task'] + FMT_CLEAR)
     elif tel['mode'] == 1:
         print('    Action name: ' + FMT_BOLD + 'IDLE' + FMT_CLEAR)
 

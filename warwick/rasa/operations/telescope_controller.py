@@ -24,7 +24,7 @@
 import collections
 import datetime
 import threading
-from warwick.observatory.common import log, daemons
+from warwick.observatory.common import log
 
 from .actions import Initialize, Shutdown, TelescopeActionStatus
 from .constants import OperationsMode
@@ -54,6 +54,9 @@ class TelescopeController(object):
 
         self._log_name = 'rasa_opsd'
 
+        self._action_count = 0
+        self._current_action_number = 0
+
         self._run_thread = threading.Thread(target=self.__run)
         self._run_thread.daemon = True
         self._run_thread.start()
@@ -78,6 +81,7 @@ class TelescopeController(object):
                                 self._active_action.abort()
                             log.info(self._log_name, 'Aborting action queue')
                             self._action_queue.clear()
+                            self._action_count = self._current_action_number = 0
                         elif self._active_action is None:
                             print('queue aborted - switching to manual')
                             self._mode = OperationsMode.Manual
@@ -102,11 +106,12 @@ class TelescopeController(object):
                                 self._active_action = Initialize()
                             else:
                                 self._active_action = self._action_queue.pop()
-
+                                self._current_action_number += 1
                         # We have nothing left to do, so stow the telescope until next time
                         elif not self._action_queue and self._initialized and \
                                 self._requested_mode != OperationsMode.Manual:
                             self._active_action = Shutdown()
+                            self._action_count = self._current_action_number = 0
 
                         # Start the action running
                         if self._active_action is not None:
@@ -122,6 +127,7 @@ class TelescopeController(object):
                             log.info(self._log_name, 'Aborting action queue and parking telescope')
                             self._action_queue.clear()
                             self._mode = OperationsMode.Error
+                            self._action_count = self._current_action_number = 0
 
                         if status != TelescopeActionStatus.Incomplete:
                             if isinstance(self._active_action, Initialize):
@@ -151,6 +157,8 @@ class TelescopeController(object):
                 'mode_updated': self._mode_updated.strftime('%Y-%m-%dT%H:%M:%SZ'),
                 'requested_mode': self._requested_mode,
                 'status_updated': self._status_updated.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                'action_number': self._current_action_number,
+                'action_count': self._action_count
             }
 
             if self._active_action is not None:
@@ -173,13 +181,16 @@ class TelescopeController(object):
            Returns True on success or False if the
            telescope is not under automatic control.
         """
+        print('queue actions')
         with self._action_lock:
             if self._mode != OperationsMode.Automatic:
+                print('not automatic')
                 return False
 
             for action in actions:
                 print('queuing', action.name)
                 self._action_queue.appendleft(action)
+                self._action_count += 1
             self.__shortcut_loop_wait()
         return True
 
@@ -197,3 +208,4 @@ class TelescopeController(object):
             if self._active_action:
                 self._action_queue.clear()
                 self._active_action.abort()
+                self._action_count = self._current_action_number = 0
