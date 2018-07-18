@@ -209,3 +209,4 @@ class TelescopeController(object):
                 self._action_queue.clear()
                 self._active_action.abort()
                 self._action_count = self._current_action_number = 0
+

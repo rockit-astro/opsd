@@ -72,10 +72,11 @@ class DomeController(object):
         self._mode = OperationsMode.Manual
         self._mode_updated = datetime.datetime.utcnow()
         self._requested_mode = OperationsMode.Manual
+        self._requested_open_date = None
+        self._requested_close_date = None
 
         self._status = DomeStatus.Closed
         self._status_updated = datetime.datetime.utcnow()
-        self._requested_status = DomeStatus.Closed
         self._log_name = 'rasa_opsd'
 
         loop = threading.Thread(target=self.__loop)
@@ -104,7 +105,13 @@ class DomeController(object):
             # Copy public facing variables to avoid race conditions
             with self._lock:
                 requested_mode = self._requested_mode
-                requested_status = self._requested_status
+
+                current_date = datetime.datetime.utcnow()
+                requested_open = self._requested_open_date is not None and \
+                    self._requested_close_date is not None and \
+                    current_date > self._requested_open_date and \
+                    current_date < self._requested_close_date
+                requested_status = DomeStatus.Open if requested_open else DomeStatus.Closed
 
             auto_failure = self._mode == OperationsMode.Error and \
                 requested_mode == OperationsMode.Automatic
@@ -211,23 +218,65 @@ class DomeController(object):
     def status(self):
         """Returns a dictionary with the current dome status"""
         with self._lock:
+            open_str = None
+            if self._requested_open_date:
+                open_str = self._requested_open_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+            close_str = None
+            if self._requested_close_date:
+                close_str = self._requested_close_date.strftime('%Y-%m-%dT%H:%M:%SZ')
             return {
                 'mode': self._mode,
                 'mode_updated': self._mode_updated.strftime('%Y-%m-%dT%H:%M:%SZ'),
                 'status': self._status,
                 'status_updated': self._status_updated.strftime('%Y-%m-%dT%H:%M:%SZ'),
                 'requested_mode': self._requested_mode,
-                'requested_status': self._requested_status,
+                'requested_open_date': open_str,
+                'requested_close_date': close_str,
             }
-
-    def request_status(self, status):
-        """Request a dome status change (open/closed)"""
-        with self._lock:
-            self._requested_status = status
-            self.__shortcut_loop_wait()
 
     def request_mode(self, mode):
         """Request a dome mode change (automatic/manual)"""
         with self._lock:
             self._requested_mode = mode
             self.__shortcut_loop_wait()
+
+    def set_open_window(self, dates):
+        """Sets the datetimes that the dome should open and close
+           These dates will be cleared automatically if a weather alert triggers
+        """
+        if not dates or len(dates) < 2:
+            return False
+
+        if not isinstance(dates[0], datetime.datetime) or \
+                not isinstance(dates[1], datetime.datetime):
+            return False
+
+        with self._lock:
+            self._requested_open_date = dates[0]
+            self._requested_close_date = dates[1]
+
+            open_str = dates[0].strftime('%Y-%m-%dT%H:%M:%SZ')
+            close_str = dates[1].strftime('%Y-%m-%dT%H:%M:%SZ')
+            print('Scheduled dome window ' + open_str + ' - ' + close_str)
+            log.info(self._log_name, 'Scheduled dome window ' + open_str + ' - ' + close_str)
+
+            self.__shortcut_loop_wait()
+            return True
+
+    def clear_open_window(self):
+        """Clears the times that the dome should be automatically open
+           The dome will automatically close if it is currently within this window
+        """
+        self._requested_open_date = self._requested_close_date = None
+        print('Cleared dome window')
+        log.info(self._log_name, 'Cleared dome window')
+
+    def active(self):
+        """Returns true if the dome is currently under active control
+           and should be notified about a weather alert
+        """
+        if not self._requested_open_date or not self._requested_close_date:
+            return False
+
+        now = datetime.datetime.utcnow()
+        return now > self._requested_open_date and now < self._requested_close_date

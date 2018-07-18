@@ -4,14 +4,17 @@ _ops()
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="status json dome dehumidifier observing autoflat acquire schedule validate"
+    opts="status json dome tel dehumidifier validate schedule"
 
     case "${prev}" in
-        dome|dehumidifier)
-            opts="auto manual"
+        dome)
+            opts="auto manual clear"
             ;;
-        observing)
-            opts="enabled disabled"
+        tel)
+            opts="auto manual stop"
+            ;;
+        dehumidifier)
+            opts="auto manual"
             ;;
         schedule|validate)
             # Fall back to readline completion for files (from the -o default)

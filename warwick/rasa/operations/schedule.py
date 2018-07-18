@@ -73,8 +73,10 @@ def __create_validator(night):
     # pylint: enable=no-member
     # pylint: enable=assigning-non-slot
 
-    # Ensure that tagged dates occur on the same night as the observation
     def require_night(validator, value, instance, schema):
+        """Create a validator object that forces a tagged date to match
+           the night defined in the observing plan
+        """
         try:
             date = datetime.datetime.strptime(instance, '%Y-%m-%dT%H:%M:%SZ')
         except Exception:
@@ -82,12 +84,14 @@ def __create_validator(night):
             return
 
         if value and (date < night_start or date > night_end):
-            yield jsonschema.ValidationError("{} is not between {} and {}".format(date, night_start, night_end))
+            start_str = night_start.strftime('%Y-%m-%dT%H:%M:%SZ')
+            end_str = night_end.strftime('%Y-%m-%dT%H:%M:%SZ')
+            yield jsonschema.ValidationError("{} is not between {} and {}".format(
+                date, start_str, end_str))
 
     validators['require-night'] = require_night
     return jsonschema.validators.create(meta_schema=jsonschema.Draft4Validator.META_SCHEMA,
                                         validators=validators)
-
 
 def __validate_schema(validator, schema, block):
     try:
@@ -165,6 +169,8 @@ def validate_schedule(json):
     if 'night' not in json:
         return False, ['syntax error: missing key \'night\'']
 
+    # TODO: Require schedule to be for tonight!
+
     try:
         validator = __create_validator(json['night'])
     except Exception as e:
@@ -188,6 +194,7 @@ def validate_schedule(json):
 
 def schedule_is_tonight(json):
     """Returns true if a given schedule is valid to execute tonight"""
+    pass
 
 def parse_schedule_actions(json):
     """Parses a json object into a list of TelescopeActions
@@ -202,6 +209,15 @@ def parse_schedule_actions(json):
         return []
     return actions
 
-def parse_schedule_dome_times(json):
-    """Parses dome open and close times from a schedule"""
-    return None, None
+def parse_dome_window(json):
+    """Parses dome open and close dates from a schedule
+       Returns a tuple of the open and close dates
+       or None if the json does not define a dome block
+    """
+    if 'dome' in json and 'open' in json['dome'] and 'close' in json['dome']:
+        # These dates have already been validated by __validate_dome
+        open_date = datetime.datetime.strptime(json['dome']['open'], '%Y-%m-%dT%H:%M:%SZ')
+        close_date = datetime.datetime.strptime(json['dome']['close'], '%Y-%m-%dT%H:%M:%SZ')
+        return (open_date, close_date)
+
+    return None

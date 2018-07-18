@@ -30,7 +30,6 @@ from warwick.rasa.operations import (
     validate_schedule
 )
 
-
 SCRIPT_NAME = os.path.basename(sys.argv[0])
 sys.excepthook = Pyro4.util.excepthook
 
@@ -95,33 +94,31 @@ def run_command(command):
     sys.exit(ret)
 
 def dome_control(args):
-    """Changes the dome between automatic and manual control"""
+    """Changes the dome between automatic and manual control and cancels automated observing"""
     if args:
+        if args[0] == 'clear':
+            with daemons.rasa_operations.connect() as ops:
+                return ops.clear_dome_window()
+
         if args[0] in ['auto', 'manual']:
             with daemons.rasa_operations.connect() as ops:
                 return ops.dome_control(args[0] == 'auto')
 
-    print('usage: {} dome (auto|manual)'.format(SCRIPT_NAME))
+    print('usage: {} dome (auto|manual|clear)'.format(SCRIPT_NAME))
     return -1
 
 def tel_control(args):
-    """Changes the telescope between automatic and manual control"""
+    """Changes the telescope between automatic and manual control and cancels automated observing"""
     if args:
+        if args[0] == 'stop':
+            with daemons.rasa_operations.connect() as ops:
+                return ops.stop_telescope()
+
         if args[0] in ['auto', 'manual']:
             with daemons.rasa_operations.connect() as ops:
                 return ops.tel_control(args[0] == 'auto')
 
-    print('usage: {} tel (auto|manual)'.format(SCRIPT_NAME))
-    return -1
-
-def set_observing(args):
-    """Enable or disable the global observing mode (opens the dome)"""
-    if args:
-        if args[0] == 'enabled' or args[0] == 'disabled':
-            with daemons.rasa_operations.connect() as ops:
-                return ops.set_observing(args[0] == 'enabled')
-
-    print('usage: {} observing (enabled|disabled)'.format(SCRIPT_NAME))
+    print('usage: {} tel (auto|manual|stop)'.format(SCRIPT_NAME))
     return -1
 
 def validate_schedule_json(args):
@@ -171,13 +168,6 @@ def schedule(args):
 
     return -1
 
-def stop_telescope():
-    """Schedule observations for a nights observing"""
-    with daemons.rasa_operations.connect() as ops:
-        return ops.stop_telescope()
-
-    return -1
-
 def print_status():
     """Prints the latest ops data in machine-readable form"""
     status = None
@@ -214,14 +204,19 @@ def print_status():
     print(dome_mode)
 
     if dome['mode'] == 1:
-        observing = FMT_GREEN + 'ENABLED' if status['observing'] else FMT_RED + 'DISABLED'
-        observing_status = '    Observing: ' + FMT_BOLD + observing + FMT_CLEAR
-        print(observing_status)
+
+        open_str = FMT_YELLOW + 'Not Scheduled'
+        if dome['requested_open_date']:
+            open_str = dome['requested_open_date']
+        print('     Opening: ' + FMT_BOLD + open_str + FMT_CLEAR)
+
+        close_str = FMT_YELLOW + 'Not Scheduled'
+        if dome['requested_close_date']:
+            close_str = dome['requested_close_date']
+        print('     Closing: ' + FMT_BOLD + close_str + FMT_CLEAR)
+
         dome_status = '    Shutters: ' + FMT_BOLD + DOME_STATUS_CODES[dome['status']] + \
             FMT_CLEAR
-        if dome['status'] != dome['requested_status']:
-            dome_status += ' (' + FMT_BOLD + DOME_STATUS_CODES[dome['requested_status']] + \
-                FMT_CLEAR + ' queued)'
         print(dome_status)
 
     tel = status['telescope']
@@ -275,9 +270,8 @@ def print_usage(name):
     print()
     print('   json         print a machine-readable summary of the operations status')
     print('   status       print a human-readable summary of the operations status')
-    print('   dome         toggle dome between manual and automatic control')
-    print('   tel          toggle telescope between manual and automatic control')
-    print('   observing    toggle observing mode on or off')
+    print('   dome         toggle dome between manual and automatic control or clear schedule')
+    print('   tel          toggle telescope between manual and automatic control or cancel actions')
     print('   validate     checks a schedule file for errors')
     print('   schedule     schedule observations for the night')
     print()
@@ -292,14 +286,10 @@ if __name__ == '__main__':
         sys.exit(print_status())
     elif sys.argv[1] == 'json':
         sys.exit(print_json())
-    elif sys.argv[1] == 'stop':
-        sys.exit(stop_telescope())
     elif sys.argv[1] == 'dome':
         run_command(lambda: dome_control(sys.argv[2:]))
     elif sys.argv[1] == 'tel':
         run_command(lambda: tel_control(sys.argv[2:]))
-    elif sys.argv[1] == 'observing':
-        run_command(lambda: set_observing(sys.argv[2:]))
     elif sys.argv[1] == 'validate':
         run_command(lambda: validate_schedule_json(sys.argv[2:]))
     elif sys.argv[1] == 'schedule':

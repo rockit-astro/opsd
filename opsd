@@ -32,11 +32,11 @@ from warwick.observatory.common import (
 from warwick.observatory.common.helpers import pyro_client_matches
 from warwick.rasa.operations import (
     DomeController,
-    DomeStatus,
     TelescopeController,
     EnvironmentWatcher,
     CommandStatus,
     OperationsMode,
+    parse_dome_window,
     parse_schedule_actions,
     validate_schedule,
 )
@@ -67,7 +67,6 @@ class OperationsDaemon:
     def __init__(self):
         self._command_lock = threading.Lock()
         self._wait_condition = threading.Condition()
-        self._observing = False
 
         self._dome = DomeController(
             daemons.rasa_dome,
@@ -89,18 +88,16 @@ class OperationsDaemon:
 
             dome_status = self._dome.status()
             if dome_status['mode'] == OperationsMode.Error:
-                self._observing = False
                 print('Observing condition disabled (dome error)')
                 log.warning('rasa_opsd', 'Observing condition disabled (dome error)')
+                self._telescope.abort()
 
-            if not self._environment.safe and self._observing:
-                self._observing = False
-                print('Observing condition disabled (environment: '
+            if not self._environment.safe and self._dome.active():
+                self._dome.clear_open_window()
+                print('Cancelling dome schedule (environment: '
                       + ', '.join(self._environment.unsafe_conditions) + ')')
-                log.warning('rasa_opsd', 'Observing condition disabled (environment: '
+                log.warning('rasa_opsd', 'Cancelling dome schedule (environment: '
                             + ', '.join(self._environment.unsafe_conditions) + ')')
-
-            self._dome.request_status(DomeStatus.Open if self._observing else DomeStatus.Closed)
 
             # Wait for the next loop period, unless woken up early by __shortcut_loop_wait
             with self._wait_condition:
@@ -158,31 +155,9 @@ class OperationsDaemon:
             return CommandStatus.Succeeded
 
     @Pyro4.expose
-    def set_observing(self, observing):
-        """Enable or disable the global observing mode (opens the dome)"""
-        if not pyro_client_matches(CONTROL_IPS):
-            return CommandStatus.InvalidControlIP
-
-        with TryLock(self._command_lock) as success:
-            if not success:
-                return CommandStatus.Blocked
-
-            dome_status = self._dome.status()
-            if observing and dome_status['mode'] == OperationsMode.Error:
-                return CommandStatus.InErrorState
-
-            self._observing = observing
-            self.__shortcut_loop_wait()
-            log.info('rasa_opsd', 'Observing condition manually '
-                     + ('enabled' if observing else 'disabled'))
-
-            return CommandStatus.Succeeded
-
-    @Pyro4.expose
     def status(self):
         """Query the latest status."""
         return {
-            'observing': self._observing,
             'dome': self._dome.status(),
             'telescope': self._telescope.status(),
             'environment': self._environment.status()
@@ -203,7 +178,17 @@ class OperationsDaemon:
         if not pyro_client_matches(CONTROL_IPS):
             return CommandStatus.InvalidControlIP
 
-        return self._telescope.abort()
+        self._telescope.abort()
+        return CommandStatus.Succeeded
+
+    @Pyro4.expose
+    def clear_dome_window(self):
+        """Cancels the dome open window"""
+        if not pyro_client_matches(CONTROL_IPS):
+            return CommandStatus.InvalidControlIP
+
+        self._dome.clear_open_window()
+        return CommandStatus.Succeeded
 
     @Pyro4.expose
     def schedule_observations(self, schedule):
@@ -211,14 +196,22 @@ class OperationsDaemon:
         if not pyro_client_matches(CONTROL_IPS):
             return CommandStatus.InvalidControlIP
 
+        dome_status = self._dome.status()
+        if dome_status['mode'] == OperationsMode.Error:
+            return CommandStatus.InErrorState
+
         valid, _ = validate_schedule(schedule)
         if not valid:
             return CommandStatus.InvalidSchedule
 
-        # TODO: Schedule dome times
+        dome_window = parse_dome_window(schedule)
+        if dome_window and not self._dome.set_open_window(dome_window):
+            return CommandStatus.Failed
+
         if not self._telescope.queue_actions(parse_schedule_actions(schedule)):
             return CommandStatus.Failed
 
+        self.__shortcut_loop_wait()
         return CommandStatus.Succeeded
 
 if __name__ == '__main__':
