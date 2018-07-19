@@ -82,16 +82,15 @@ class OperationsDaemon:
         runloop.start()
 
     def __ops_loop(self):
-        """Main operations run loop."""
+        """Main operations run loop.
+           Polls the environment and closes the dome if necessary
+           Individual telescope actions are expected to check the
+           status of the dome and abort if necessary
+        """
         while True:
             self._environment.update()
 
             dome_status = self._dome.status()
-            if dome_status['mode'] == OperationsMode.Error:
-                print('Observing condition disabled (dome error)')
-                log.warning('rasa_opsd', 'Observing condition disabled (dome error)')
-                self._telescope.abort()
-
             if not self._environment.safe and self._dome.active():
                 self._dome.clear_open_window()
                 print('Cancelling dome schedule (environment: '

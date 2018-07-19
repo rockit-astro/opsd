@@ -51,11 +51,11 @@ class DomeStatus:
                 status['west_shutter'] == DomeShutterStatus.Closed:
             return DomeStatus.Closed
 
-        if status['east_shutter'] == DomeShutterStatus.Open and \
-                status['west_shutter'] == DomeShutterStatus.Open:
-            return DomeStatus.Open
+        if status['east_shutter'] in [DomeShutterStatus.Opening, DomeShutterStatus.Closing] or \
+                status['west_shutter'] in [DomeShutterStatus.Opening, DomeShutterStatus.Closing]:
+            return DomeStatus.Moving
 
-        return DomeStatus.Moving
+        return DomeStatus.Open
 
 class DomeController(object):
     """Class managing automatic dome control for the operations daemon"""
@@ -141,7 +141,7 @@ class DomeController(object):
 
                             if ret == DomeCommandStatus.Succeeded:
                                 self.__set_mode(OperationsMode.Manual)
-                                log.error(self._log_name, 'Dome switched to Manual mode')
+                                log.info(self._log_name, 'Dome switched to Manual mode')
                             else:
                                 print('error: failed to switch dome to manual with ' \
                                     + DomeCommandStatus.message(ret))
