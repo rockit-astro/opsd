@@ -17,16 +17,10 @@
 
 """Telescope action to park the telescope and switch off the drive power"""
 
-# pylint: disable=broad-except
-# pylint: disable=invalid-name
-
-import Pyro4
-from warwick.observatory.common import (
-    daemons,
-    log)
-
-from . import TelescopeAction, TelescopeActionStatus
-from ..constants import CommandStatus
+from warwick.observatory.operations import (
+    TelescopeAction,
+    TelescopeActionStatus)
+from .telescope_helpers import tel_slew_altaz
 
 # Position to park the telescope after homing
 STOW_ALTAZ = (0.616, 0.405)
@@ -39,23 +33,9 @@ class Shutdown(TelescopeAction):
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
-        try:
-            self.set_task('Parking Telescope')
-
-            with daemons.rasa_telescope.connect(timeout=STOW_TIMEOUT) as teld:
-                status = teld.slew_altaz(STOW_ALTAZ[0], STOW_ALTAZ[1])
-                if status != CommandStatus.Succeeded:
-                    print('Failed to park telescope')
-                    log.error(self.log_name, 'Failed to park telescope')
-                    self.status = TelescopeActionStatus.Error
-        except Pyro4.errors.CommunicationError:
-            print('Failed to communicate with telescope daemon')
-            log.error(self.log_name, 'Failed to communicate with telescope daemon')
+        self.set_task('Parking Telescope')
+        if not tel_slew_altaz(self.log_name, STOW_ALTAZ[0], STOW_ALTAZ[1],
+                              False, STOW_TIMEOUT):
             self.status = TelescopeActionStatus.Error
-        except Exception as e:
-            print('Unknown error while parking telescope')
-            print(e)
-            log.error(self.log_name, 'Unknown error while parking telescope')
-            self.status = TelescopeActionStatus.Error
-
+            return
         self.status = TelescopeActionStatus.Complete

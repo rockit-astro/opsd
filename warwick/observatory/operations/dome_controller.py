@@ -21,6 +21,7 @@
 # pylint: disable=too-many-statements
 # pylint: disable=too-many-branches
 # pylint: disable=too-many-instance-attributes
+# pylint: disable=too-many-arguments
 # pylint: disable=invalid-name
 # pylint: disable=broad-except
 
@@ -59,7 +60,7 @@ class DomeStatus:
 
 class DomeController(object):
     """Class managing automatic dome control for the operations daemon"""
-    def __init__(self, daemon, open_close_timeout, heartbeat_timeout, loop_delay=10):
+    def __init__(self, daemon, log_name, open_close_timeout, heartbeat_timeout, loop_delay=10):
         self._lock = threading.Lock()
         self._wait_condition = threading.Condition()
 
@@ -77,7 +78,7 @@ class DomeController(object):
 
         self._status = DomeStatus.Closed
         self._status_updated = datetime.datetime.utcnow()
-        self._log_name = 'rasa_opsd'
+        self._log_name = log_name
 
         loop = threading.Thread(target=self.__loop)
         loop.daemon = True
@@ -123,7 +124,6 @@ class DomeController(object):
                 try:
                     with self._daemon.connect() as dome:
                         if requested_mode == OperationsMode.Automatic:
-                            # TODO: Change this to lock to ops mode
                             ret = dome.set_heartbeat_timer(self._heartbeat_timeout)
                             if ret == DomeCommandStatus.Succeeded:
                                 self.__set_mode(OperationsMode.Automatic)
@@ -135,8 +135,6 @@ class DomeController(object):
                                 log.info(self._log_name, 'Failed to switch dome to Automatic mode')
                         else:
                             # Switch from auto or error state back to manual
-                            # TODO: Change this to unlock from ops mode
-                            # TODO: the dome daemon should disable the ops lock if it times out
                             ret = dome.set_heartbeat_timer(0)
 
                             if ret == DomeCommandStatus.Succeeded:

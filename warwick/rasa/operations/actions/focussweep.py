@@ -31,6 +31,9 @@ import Pyro4
 from warwick.observatory.common import (
     daemons,
     log)
+from warwick.observatory.operations import (
+    TelescopeAction,
+    TelescopeActionStatus)
 from warwick.rasa.camera import (
     configure_validation_schema as camera_schema)
 from warwick.rasa.telescope import CommandStatus as TelCommandStatus
@@ -39,7 +42,6 @@ from warwick.rasa.pipeline import (
 
 from .camera_helpers import take_images
 from .telescope_helpers import set_focus
-from . import TelescopeAction, TelescopeActionStatus
 
 SLEW_TIMEOUT = 120
 FOCUS_TIMEOUT = 300

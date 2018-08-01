@@ -30,7 +30,7 @@ from warwick.observatory.common import (
     IP,
     TryLock)
 from warwick.observatory.common.helpers import pyro_client_matches
-from warwick.rasa.operations import (
+from warwick.observatory.operations import (
     DomeController,
     TelescopeController,
     EnvironmentWatcher,
@@ -40,6 +40,8 @@ from warwick.rasa.operations import (
     parse_schedule_actions,
     validate_schedule,
 )
+
+from warwick.rasa.operations import RASAConfig
 
 # Include more detailed exceptions
 sys.excepthook = Pyro4.util.excepthook
@@ -67,15 +69,24 @@ class OperationsDaemon:
     def __init__(self):
         self._command_lock = threading.Lock()
         self._wait_condition = threading.Condition()
+        self._config = RASAConfig
 
         self._dome = DomeController(
-            daemons.rasa_dome,
+            self._config.dome_daemon,
+            self._config.log_name,
             DOME_PYRO_OPENCLOSE_TIMEOUT,
             DOME_HEARTBEAT_TIMEOUT,
             LOOP_DELAY)
 
-        self._telescope = TelescopeController()
-        self._environment = EnvironmentWatcher()
+        self._telescope = TelescopeController(
+            self._config.log_name,
+            self._config.telescope_initialize_action,
+            self._config.telescope_shutdown_action)
+
+        self._environment = EnvironmentWatcher(
+            self._config.environment_daemon,
+            self._config.log_name,
+            self._config.get_enviroment_conditions())
 
         runloop = threading.Thread(target=self.__ops_loop)
         runloop.daemon = True
@@ -90,7 +101,6 @@ class OperationsDaemon:
         while True:
             self._environment.update()
 
-            dome_status = self._dome.status()
             if not self._environment.safe and self._dome.active():
                 self._dome.clear_open_window()
                 print('Cancelling dome schedule (environment: '
@@ -199,7 +209,7 @@ class OperationsDaemon:
         if dome_status['mode'] == OperationsMode.Error:
             return CommandStatus.InErrorState
 
-        valid, _ = validate_schedule(schedule)
+        valid, _ = validate_schedule(schedule, self._config.get_action_types())
         if not valid:
             return CommandStatus.InvalidSchedule
 
@@ -207,7 +217,8 @@ class OperationsDaemon:
         if dome_window and not self._dome.set_open_window(dome_window):
             return CommandStatus.Failed
 
-        if not self._telescope.queue_actions(parse_schedule_actions(schedule)):
+        if not self._telescope.queue_actions(parse_schedule_actions(
+                schedule, self._config.get_action_types())):
             return CommandStatus.Failed
 
         self.__shortcut_loop_wait()

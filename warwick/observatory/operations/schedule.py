@@ -27,30 +27,10 @@ import datetime
 import ephem
 import jsonschema
 
-# Action types
-from .actions import (
-    FocusSweep,
-    ImageSet,
-    OffsetTelescope,
-    SlewTelescope,
-    SkyFlats,
-    TestHorizonImage,
-    Wait)
-
 # Measured from GPS receiver
 SITE_LATITUDE = 28.7603135
 SITE_LONGITUDE = -17.8796168
 SITE_ELEVATION = 2387
-
-ACTION_TYPES = {
-    'FocusSweep': FocusSweep,
-    'SkyFlats': SkyFlats,
-    'ImageSet': ImageSet,
-    'OffsetTelescope': OffsetTelescope,
-    'SlewTelescope': SlewTelescope,
-    'TestHorizonImage': TestHorizonImage,
-    'Wait': Wait
-}
 
 def __create_validator(night):
     """Returns a template validator that includes support for the
@@ -137,16 +117,16 @@ def __validate_dome(validator, block):
     # Prefix each message with the action index and type
     return ['dome: ' + e for e in errors]
 
-def __validate_action(validator, index, block):
+def __validate_action(validator, index, block, action_types):
     """Validates an action block and returns a list of any schema violations"""
     if 'type' not in block:
         return ['action ' + str(index) + ": missing key 'type'"]
 
-    if block['type'] not in ACTION_TYPES:
+    if block['type'] not in action_types:
         return ['action ' + str(index) + ": unknown action type '" + block['type'] + "'"]
 
     try:
-        schema = ACTION_TYPES[block['type']].validation_schema()
+        schema = action_types[block['type']].validation_schema()
         if schema is not None:
             errors = __validate_schema(validator, schema, block)
         else:
@@ -158,7 +138,7 @@ def __validate_action(validator, index, block):
     # Prefix each message with the action index and type
     return ['action ' + str(index) + ' (' + block['type'] + '): ' + e for e in errors]
 
-def validate_schedule(json):
+def validate_schedule(json, action_types):
     """Tests whether a json object defines a valid opsd schedule
        Returns a tuple of (valid, messages) where:
           valid is a boolean indicating whether the schedule is valid
@@ -173,7 +153,7 @@ def validate_schedule(json):
 
     try:
         validator = __create_validator(json['night'])
-    except Exception as e:
+    except Exception:
         pass
 
     if 'dome' in json:
@@ -184,7 +164,7 @@ def validate_schedule(json):
     if 'actions' in json:
         if isinstance(json['actions'], list):
             for i, action in enumerate(json['actions']):
-                errors.extend(__validate_action(validator, i, action))
+                errors.extend(__validate_action(validator, i, action, action_types))
         else:
             errors.append('syntax: error \'actions\' must be a list')
     else:
@@ -194,15 +174,16 @@ def validate_schedule(json):
 
 def schedule_is_tonight(json):
     """Returns true if a given schedule is valid to execute tonight"""
+    # TODO: Implement me!
     pass
 
-def parse_schedule_actions(json):
+def parse_schedule_actions(json, action_types):
     """Parses a json object into a list of TelescopeActions
        to be run by the telescope control thread"""
     actions = []
     try:
         for action in json['actions']:
-            actions.append(ACTION_TYPES[action['type']](action))
+            actions.append(action_types[action['type']](action))
     except Exception as e:
         print('exception while parsing schedule')
         print(e)

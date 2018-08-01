@@ -21,7 +21,9 @@
 # pylint: disable=invalid-name
 
 import threading
-from . import TelescopeAction, TelescopeActionStatus
+from warwick.observatory.operations import (
+    TelescopeAction,
+    TelescopeActionStatus)
 
 class Wait(TelescopeAction):
     """Telescope action to power on and prepare the telescope for observing"""

@@ -42,13 +42,14 @@ from astropy import units as u
 from warwick.observatory.common import (
     daemons,
     log)
+from warwick.observatory.operations import (
+    TelescopeAction,
+    TelescopeActionStatus)
 from warwick.rasa.camera import (
     configure_validation_schema as camera_schema)
 from warwick.rasa.pipeline import (
     configure_flats_validation_schema as pipeline_schema)
 from warwick.rasa.telescope import CommandStatus as TelCommandStatus
-
-from . import TelescopeAction, TelescopeActionStatus
 
 SLEW_TIMEOUT = 120
 

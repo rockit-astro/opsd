@@ -20,13 +20,14 @@
 # pylint: disable=too-many-instance-attributes
 # pylint: disable=too-few-public-methods
 # pylint: disable=too-many-branches
+# pylint: disable=too-many-statements
 
 import collections
 import datetime
 import threading
 from warwick.observatory.common import log
 
-from .actions import Initialize, Shutdown, TelescopeActionStatus
+from . import TelescopeActionStatus
 from .constants import OperationsMode
 
 # This should be kept in sync with the dictionary in ops
@@ -36,9 +37,12 @@ class CameraStatus:
 
 class TelescopeController(object):
     """Class managing automatic telescope control for the operations daemon"""
-    def __init__(self, loop_delay=5):
+    def __init__(self, log_name, initialize_action, shutdown_action, loop_delay=5):
         self._wait_condition = threading.Condition()
         self._loop_delay = loop_delay
+
+        self._initialize_action = initialize_action
+        self._shutdown_action = shutdown_action
 
         self._action_lock = threading.Lock()
         self._action_queue = collections.deque()
@@ -52,7 +56,7 @@ class TelescopeController(object):
         self._mode_updated = datetime.datetime.utcnow()
         self._requested_mode = OperationsMode.Manual
 
-        self._log_name = 'rasa_opsd'
+        self._log_name = log_name
 
         self._action_count = 0
         self._current_action_number = 0
@@ -103,14 +107,14 @@ class TelescopeController(object):
                         # We have something to do, but may need to initialize the telescope
                         if self._action_queue:
                             if not self._initialized:
-                                self._active_action = Initialize()
+                                self._active_action = self._initialize_action()
                             else:
                                 self._active_action = self._action_queue.pop()
                                 self._current_action_number += 1
                         # We have nothing left to do, so stow the telescope until next time
                         elif not self._action_queue and self._initialized and \
                                 self._requested_mode != OperationsMode.Manual:
-                            self._active_action = Shutdown()
+                            self._active_action = self._shutdown_action()
                             self._action_count = self._current_action_number = 0
 
                         # Start the action running
@@ -130,10 +134,10 @@ class TelescopeController(object):
                             self._action_count = self._current_action_number = 0
 
                         if status != TelescopeActionStatus.Incomplete:
-                            if isinstance(self._active_action, Initialize):
+                            if isinstance(self._active_action, self._initialize_action):
                                 print('Initialization complete')
                                 self._initialized = True
-                            elif isinstance(self._active_action, Shutdown):
+                            elif isinstance(self._active_action, self._shutdown_action):
                                 print('Shutdown complete')
                                 self._initialized = False
 
@@ -209,4 +213,3 @@ class TelescopeController(object):
                 self._action_queue.clear()
                 self._active_action.abort()
                 self._action_count = self._current_action_number = 0
-

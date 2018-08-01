@@ -29,6 +29,9 @@ import Pyro4
 from warwick.observatory.common import (
     daemons,
     log)
+from warwick.observatory.operations import (
+    TelescopeAction,
+    TelescopeActionStatus)
 from warwick.rasa.camera import (
     CameraStatus,
     configure_validation_schema as camera_schema)
@@ -36,7 +39,6 @@ from warwick.rasa.pipeline import (
     configure_standard_validation_schema as pipeline_schema)
 
 from .camera_helpers import take_images, get_camera_status
-from . import TelescopeAction, TelescopeActionStatus
 
 VALID_CAMERA_STATES = [CameraStatus.Acquiring, CameraStatus.Reading, CameraStatus.Waiting]
 

@@ -18,7 +18,7 @@ mkdir -p %{buildroot}%{_bindir}
 mkdir -p %{buildroot}%{_unitdir}
 
 %{__install} %{_sourcedir}/opsd %{buildroot}%{_bindir}
-%{__install} %{_sourcedir}/opsd.service %{buildroot}%{_unitdir}
+%{__install} %{_sourcedir}/rasa-opsd.service %{buildroot}%{_unitdir}
 
 %post
 %systemd_post rasa-opsd.service

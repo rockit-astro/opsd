@@ -15,6 +15,14 @@
 # You should have received a copy of the GNU General Public License
 # along with opsd.  If not, see <http://www.gnu.org/licenses/>.
 
-"""opsd common code"""
+from distutils.core import setup
 
-from .config import RASAConfig
+setup(name='warwick.observatory.operations',
+      version='0',
+      packages = ['warwick.observatory.operations'],
+      author='Paul Chote',
+      description='Common code for the W1m and RASA operations daemons',
+      license='GNU GPLv3',
+      author_email='p.chote@warwick.ac.uk',
+      url="https://github.com/warwick-one-metre/opsd",
+)

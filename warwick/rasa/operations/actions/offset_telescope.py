@@ -25,7 +25,9 @@
 # pylint: disable=too-many-statements
 
 import math
-from . import TelescopeAction, TelescopeActionStatus
+from warwick.observatory.operations import (
+    TelescopeAction,
+    TelescopeActionStatus)
 from .telescope_helpers import tel_offset_radec, tel_stop
 
 OFFSET_TIMEOUT = 120

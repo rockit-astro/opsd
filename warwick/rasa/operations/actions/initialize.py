@@ -27,9 +27,11 @@ import Pyro4
 from warwick.observatory.common import (
     daemons,
     log)
+from warwick.observatory.operations import (
+    TelescopeAction,
+    TelescopeActionStatus)
 from warwick.rasa.camera import CommandStatus as CamCommandStatus
 from warwick.rasa.telescope import CommandStatus as TelCommandStatus
-from . import TelescopeAction, TelescopeActionStatus
 
 # Position to park the telescope after homing
 STOW_ALTAZ = (0.616, 0.405)

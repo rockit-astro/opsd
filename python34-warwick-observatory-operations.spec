@@ -1,5 +1,5 @@
 #
-# spec file for package python3-warwick-rasa-operations
+# spec file for package python3-warwick-observatory-operations
 #
 # Copyright (c) 2016 SUSE LINUX Products GmbH, Nuernberg, Germany.
 #
@@ -12,29 +12,29 @@
 # license that conforms to the Open Source Definition (Version 1.9)
 # published by the Open Source Initiative.
 
-Name:           python34-warwick-rasa-operations
+Name:           python34-warwick-observatory-operations
 Version:        2.1.0
 Release:        0
 License:        GPL3
-Summary:        RASA prototype specific operations code
+Summary:        Common backend code for the RASA prototype telescope operations daemon
 Url:            https://github.com/warwick-one-metre/
 BuildArch:      noarch
-Requires:       python34-warwick-rasa-operations
+Requires:       python34-astroplan, python34-jsonschema
 
 %description
-Part of the observatory software for the RASA prototype telescope.
+Part of the observatory software for the W1m and RASA prototype telescopes.
 
-python3-warwick-rasa-operations holds the RASA-specific operations code.
+python3-warwick-observatory-operations holds the common operations code.
 
 %prep
 
 rsync -av --exclude=build .. .
 
 %build
-python3 setup_rasa.py build
+python3 setup_observatory.py build
 
 %install
-python3 setup_rasa.py install --prefix=%{_prefix} --root=%{buildroot}
+python3 setup_observatory.py install --prefix=%{_prefix} --root=%{buildroot}
 
 %files
 %defattr(-,root,root,-)

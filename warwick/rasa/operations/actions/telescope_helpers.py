@@ -77,6 +77,30 @@ def tel_offset_radec(log_name, ra, dec, timeout):
         log.error(log_name, 'Unknown error while offsetting telescope')
         return False
 
+def tel_slew_altaz(log_name, alt, az, tracking, timeout):
+    """Slew the telescope to a given Alt, Az"""
+    try:
+        with daemons.rasa_telescope.connect(timeout=timeout) as teld:
+            if tracking:
+                status = teld.track_altaz(alt, az)
+            else:
+                status = teld.slew_altaz(alt, az)
+
+            if status != TelCommandStatus.Succeeded:
+                print('Failed to slew telescope')
+                log.error(log_name, 'Failed to slew telescope')
+                return False
+            return True
+    except Pyro4.errors.CommunicationError:
+        print('Failed to communicate with telescope daemon')
+        log.error(log_name, 'Failed to communicate with telescope daemon')
+        return False
+    except Exception:
+        print('Unknown error while slewing telescope')
+        traceback.print_exc(file=sys.stdout)
+        log.error(log_name, 'Unknown error while slewing telescope')
+        return False
+
 def tel_stop(log_name):
     """Stop the telescope tracking or movement"""
     try:
