@@ -50,6 +50,8 @@ from warwick.rasa.camera import (
 from warwick.rasa.pipeline import (
     configure_flats_validation_schema as pipeline_schema)
 from .telescope_helpers import tel_status, tel_slew_altaz
+from .camera_helpers import stop_camera
+from .pipeline_helpers import pipeline_enable_archiving, configure_pipeline
 
 SLEW_TIMEOUT = 120
 
@@ -138,6 +140,8 @@ class InstrumentArm:
         self._expected_next_exposure = datetime.datetime.utcnow() \
             + datetime.timedelta(seconds=exposure + delay)
         try:
+            # Need to communicate directly with camera daemon
+            # to allow set_exposure_delay and set_exosure
             with self._daemon.connect() as cam:
                 if exposure == 0:
                     # .configure will reset all other parameters to their default values
@@ -226,18 +230,8 @@ class InstrumentArm:
                     self.state = AutoFlatState.Saving
 
             if self.state != last_state:
-                try:
-                    with daemons.rasa_pipeline.connect() as pipeline:
-                        pipeline.set_archive(self.name, self.state == AutoFlatState.Saving)
-                except Pyro4.errors.CommunicationError:
-                    print('Failed to communicate with pipeline daemon')
-                    log.error(self._log_name, 'Failed to communicate with pipeline daemon')
-                    self.state = AutoFlatState.Error
-                    return
-                except Exception as e:
-                    print('Unknown error while configuring pipeline')
-                    print(e)
-                    log.error(self._log_name, 'Unknown error while configuring pipeline')
+                if not pipeline_enable_archiving(self._log_name, self.name,
+                                                 self.state == AutoFlatState.Saving):
                     self.state = AutoFlatState.Error
                     return
 
@@ -252,17 +246,7 @@ class InstrumentArm:
     def abort(self):
         """Aborts any active exposures and sets the state to complete"""
         if self.state == AutoFlatState.Saving:
-            try:
-                with self._daemon.connect() as cam:
-                    cam.stop_sequence()
-            except Pyro4.errors.CommunicationError:
-                print('Failed to communicate with ' + self.name + ' camera daemon')
-                log.error(self._log_name, 'Failed to communicate with ' + self.name +
-                          ' camera daemon')
-            except Exception as e:
-                print('Unknown error with ' + self.name + ' camera')
-                print(e)
-                log.error(self._log_name, 'Unknown error with ' + self.name + ' camera')
+            stop_camera(self._log_name, self._daemon)
         self.state = AutoFlatState.Complete
 
 class SkyFlats(TelescopeAction):
@@ -356,24 +340,14 @@ class SkyFlats(TelescopeAction):
 
         # Configure pipeline and camera for flats
         # Archiving will be enabled when the brightness is inside the required range
-        try:
-            with daemons.rasa_pipeline.connect() as pipeline:
-                pipeline_config = {}
-                pipeline_config.update(self.config['pipeline'])
-                pipeline_config.update({
-                    'intstats': True,
-                    'type': 'FLAT',
-                })
-                pipeline.configure(pipeline_config)
-        except Pyro4.errors.CommunicationError:
-            print('Failed to communicate with pipeline daemon')
-            log.error(self.log_name, 'Failed to communicate with pipeline daemon')
-            self.status = TelescopeActionStatus.Error
-            return
-        except Exception as e:
-            print('Unknown error while configuring pipeline')
-            print(e)
-            log.error(self.log_name, 'Unknown error while configuring pipeline')
+        pipeline_config = {}
+        pipeline_config.update(self.config['pipeline'])
+        pipeline_config.update({
+            'intstats': True,
+            'type': 'FLAT',
+        })
+
+        if not configure_pipeline(self.log_name, pipeline_config):
             self.status = TelescopeActionStatus.Error
             return
 

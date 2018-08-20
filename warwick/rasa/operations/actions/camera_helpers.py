@@ -27,13 +27,11 @@
 import sys
 import traceback
 import Pyro4
-from warwick.observatory.common import (
-    daemons,
-    log)
+from warwick.observatory.common import log
 from warwick.rasa.camera import (
     CommandStatus as CamCommandStatus)
 
-def take_images(log_name, count=1, config=None):
+def take_images(log_name, daemon, count=1, config=None):
     """Start an exposure sequence with count images
 
        If config is non-None it is assumed to contain
@@ -42,7 +40,7 @@ def take_images(log_name, count=1, config=None):
        before starting the sequence.
     """
     try:
-        with daemons.rasa_camera.connect() as cam:
+        with daemon.connect() as cam:
             if config:
                 status = cam.configure(config)
 
@@ -64,15 +62,30 @@ def take_images(log_name, count=1, config=None):
         log.error(log_name, 'Unknown error with camera')
         return False
 
-def get_camera_status(log_name):
+def get_camera_status(log_name, daemon):
     """Returns the status dictionary for the camera"""
     try:
-        with daemons.rasa_camera.connect() as camd:
+        with daemon.connect() as camd:
             return camd.report_status()
     except Pyro4.errors.CommunicationError:
         print('Failed to communicate with camera daemon')
+        log.error(log_name, 'Failed to communicate with camera daemon')
         return None
     except Exception:
         print('Unknown error while querying camera status')
         traceback.print_exc(file=sys.stdout)
+        log.error(log_name, 'Unknown error with camera')
         return None
+
+def stop_camera(log_name, daemon):
+    """Aborts any active exposure sequences"""
+    try:
+        with daemon.connect() as camd:
+            return camd.stop_sequence() == CamCommandStatus.Succeeded
+    except Pyro4.errors.CommunicationError:
+        print('Failed to communicate with camera daemon')
+        log.error(log_name, 'Failed to communicate with camera daemon')
+        return False
+    except Exception:
+        print('Unknown error while stopping camera')
+        traceback.print_exc(file=sys.stdout)

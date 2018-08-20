@@ -153,3 +153,19 @@ def set_focus(log_name, channel, position, timeout):
         print(e)
         log.error(log_name, 'Unknown error while configuring focuser')
         return False
+
+def stop_focus(log_name):
+    """Stop the focuser movement"""
+    try:
+        with daemons.rasa_focus.connect() as focusd:
+            focusd.stop()
+        return True
+    except Pyro4.errors.CommunicationError:
+        print('Failed to communicate with focuser daemon')
+        log.error(log_name, 'Failed to communicate with focuser daemon')
+        return False
+    except Exception:
+        print('Unknown error while stopping focuser')
+        traceback.print_exc(file=sys.stdout)
+        log.error(log_name, 'Unknown error while stopping focuser')
+        return False

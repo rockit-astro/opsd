@@ -27,21 +27,19 @@
 import datetime
 import math
 import threading
-import Pyro4
-from warwick.observatory.common import (
-    daemons,
-    log)
+from warwick.observatory.common import daemons
 from warwick.observatory.operations import (
     TelescopeAction,
     TelescopeActionStatus)
 from warwick.rasa.camera import (
     configure_validation_schema as camera_schema)
-from warwick.rasa.telescope import CommandStatus as TelCommandStatus
 from warwick.rasa.pipeline import (
     configure_standard_validation_schema as pipeline_schema)
 
-from .camera_helpers import take_images
-from .telescope_helpers import set_focus
+from .camera_helpers import take_images, stop_camera
+from .pipeline_helpers import configure_pipeline
+from .telescope_helpers import set_focus, tel_slew_radec, tel_stop, stop_focus
+
 
 SLEW_TIMEOUT = 120
 FOCUS_TIMEOUT = 300
@@ -53,6 +51,7 @@ class FocusSweep(TelescopeAction):
         self._acquired_images = 0
         self._wait_condition = threading.Condition()
         self._focus_measurements = {}
+        self._camera = daemons.rasa_camera
 
     @classmethod
     def validation_schema(cls):
@@ -98,25 +97,14 @@ class FocusSweep(TelescopeAction):
     def run_thread(self):
         """Thread that runs the hardware actions"""
         self.set_task('Slewing to field')
-        try:
-            with daemons.rasa_telescope.connect(timeout=SLEW_TIMEOUT) as teld:
-                status = teld.track_radec(math.radians(self.config['ra']),
-                                          math.radians(self.config['dec']))
-                if not self.aborted and status != TelCommandStatus.Succeeded:
-                    print('Failed to slew telescope')
-                    log.error(self.log_name, 'Failed to slew telescope')
-                    self.status = TelescopeActionStatus.Error
-                    return
-        except Pyro4.errors.CommunicationError:
-            print('Failed to communicate with telescope daemon')
-            log.error(self.log_name, 'Failed to communicate with telescope daemon')
-            self.status = TelescopeActionStatus.Error
-            return
-        except Exception as e:
-            print('Unknown error while slewing telescope')
-            print(e)
-            log.error(self.log_name, 'Unknown error while slewing telescope')
-            self.status = TelescopeActionStatus.Error
+
+        if not tel_slew_radec(self.log_name,
+                              math.radians(self.config['ra']),
+                              math.radians(self.config['dec']),
+                              True, SLEW_TIMEOUT):
+
+            if not self.aborted:
+                self.status = TelescopeActionStatus.Error
             return
 
         if self.aborted:
@@ -125,26 +113,15 @@ class FocusSweep(TelescopeAction):
 
         self.set_task('Preparing camera')
 
-        try:
-            pipeline_config = {}
-            pipeline_config.update(self.config['pipeline'])
-            pipeline_config.update({
-                'fwhm': True,
-                'type': 'SCIENCE',
-                'object': 'Focus run',
-            })
+        pipeline_config = {}
+        pipeline_config.update(self.config['pipeline'])
+        pipeline_config.update({
+            'fwhm': True,
+            'type': 'SCIENCE',
+            'object': 'Focus run',
+        })
 
-            with daemons.rasa_pipeline.connect() as pipeline:
-                pipeline.configure(pipeline_config)
-        except Pyro4.errors.CommunicationError:
-            print('Failed to communicate with pipeline daemon')
-            log.error(self.log_name, 'Failed to communicate with pipeline daemon')
-            self.status = TelescopeActionStatus.Error
-            return
-        except Exception as e:
-            print('Unknown error while configuring pipeline')
-            print(e)
-            log.error(self.log_name, 'Unknown error while configuring pipeline')
+        if not configure_pipeline(self.log_name, pipeline_config):
             self.status = TelescopeActionStatus.Error
             return
 
@@ -156,7 +133,7 @@ class FocusSweep(TelescopeAction):
             return
 
         # Configure the camera then take the first exposure to start the process
-        if not take_images(self.log_name, 1, self.config['rasa']):
+        if not take_images(self.log_name, self._camera, 1, self.config['rasa']):
             self.status = TelescopeActionStatus.Error
             return
 
@@ -185,7 +162,7 @@ class FocusSweep(TelescopeAction):
                     self.status = TelescopeActionStatus.Error
                     return
 
-                if not take_images(self.log_name, 1, self.config['rasa']):
+                if not take_images(self.log_name, self._camera, 1, self.config['rasa']):
                     self.status = TelescopeActionStatus.Error
                     return
 
@@ -194,31 +171,15 @@ class FocusSweep(TelescopeAction):
 
             elif datetime.datetime.utcnow() > expected_next_exposure:
                 print('Exposure timed out - retrying')
-                if not take_images(self.log_name, 1, self.config['rasa']):
+                if not take_images(self.log_name, self._camera, 1, self.config['rasa']):
                     self.status = TelescopeActionStatus.Error
                     return
 
                 expected_next_exposure = datetime.datetime.utcnow() \
                     + datetime.timedelta(seconds=self.config['rasa']['exposure'] + 10)
 
-        # Stop slewing for the next action
-        try:
-            with daemons.rasa_telescope.connect(timeout=SLEW_TIMEOUT) as teld:
-                status = teld.stop()
-                if not self.aborted and status != TelCommandStatus.Succeeded:
-                    print('Failed to stop telescope')
-                    log.error(self.log_name, 'Failed to stop telescope')
-                    self.status = TelescopeActionStatus.Error
-                    return
-        except Pyro4.errors.CommunicationError:
-            print('Failed to communicate with telescope daemon')
-            log.error(self.log_name, 'Failed to communicate with telescope daemon')
-            self.status = TelescopeActionStatus.Error
-            return
-        except Exception as e:
-            print('Unknown error while stopping telescope')
-            print(e)
-            log.error(self.log_name, 'Unknown error while stopping telescope')
+        # Stop tracking for the next action
+        if not tel_stop(self.log_name):
             self.status = TelescopeActionStatus.Error
             return
 
@@ -243,32 +204,10 @@ class FocusSweep(TelescopeAction):
     def abort(self):
         """Aborted by a weather alert or user action"""
         super().abort()
-        try:
-            with daemons.rasa_telescope.connect() as teld:
-                teld.stop()
-        except Pyro4.errors.CommunicationError:
-            print('Failed to communicate with telescope daemon')
-        except Exception as e:
-            print('Unknown error while stopping telescope')
-            print(e)
 
-        try:
-            with daemons.rasa_camera.connect() as camd:
-                camd.stop_sequence()
-        except Pyro4.errors.CommunicationError:
-            print('Failed to communicate with camera daemon')
-        except Exception as e:
-            print('Unknown error while stopping camera')
-            print(e)
-
-        try:
-            with daemons.rasa_focus.connect() as focusd:
-                focusd.stop_channel(self.config['channel'])
-        except Pyro4.errors.CommunicationError:
-            print('Failed to communicate with focus daemon')
-        except Exception as e:
-            print('Unknown error while stopping focuser')
-            print(e)
+        tel_stop(self.log_name)
+        stop_camera(self.log_name, self._camera)
+        stop_focus(self.log_name)
 
         with self._wait_condition:
             self._wait_condition.notify_all()

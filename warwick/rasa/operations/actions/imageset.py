@@ -25,7 +25,6 @@
 # pylint: disable=too-many-statements
 
 import threading
-import Pyro4
 from warwick.observatory.common import (
     daemons,
     log)
@@ -39,6 +38,7 @@ from warwick.rasa.pipeline import (
     configure_standard_validation_schema as pipeline_schema)
 
 from .camera_helpers import take_images, get_camera_status, stop_camera
+from .pipeline_helpers import configure_pipeline
 
 VALID_CAMERA_STATES = [CameraStatus.Acquiring, CameraStatus.Reading, CameraStatus.Waiting]
 
@@ -48,6 +48,7 @@ class ImageSet(TelescopeAction):
         super().__init__('Take Image Set', config)
         self._acquired_images = 0
         self._wait_condition = threading.Condition()
+        self._camera = daemons.rasa_camera
 
     @classmethod
     def validation_schema(cls):
@@ -77,22 +78,13 @@ class ImageSet(TelescopeAction):
 
         self.set_task('Preparing camera')
 
-        try:
-            with daemons.rasa_pipeline.connect() as pipeline:
-                pipeline.configure(self.config['pipeline'])
-        except Pyro4.errors.CommunicationError:
-            print('Failed to communicate with pipeline daemon')
-            log.error(self.log_name, 'Failed to communicate with pipeline daemon')
-            self.status = TelescopeActionStatus.Error
-            return
-        except Exception as e:
-            print('Unknown error while configuring pipeline')
-            print(e)
-            log.error(self.log_name, 'Unknown error while configuring pipeline')
+        if not configure_pipeline(self.log_name, self.config['pipeline']):
+            log.error(self.log_name, 'Aborting action')
+            print('Aborting action')
             self.status = TelescopeActionStatus.Error
             return
 
-        if not take_images(self.log_name, self.config['count'], self.config['rasa']):
+        if not take_images(self.log_name, self._camera, self.config['count'], self.config['rasa']):
             log.error(self.log_name, 'Aborting action')
             print('Aborting action')
             self.status = TelescopeActionStatus.Error
@@ -118,7 +110,7 @@ class ImageSet(TelescopeAction):
                 break
 
             # Check camera for error status
-            status = get_camera_status(self.log_name)
+            status = get_camera_status(self.log_name, self._camera)
             if not status:
                 print('Failed to query camera status')
                 log.error(self.log_name, 'Failed to query camera status')
@@ -135,7 +127,7 @@ class ImageSet(TelescopeAction):
                     print(message)
                     log.info(self.log_name, message)
 
-                    if not take_images(self.log_name, remaining, self.config['rasa']):
+                    if not take_images(self.log_name, self._camera, remaining, self.config['rasa']):
                         print('Aborting action')
                         log.error(self.log_name, 'Aborting action')
 
@@ -160,14 +152,7 @@ class ImageSet(TelescopeAction):
         """Aborted by a weather alert or user action"""
         super().abort()
 
-        try:
-            with daemons.rasa_camera.connect() as camd:
-                camd.stop_sequence()
-        except Pyro4.errors.CommunicationError:
-            print('Failed to communicate with camera daemon')
-        except Exception as e:
-            print('Unknown error while stopping camera')
-            print(e)
+        stop_camera(self.log_name, self._camera)
 
         with self._wait_condition:
             self._wait_condition.notify_all()
