@@ -51,10 +51,7 @@ class Wait(TelescopeAction):
         with self._wait_condition:
             self._wait_condition.wait(self.config['delay'])
 
-        if self.aborted:
-            self.status = TelescopeActionStatus.Error
-        else:
-            self.status = TelescopeActionStatus.Complete
+        self.status = TelescopeActionStatus.Complete
 
     def abort(self):
         """Aborted by a weather alert or user action"""

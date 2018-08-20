@@ -161,10 +161,11 @@ class Initialize(TelescopeAction):
             self.status = TelescopeActionStatus.Error
             return
 
-        if not self.__wait_for_temperature_lock():
-            self.status = TelescopeActionStatus.Error
-        else:
+        locked = self.__wait_for_temperature_lock()
+        if self.aborted or locked:
             self.status = TelescopeActionStatus.Complete
+        else:
+            self.status = TelescopeActionStatus.Error
 
     def abort(self):
         """Aborted by a weather alert or user action"""

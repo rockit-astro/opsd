@@ -120,7 +120,7 @@ class FocusSweep(TelescopeAction):
             return
 
         if self.aborted:
-            self.status = TelescopeActionStatus.Error
+            self.status = TelescopeActionStatus.Complete
             return
 
         self.set_task('Preparing camera')
@@ -222,7 +222,7 @@ class FocusSweep(TelescopeAction):
             self.status = TelescopeActionStatus.Error
             return
 
-        if not self.aborted and self._acquired_images == self.config['count']:
+        if self.aborted or self._acquired_images == self.config['count']:
             self.status = TelescopeActionStatus.Complete
         else:
             self.status = TelescopeActionStatus.Error

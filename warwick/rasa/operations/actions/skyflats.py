@@ -411,7 +411,7 @@ class SkyFlats(TelescopeAction):
 
         success = all([arm.state == AutoFlatState.Complete
                        for arm in self._instrument_arms.values()])
-        if not self.aborted and success:
+        if self.aborted or success:
             self.status = TelescopeActionStatus.Complete
         else:
             self.status = TelescopeActionStatus.Error

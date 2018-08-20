@@ -69,10 +69,7 @@ class SlewTelescope(TelescopeAction):
             self.status = TelescopeActionStatus.Error
             return
 
-        if not self.aborted:
-            self.status = TelescopeActionStatus.Complete
-        else:
-            self.status = TelescopeActionStatus.Error
+        self.status = TelescopeActionStatus.Complete
 
     def abort(self):
         """Aborted by a weather alert or user action"""
