@@ -43,6 +43,9 @@ class TelescopeAction(object):
         # Defer the run thread creation until the action first ticks
         self._run_thread = None
 
+        # Set when the action is started or by notification
+        self.dome_is_open = False
+
     @classmethod
     def validation_schema(cls):
         """Returns the schema to use for validating input configuration"""
@@ -52,13 +55,18 @@ class TelescopeAction(object):
         """Updates the task shown to the user"""
         self.task = task
 
-    def start(self):
+    def start(self, dome_is_open):
         """Spawns the run thread that runs the hardware actions"""
         # Start the run thread on the first tick
+        self.dome_is_open = dome_is_open
         if self._run_thread is None:
             self._run_thread = threading.Thread(target=self.run_thread)
             self._run_thread.daemon = True
             self._run_thread.start()
+
+    def dome_status_changed(self, dome_is_open):
+        """Notification called when the dome is fully open or fully closed"""
+        self.dome_is_open = dome_is_open
 
     def run_thread(self):
         """Thread that runs the hardware actions

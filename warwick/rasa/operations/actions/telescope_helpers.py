@@ -33,6 +33,21 @@ from warwick.observatory.common import (
 from warwick.rasa.focuser import CommandStatus as FocCommandStatus
 from warwick.rasa.telescope import CommandStatus as TelCommandStatus
 
+def tel_status(log_name):
+    """Returns the telescope status dict or None on error"""
+    try:
+        with daemons.rasa_telescope.connect() as teld:
+            return teld.report_status()
+    except Pyro4.errors.CommunicationError:
+        print('Failed to communicate with telescope daemon')
+        log.error(log_name, 'Failed to communicate with telescope daemon')
+        return None
+    except Exception:
+        print('Unknown error while querying telescope status')
+        traceback.print_exc(file=sys.stdout)
+        log.error(log_name, 'Unknown error while querying telescope status')
+        return None
+
 def tel_slew_radec(log_name, ra, dec, tracking, timeout):
     """Slew the telescope to a given RA, Dec"""
     try:

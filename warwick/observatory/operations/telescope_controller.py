@@ -27,7 +27,7 @@ import datetime
 import threading
 from warwick.observatory.common import log
 
-from . import TelescopeActionStatus
+from . import TelescopeActionStatus, DomeStatus
 from .constants import OperationsMode
 
 # This should be kept in sync with the dictionary in ops
@@ -37,7 +37,7 @@ class CameraStatus:
 
 class TelescopeController(object):
     """Class managing automatic telescope control for the operations daemon"""
-    def __init__(self, log_name, initialize_action, shutdown_action, loop_delay=5):
+    def __init__(self, log_name, dome_controller, initialize_action, shutdown_action, loop_delay=5):
         self._wait_condition = threading.Condition()
         self._loop_delay = loop_delay
 
@@ -65,8 +65,13 @@ class TelescopeController(object):
         self._run_thread.daemon = True
         self._run_thread.start()
 
+        self._dome_controller = dome_controller
+        self._dome_was_open = False
+
     def __run(self):
         while True:
+            dome_is_open = self._dome_controller.status()['status'] == DomeStatus.Open
+
             with self._action_lock:
                 auto_failure = self._mode == OperationsMode.Error and \
                     self._requested_mode == OperationsMode.Automatic
@@ -119,7 +124,7 @@ class TelescopeController(object):
 
                         # Start the action running
                         if self._active_action is not None:
-                            self._active_action.start()
+                            self._active_action.start(dome_is_open)
 
                     if self._active_action is not None:
                         # Poll the current action until it completes or encounters an error
@@ -133,7 +138,10 @@ class TelescopeController(object):
                             self._mode = OperationsMode.Error
                             self._action_count = self._current_action_number = 0
 
-                        if status != TelescopeActionStatus.Incomplete:
+                        if status == TelescopeActionStatus.Incomplete:
+                            if dome_is_open != self._dome_was_open:
+                                self._active_action.dome_status_changed(dome_is_open)
+                        else:
                             if isinstance(self._active_action, self._initialize_action):
                                 print('Initialization complete')
                                 self._initialized = True
@@ -143,6 +151,8 @@ class TelescopeController(object):
 
                             self._active_action = None
                             continue
+
+            self._dome_was_open = dome_is_open
 
             # Wait for the next loop period, unless woken up early by __shortcut_loop_wait
             with self._wait_condition:

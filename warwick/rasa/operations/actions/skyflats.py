@@ -49,7 +49,7 @@ from warwick.rasa.camera import (
     configure_validation_schema as camera_schema)
 from warwick.rasa.pipeline import (
     configure_flats_validation_schema as pipeline_schema)
-from warwick.rasa.telescope import CommandStatus as TelCommandStatus
+from .telescope_helpers import tel_status, tel_slew_altaz
 
 SLEW_TIMEOUT = 120
 
@@ -250,7 +250,7 @@ class InstrumentArm:
                 self.__take_image(clamped_exposure, delay_exposure)
 
     def abort(self):
-        """Aborts any active exposures and sets the state to error"""
+        """Aborts any active exposures and sets the state to complete"""
         if self.state == AutoFlatState.Saving:
             try:
                 with self._daemon.connect() as cam:
@@ -263,7 +263,7 @@ class InstrumentArm:
                 print('Unknown error with ' + self.name + ' camera')
                 print(e)
                 log.error(self._log_name, 'Unknown error with ' + self.name + ' camera')
-        self.state = AutoFlatState.Error
+        self.state = AutoFlatState.Complete
 
 class SkyFlats(TelescopeAction):
     """Telescope action to acquire sky flats"""
@@ -294,43 +294,19 @@ class SkyFlats(TelescopeAction):
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
-
-        self.set_task('Slewing to antisolar point')
-        try:
-            # Query site location from the telescope
-            with daemons.rasa_telescope.connect() as teld:
-                s = teld.report_status()
-
-            # pylint: disable=no-member
-            location = EarthLocation(lat=s['site_latitude']*u.rad,
-                                     lon=s['site_longitude']*u.rad,
-                                     height=s['site_elevation']*u.m)
-            # pylint: enable=no-member
-
-            # The anti-solar point is opposite the sun at 75 degrees
-            sun_altaz = sun_position(location)
-            print('Sun position is', sun_altaz)
-
-            with daemons.rasa_telescope.connect(timeout=SLEW_TIMEOUT) as teld:
-                status = teld.slew_altaz(math.radians(75), math.radians(sun_altaz[1] + 180))
-                if not self.aborted and status != TelCommandStatus.Succeeded:
-                    print('Failed to slew telescope')
-                    log.error(self.log_name, 'Failed to slew telescope')
-                    self.status = TelescopeActionStatus.Error
-                    return
-        except Pyro4.errors.CommunicationError:
-            print('Failed to communicate with telescope daemon')
-            log.error(self.log_name, 'Failed to communicate with telescope daemon')
-            self.status = TelescopeActionStatus.Error
-            return
-        except Exception as e:
-            print('Unknown error while slewing telescope')
-            print(e)
-            log.error(self.log_name, 'Unknown error while slewing telescope')
+        # Query site location from the telescope
+        ts = tel_status(self.log_name)
+        if not ts:
             self.status = TelescopeActionStatus.Error
             return
 
-        self.set_task('Waiting for sun')
+        # pylint: disable=no-member
+        location = EarthLocation(lat=ts['site_latitude']*u.rad,
+                                 lon=ts['site_longitude']*u.rad,
+                                 height=ts['site_elevation']*u.m)
+        # pylint: enable=no-member
+
+        self.set_task('Waiting for dome and sun')
         while not self.aborted:
             sun_altitude = sun_position(location)[0]
             if self.config['evening']:
@@ -339,27 +315,43 @@ class SkyFlats(TelescopeAction):
                     log.info(self.log_name, 'autoflat: sun already too low - continuing')
                     self.status = TelescopeActionStatus.Complete
                     return
-                if sun_altitude < CONFIG['max_sun_altitude']:
+                if sun_altitude < CONFIG['max_sun_altitude'] and self.dome_is_open:
                     break
-                print('{:.1f} > {:.1f} - keep waiting'.format(sun_altitude,
-                                                              CONFIG['max_sun_altitude']))
+                print('{:.1f} > {:.1f}; dome {} - keep waiting'.format(
+                    sun_altitude, CONFIG['max_sun_altitude'], self.dome_is_open))
             else:
                 if sun_altitude > CONFIG['max_sun_altitude']:
                     print('autoflat: sun already too high - continuing')
                     log.info(self.log_name, 'autoflat: sun already too high - continuing')
                     self.status = TelescopeActionStatus.Complete
                     return
-                if sun_altitude > CONFIG['min_sun_altitude']:
+                if sun_altitude > CONFIG['min_sun_altitude'] and self.dome_is_open:
                     break
-                print('{:.1f} < {:.1f} - keep waiting'.format(sun_altitude,
-                                                              CONFIG['min_sun_altitude']))
+                print('{:.1f} < {:.1f}; dome {} - keep waiting'.format(
+                    sun_altitude, CONFIG['min_sun_altitude'], self.dome_is_open))
 
             with self._wait_condition:
                 self._wait_condition.wait(CONFIG['sun_altitude_check_interval'])
 
+        self.set_task('Slewing to antisolar point')
+
+        # The anti-solar point is opposite the sun at 75 degrees
+        sun_altaz = sun_position(location)
+        print('Sun position is', sun_altaz)
+
+        if not tel_slew_altaz(self.log_name,
+                              math.radians(75),
+                              math.radians(sun_altaz[1] + 180),
+                              False, SLEW_TIMEOUT):
+            if not self.aborted:
+                print('Failed to slew telescope')
+                log.error(self.log_name, 'Failed to slew telescope')
+                self.status = TelescopeActionStatus.Error
+                return
+
         # Last chance to bail out before starting the main logic
         if self.aborted:
-            self.status = TelescopeActionStatus.Error
+            self.status = TelescopeActionStatus.Complete
             return
 
         # Configure pipeline and camera for flats
@@ -405,12 +397,21 @@ class SkyFlats(TelescopeAction):
             if self.aborted:
                 break
 
+            if not self.dome_is_open:
+                for arm in self._instrument_arms.values():
+                    arm.abort()
+
+                print('Aborting: dome has closed')
+                log.error(self.log_name, 'Dome has closed')
+                break
+
             # We are done once all arms are either complete or have errored
             if all([arm.state >= AutoFlatState.Complete for arm in self._instrument_arms.values()]):
                 break
 
-        success = all([arm.state == AutoFlatState.Complete
-                       for arm in self._instrument_arms.values()])
+        success = self.dome_is_open and all([arm.state == AutoFlatState.Complete
+                                             for arm in self._instrument_arms.values()])
+
         if self.aborted or success:
             self.status = TelescopeActionStatus.Complete
         else:

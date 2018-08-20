@@ -80,6 +80,7 @@ class OperationsDaemon:
 
         self._telescope = TelescopeController(
             self._config.log_name,
+            self._dome,
             self._config.telescope_initialize_action,
             self._config.telescope_shutdown_action)
 

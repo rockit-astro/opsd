@@ -38,7 +38,7 @@ from warwick.rasa.camera import (
 from warwick.rasa.pipeline import (
     configure_standard_validation_schema as pipeline_schema)
 
-from .camera_helpers import take_images, get_camera_status
+from .camera_helpers import take_images, get_camera_status, stop_camera
 
 VALID_CAMERA_STATES = [CameraStatus.Acquiring, CameraStatus.Reading, CameraStatus.Waiting]
 
@@ -54,13 +54,14 @@ class ImageSet(TelescopeAction):
         return {
             'type': 'object',
             'additionalProperties': False,
-            'required': ['count'],
+            'required': ['count', 'onsky'],
             'properties': {
                 'type': {'type': 'string'},
                 'count': {
                     'type': 'integer',
                     'minimum': 0
                 },
+                'onsky': {'type', 'boolean'},
                 'rasa': camera_schema('rasa'),
                 'pipeline': pipeline_schema()
             }
@@ -68,6 +69,11 @@ class ImageSet(TelescopeAction):
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
+        if self.config['onsky'] and not self.dome_is_open:
+            print('Aborting: dome is not open')
+            log.error(self.log_name, 'Aborting: dome is not open')
+            self.status = TelescopeActionStatus.Error
+            return
 
         self.set_task('Preparing camera')
 
@@ -104,6 +110,11 @@ class ImageSet(TelescopeAction):
                 self._wait_condition.wait(60)
 
             if self._acquired_images == self.config['count'] or self.aborted:
+                break
+
+            if self.config['onsky'] and not self.dome_is_open:
+                print('Aborting: dome is not open')
+                log.error(self.log_name, 'Dome is not open')
                 break
 
             # Check camera for error status
@@ -157,6 +168,13 @@ class ImageSet(TelescopeAction):
         except Exception as e:
             print('Unknown error while stopping camera')
             print(e)
+
+        with self._wait_condition:
+            self._wait_condition.notify_all()
+
+    def dome_status_changed(self, dome_is_open):
+        """Notification called when the dome is fully open or fully closed"""
+        super().dome_status_changed(dome_is_open)
 
         with self._wait_condition:
             self._wait_condition.notify_all()
