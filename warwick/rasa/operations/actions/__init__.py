@@ -17,6 +17,7 @@
 
 """opsd common code"""
 
+from .autofocus import AutoFocus
 from .focussweep import FocusSweep
 from .imageset import ImageSet
 from .offset_telescope import OffsetTelescope

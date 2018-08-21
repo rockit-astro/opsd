@@ -22,6 +22,7 @@ from warwick.observatory.operations import ConditionWatcher
 from .actions import Initialize, Shutdown
 
 from .actions import (
+    AutoFocus,
     FocusSweep,
     ImageSet,
     OffsetTelescope,
@@ -87,6 +88,7 @@ class RASAConfig:
 
     def get_action_types():
         return {
+            'AutoFocus': AutoFocus,
             'FocusSweep': FocusSweep,
             'SkyFlats': SkyFlats,
             'ImageSet': ImageSet,

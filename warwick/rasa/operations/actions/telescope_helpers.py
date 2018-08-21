@@ -30,7 +30,9 @@ import Pyro4
 from warwick.observatory.common import (
     daemons,
     log)
-from warwick.rasa.focuser import CommandStatus as FocCommandStatus
+from warwick.rasa.focuser import (
+    CommandStatus as FocCommandStatus,
+    FocuserStatus)
 from warwick.rasa.telescope import CommandStatus as TelCommandStatus
 
 def tel_status(log_name):
@@ -132,6 +134,26 @@ def tel_stop(log_name):
         log.error(log_name, 'Unknown error while stopping telescope')
         return False
 
+def get_focus(log_name, channel):
+    """Returns the requested focuser position or None on error
+       Requires focuser to be idle
+    """
+    try:
+        with daemons.rasa_focus.connect() as focusd:
+            status = focusd.report_status()['channels'][channel]
+            if status['status'] != FocuserStatus.Idle:
+                return None
+            return status['current_steps']
+    except Pyro4.errors.CommunicationError:
+        print('Failed to communicate with focuser daemon')
+        log.error(log_name, 'Failed to communicate with focuser daemon')
+        return None
+    except Exception:
+        print('Unknown error while querying focuser position')
+        traceback.print_exc(file=sys.stdout)
+        log.error(log_name, 'Unknown error while querying focuser position')
+        return None
+
 def set_focus(log_name, channel, position, timeout):
     """Set the given focuser channel to the given position"""
     try:
@@ -142,15 +164,14 @@ def set_focus(log_name, channel, position, timeout):
                 print('Failed to set focuser position')
                 log.error(log_name, 'Failed to set focuser position')
                 return False
-            print('done')
             return True
     except Pyro4.errors.CommunicationError:
         print('Failed to communicate with focuser daemon')
         log.error(log_name, 'Failed to communicate with focuser daemon')
         return False
-    except Exception as e:
+    except Exception:
         print('Unknown error while configuring focuser')
-        print(e)
+        traceback.print_exc(file=sys.stdout)
         log.error(log_name, 'Unknown error while configuring focuser')
         return False
 
