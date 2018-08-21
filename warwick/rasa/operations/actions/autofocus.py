@@ -119,7 +119,7 @@ class AutoFocus(TelescopeAction):
         pipeline_config = {}
         pipeline_config.update(self.config['pipeline'])
         pipeline_config.update({
-            'fwhm': True,
+            'hfd': True,
             'type': 'SCIENCE',
             'object': 'Autofocus',
         })
@@ -237,11 +237,11 @@ class AutoFocus(TelescopeAction):
     def received_frame(self, headers):
         """Received a frame from the pipeline"""
         with self._wait_condition:
-            if 'MEDFWHM' in headers and 'FWHMCNT' in headers:
-                print('got hfd', headers['MEDFWHM'], 'from', headers['FWHMCNT'], 'sources')
-                self._focus_measurements.append((headers['MEDFWHM'], headers['FWHMCNT']))
+            if 'MEDHFD' in headers and 'HFDCNT' in headers:
+                print('got hfd', headers['MEDHFD'], 'from', headers['HFDCNT'], 'sources')
+                self._focus_measurements.append((headers['MEDHFD'], headers['HFDCNT']))
             else:
-                print('Headers are missing MEDFWHM or FWHMCNT')
+                print('Headers are missing MEDHFD or HFDCNT')
                 print(headers)
                 self._focus_measurements.append((0, 0))
             self._wait_condition.notify_all()

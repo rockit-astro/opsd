@@ -116,7 +116,7 @@ class FocusSweep(TelescopeAction):
         pipeline_config = {}
         pipeline_config.update(self.config['pipeline'])
         pipeline_config.update({
-            'fwhm': True,
+            'hfd': True,
             'type': 'SCIENCE',
             'object': 'Focus run',
         })
@@ -193,8 +193,8 @@ class FocusSweep(TelescopeAction):
         print(headers)
         with self._wait_condition:
             try:
-                self._focus_measurements[headers['FOCPOS']] = (headers['MEDFWHM'],
-                                                               headers['FWHMCNT'])
+                self._focus_measurements[headers['FOCPOS']] = (headers['MEDHFD'],
+                                                               headers['HFDCNT'])
             except Exception as e:
                 print('failed to update focus measurements')
                 print(e)
