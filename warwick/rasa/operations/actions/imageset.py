@@ -62,7 +62,7 @@ class ImageSet(TelescopeAction):
                     'type': 'integer',
                     'minimum': 0
                 },
-                'onsky': {'type', 'boolean'},
+                'onsky': {'type': 'boolean'},
                 'rasa': camera_schema('rasa'),
                 'pipeline': pipeline_schema()
             }

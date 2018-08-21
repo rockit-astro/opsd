@@ -25,10 +25,12 @@ import os
 import sys
 import Pyro4
 from warwick.observatory.common import daemons
-from warwick.rasa.operations import (
+from warwick.observatory.operations import (
     CommandStatus,
     validate_schedule
 )
+
+from warwick.rasa.operations import RASAConfig
 
 SCRIPT_NAME = os.path.basename(sys.argv[0])
 sys.excepthook = Pyro4.util.excepthook
@@ -138,7 +140,7 @@ def validate_schedule_json(args):
         print('error was: ' + str(e))
         return -1
 
-    valid, errors = validate_schedule(schedule)
+    valid, errors = validate_schedule(schedule, RASAConfig.get_action_types())
     status = FMT_GREEN + 'PASSED' if valid else FMT_RED + 'FAILED'
     print('Validation ' + FMT_BOLD + status + FMT_CLEAR)
     for e in errors:

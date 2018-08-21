@@ -24,6 +24,8 @@
 # pylint: disable=invalid-name
 
 import datetime
+import sys
+import traceback
 import ephem
 import jsonschema
 
@@ -83,8 +85,8 @@ def __validate_schema(validator, schema, block):
             else:
                 message = error.message
             errors.append(message)
-    except Exception as e:
-        print(e)
+    except Exception:
+        traceback.print_exc(file=sys.stdout)
         errors = ['exception while validating']
     return errors
 
@@ -131,8 +133,8 @@ def __validate_action(validator, index, block, action_types):
             errors = __validate_schema(validator, schema, block)
         else:
             errors = ['validation not implemented']
-    except Exception as e:
-        print(e)
+    except Exception:
+        traceback.print_exc(file=sys.stdout)
         errors = ['exception while validating']
 
     # Prefix each message with the action index and type
@@ -184,9 +186,9 @@ def parse_schedule_actions(json, action_types):
     try:
         for action in json['actions']:
             actions.append(action_types[action['type']](action))
-    except Exception as e:
+    except Exception:
         print('exception while parsing schedule')
-        print(e)
+        traceback.print_exc(file=sys.stdout)
         return []
     return actions
 

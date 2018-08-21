@@ -61,12 +61,12 @@ class TelescopeController(object):
         self._action_count = 0
         self._current_action_number = 0
 
+        self._dome_controller = dome_controller
+        self._dome_was_open = False
+
         self._run_thread = threading.Thread(target=self.__run)
         self._run_thread.daemon = True
         self._run_thread.start()
-
-        self._dome_controller = dome_controller
-        self._dome_was_open = False
 
     def __run(self):
         while True:

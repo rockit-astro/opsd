@@ -48,7 +48,6 @@ class FocusSweep(TelescopeAction):
     """Telescope action to do a focus sweep on a defined field"""
     def __init__(self, config):
         super().__init__('Focus Sweep', config)
-        self._acquired_images = 0
         self._wait_condition = threading.Condition()
         self._focus_measurements = {}
         self._camera = daemons.rasa_camera
@@ -178,26 +177,20 @@ class FocusSweep(TelescopeAction):
                 expected_next_exposure = datetime.datetime.utcnow() \
                     + datetime.timedelta(seconds=self.config['rasa']['exposure'] + 10)
 
-        # Stop tracking for the next action
-        if not tel_stop(self.log_name):
-            self.status = TelescopeActionStatus.Error
-            return
-
-        if self.aborted or self._acquired_images == self.config['count']:
+        if self.aborted or len(self._focus_measurements) == self.config['count']:
             self.status = TelescopeActionStatus.Complete
         else:
             self.status = TelescopeActionStatus.Error
 
     def received_frame(self, headers):
         """Received a frame from the pipeline"""
-        print(headers)
         with self._wait_condition:
-            try:
-                self._focus_measurements[headers['FOCPOS']] = (headers['MEDHFD'],
-                                                               headers['HFDCNT'])
-            except Exception as e:
-                print('failed to update focus measurements')
-                print(e)
+            if 'MEDHFD' in headers and 'HFDCNT' in headers:
+                print('got hfd', headers['MEDHFD'], 'from', headers['HFDCNT'], 'sources')
+                self._focus_measurements[headers['FOCPOS']] = (headers['MEDHFD'], headers['HFDCNT'])
+            else:
+                print('Headers are missing MEDHFD or HFDCNT')
+                print(headers)
 
             self._wait_condition.notify_all()
 
@@ -207,7 +200,7 @@ class FocusSweep(TelescopeAction):
 
         tel_stop(self.log_name)
         stop_camera(self.log_name, self._camera)
-        stop_focus(self.log_name)
+        stop_focus(self.log_name, self.config['channel'])
 
         with self._wait_condition:
             self._wait_condition.notify_all()

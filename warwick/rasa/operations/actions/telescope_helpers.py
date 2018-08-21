@@ -140,7 +140,9 @@ def get_focus(log_name, channel):
     """
     try:
         with daemons.rasa_focus.connect() as focusd:
-            status = focusd.report_status()['channels'][channel]
+            # TODO: Hacking channel id to channel array index is bogus
+            # Maybe push this into focusd itself
+            status = focusd.report_status()['channels'][channel-1]
             if status['status'] != FocuserStatus.Idle:
                 return None
             return status['current_steps']
@@ -175,11 +177,11 @@ def set_focus(log_name, channel, position, timeout):
         log.error(log_name, 'Unknown error while configuring focuser')
         return False
 
-def stop_focus(log_name):
+def stop_focus(log_name, channel):
     """Stop the focuser movement"""
     try:
         with daemons.rasa_focus.connect() as focusd:
-            focusd.stop()
+            focusd.stop_channel(channel)
         return True
     except Pyro4.errors.CommunicationError:
         print('Failed to communicate with focuser daemon')
