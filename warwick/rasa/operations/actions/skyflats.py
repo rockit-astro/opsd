@@ -151,13 +151,13 @@ class InstrumentArm:
                         'shutter': False,
                         'exposure': 0
                     })
-                    cam.configure(cam_config)
+                    cam.configure(cam_config, quiet=True)
                 else:
-                    cam.set_exposure_delay(delay)
-                    cam.set_exposure(exposure)
-                    cam.set_shutter(True)
+                    cam.set_exposure_delay(delay, quiet=True)
+                    cam.set_exposure(exposure, quiet=True)
+                    cam.set_shutter(True, quiet=True)
 
-                cam.start_sequence(1)
+                cam.start_sequence(1, quiet=True)
         except Pyro4.errors.CommunicationError:
             print('Failed to communicate with ' + self.name + ' camera daemon')
             log.error(self._log_name, 'Failed to communicate with ' + self.name + ' camera daemon')

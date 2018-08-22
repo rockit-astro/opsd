@@ -246,7 +246,7 @@ class AutoFocus(TelescopeAction):
                 return -1
 
             self.set_task('Measuring HFD')
-            if not take_images(self.log_name, self._camera, 1, cam_config):
+            if not take_images(self.log_name, self._camera, 1, cam_config, quiet=True):
                 return -1
 
             expected_delay = exposures * (self.config['rasa']['exposure'] + 10)

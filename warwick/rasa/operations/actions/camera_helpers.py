@@ -31,7 +31,7 @@ from warwick.observatory.common import log
 from warwick.rasa.camera import (
     CommandStatus as CamCommandStatus)
 
-def take_images(log_name, daemon, count=1, config=None):
+def take_images(log_name, daemon, count=1, config=None, quiet=False):
     """Start an exposure sequence with count images
 
        If config is non-None it is assumed to contain
@@ -42,10 +42,10 @@ def take_images(log_name, daemon, count=1, config=None):
     try:
         with daemon.connect() as cam:
             if config:
-                status = cam.configure(config)
+                status = cam.configure(config, quiet=quiet)
 
             if not config or status == CamCommandStatus.Succeeded:
-                status = cam.start_sequence(count)
+                status = cam.start_sequence(count, quiet=quiet)
 
             if status != CamCommandStatus.Succeeded:
                 print('Failed to start exposure sequence')
