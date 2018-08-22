@@ -66,7 +66,7 @@ class Initialize(TelescopeAction):
                     return False
 
                 # Calling configure with an empty dictionary resets everything to defaults
-                if cam.configure({}) != CamCommandStatus.Succeeded:
+                if cam.configure({}, quiet=True) != CamCommandStatus.Succeeded:
                     print('Failed to reset ' + name + ' camera to defaults')
                     log.error(self.log_name, 'Failed to reset ' + name + ' camera to defaults')
                     return False
