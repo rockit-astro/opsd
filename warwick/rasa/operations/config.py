@@ -28,7 +28,8 @@ from .actions import (
     OffsetTelescope,
     SlewTelescope,
     SkyFlats,
-    Wait)
+    Wait,
+    WaitForDome)
 
 class RASAConfig:
     """Configuration for the RASA prototype"""
@@ -94,5 +95,6 @@ class RASAConfig:
             'ImageSet': ImageSet,
             'OffsetTelescope': OffsetTelescope,
             'SlewTelescope': SlewTelescope,
-            'Wait': Wait
+            'Wait': Wait,
+            'WaitForDome': WaitForDome
         }

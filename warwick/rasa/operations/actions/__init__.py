@@ -26,3 +26,4 @@ from .skyflats import SkyFlats
 from .initialize import Initialize
 from .shutdown import Shutdown
 from .wait import Wait
+from .wait_for_dome import WaitForDome
