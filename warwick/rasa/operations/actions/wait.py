@@ -20,6 +20,7 @@
 # pylint: disable=broad-except
 # pylint: disable=invalid-name
 
+import datetime
 import threading
 from warwick.observatory.operations import (
     TelescopeAction,
@@ -48,8 +49,15 @@ class Wait(TelescopeAction):
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
-        with self._wait_condition:
-            self._wait_condition.wait(self.config['delay'])
+        timeout = datetime.datetime.utcnow() + datetime.timedelta(seconds=self.config['delay'])
+        while True:
+            remaining = (timeout - datetime.datetime.utcnow()).total_seconds()
+            if remaining < 0 or self.aborted:
+                break
+
+            self.set_task('Waiting ({:.0f}s remaining)'.format(remaining))
+            with self._wait_condition:
+                self._wait_condition.wait(10)
 
         self.status = TelescopeActionStatus.Complete
 
