@@ -28,7 +28,6 @@ import datetime
 import math
 import sys
 import threading
-import traceback
 import numpy as np
 from warwick.observatory.common import daemons, log
 from warwick.observatory.operations import (
@@ -229,7 +228,8 @@ class AutoFocus(TelescopeAction):
         cam_config = {}
         cam_config.update(self.config.get('rasa', {}))
         cam_config.update({
-            'shutter': True
+            'shutter': True,
+            'window': [3065, 5112, 2043, 4090]
         })
 
         # Handle exposures individually
