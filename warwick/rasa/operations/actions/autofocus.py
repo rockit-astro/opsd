@@ -26,7 +26,6 @@
 
 import datetime
 import math
-import sys
 import threading
 import numpy as np
 from warwick.observatory.common import daemons, log
@@ -56,9 +55,12 @@ CROSSING_HFD = 2.2
 # Real stars should never be smaller than this
 MINIMUM_HFD = 3.2
 
+# Number of objects that are required to consider MEDHFD valid
+MINIMUM_OBJECT_COUNT = 75
+
 # Aim to reach this HFD on the inside edge of the v-curve
 # before offsetting to the final focus
-TARGET_HFD = 5
+TARGET_HFD = 6
 
 # Number of measurements to take when moving in to find the target HFD
 COARSE_MEASURE_REPEATS = 3
@@ -67,7 +69,11 @@ COARSE_MEASURE_REPEATS = 3
 FINE_MEASURE_REPEATS = 7
 
 # Number of focuser steps to move when searching for the target HFD
-FOCUS_STEP_SIZE = 2000
+FOCUS_STEP_SIZE = 2500
+
+# Number of seconds to add to the exposure time to account for readout + object detection
+# Consider the frame lost if this is exceeded
+MAX_PROCESSING_TIME = 10
 
 class AutoFocus(TelescopeAction):
     """Telescope action to find the optimium focus using the v-curve technique"""
@@ -140,6 +146,7 @@ class AutoFocus(TelescopeAction):
             self.__set_failed_status()
             return
 
+        self.set_task('Sampling initial HFD')
         first_hfd = min_hfd = self.measure_current_hfd(COARSE_MEASURE_REPEATS)
         if first_hfd < 0:
             self.__set_failed_status()
@@ -150,11 +157,16 @@ class AutoFocus(TelescopeAction):
             self.__set_failed_status()
             return
 
+        log.info(self.log_name, 'AutoFocus: HFD at {} steps is {:.1f}" ({} samples)'.format(
+            current_focus, first_hfd, COARSE_MEASURE_REPEATS))
+
+        self.set_task('Searching v-curve position')
+
         # Step inwards until we are well defocused on the inside edge of the v curve
         while True:
-            print('Stepping in until hfd > target')
+            log.info(self.log_name, 'AutoFocus: Searching for position on v-curve')
+            print('AutoFocus: Searching for position on v-curve (stepping out until hfd > target)')
             current_focus -= FOCUS_STEP_SIZE
-            self.set_task('Finding target focus')
             if not set_focus(self.log_name, self.config['channel'],
                              current_focus, FOCUS_TIMEOUT):
                 self.__set_failed_status()
@@ -165,17 +177,23 @@ class AutoFocus(TelescopeAction):
                 self.__set_failed_status()
                 return
 
+            log.info(self.log_name, 'AutoFocus: HFD at {} steps is {:.1f}" ({} samples)'.format(
+                current_focus, current_hfd, COARSE_MEASURE_REPEATS))
+
             min_hfd = min(min_hfd, current_hfd)
             if current_hfd > TARGET_HFD and current_hfd > min_hfd:
-                print('definitely inside focus')
+                log.info(self.log_name, 'AutoFocus: Found position on v-curve')
+                print('AutoFocus: on inside slope')
                 break
 
         # We may have stepped to far inwards in the previous step
         # Step outwards if needed until the current HFD is closer to the target
+        self.set_task('Searching for HFD {}'.format(TARGET_HFD))
         while current_hfd > 2 * TARGET_HFD:
-            print('too far from target HFD - stepping back out')
+            log.info(self.log_name, 'AutoFocus: Stepping towards HFD {}'.format(TARGET_HFD))
+            print('AutoFocus: Stepping towards HFD {}'.format(TARGET_HFD))
+
             current_focus -= int(current_hfd / (2 * INSIDE_FOCUS_SLOPE))
-            self.set_task('Finding target focus')
             if not set_focus(self.log_name, self.config['channel'],
                              current_focus, FOCUS_TIMEOUT):
                 self.__set_failed_status()
@@ -186,42 +204,49 @@ class AutoFocus(TelescopeAction):
                 self.__set_failed_status()
                 return
 
+            log.info(self.log_name, 'AutoFocus: HFD at {} steps is {:.1f}" ({} samples)'.format(
+                current_focus, current_hfd, COARSE_MEASURE_REPEATS))
+
         # Do a final move to (approximately) the target HFD
-        print('moving to where we think target HFD is')
         current_focus += int((TARGET_HFD - current_hfd) / INSIDE_FOCUS_SLOPE)
         if not set_focus(self.log_name, self.config['channel'], current_focus, FOCUS_TIMEOUT):
             self.__set_failed_status()
             return
 
-        # Take 5 frames to get an improved HFD estimate at the current position
+        # Take more frames to get an improved HFD estimate at the current position
+        self.set_task('Sampling HFD for final move')
         current_hfd = self.measure_current_hfd(FINE_MEASURE_REPEATS)
         if current_hfd < 0:
             self.__set_failed_status()
             return
 
+        log.info(self.log_name, 'AutoFocus: HFD at {} steps is {:.1f}" ({} samples)'.format(
+            current_focus, current_hfd, FINE_MEASURE_REPEATS))
+
         # Jump to target focus using calibrated parameters
         current_focus += int((CROSSING_HFD - current_hfd) / INSIDE_FOCUS_SLOPE)
 
-        print('Final focus position is', current_focus)
-        self.set_task('Moving to final focus')
-        log.info(self.log_name, 'Final focus position is {}'.format(current_focus))
+        self.set_task('Moving to focus')
         if not set_focus(self.log_name, self.config['channel'], current_focus, FOCUS_TIMEOUT):
             self.__set_failed_status()
             return
 
+        self.set_task('Sampling final HFD')
         current_hfd = self.measure_current_hfd(FINE_MEASURE_REPEATS)
         runtime = (datetime.datetime.utcnow() - start_time).total_seconds()
 
-        print('Achieved HFD of {:.2f} in {:.0f} seconds'.format(current_hfd, runtime))
-        log.info(self.log_name, 'Achieved HFD of {:.2f} in {:.0f} seconds'.format(
+        print('AutoFocus: Achieved HFD of {:.1f}" in {:.0f} seconds'.format(current_hfd, runtime))
+        log.info(self.log_name, 'AutoFocus: Achieved HFD of {:.1f}" in {:.0f} seconds'.format(
             current_hfd, runtime))
         self.status = TelescopeActionStatus.Complete
 
-
-    def measure_current_hfd(self, exposures=1, count_threshold=200):
+    def measure_current_hfd(self, exposures=1):
         """ Takes a set of exposures and returns the smallest MEDHFD value
             Returns -1 on error
         """
+        print('AutoFocus: Sampling HFD')
+        log.info(self.log_name, 'AutoFocus: Sampling HFD')
+
         requested = exposures
         failed = 0
 
@@ -242,34 +267,43 @@ class AutoFocus(TelescopeAction):
                 return np.min(samples)
 
             if failed > 5:
-                print(failed, 'exposured failed - giving up')
+                log.error(self.log_name, 'AutoFocus: Aborting because 5 HFD samples failed')
+                print(failed, 'AutoFocus: Aborting because 5 HFD samples failed')
                 return -1
 
-            self.set_task('Measuring HFD')
             if not take_images(self.log_name, self._camera, 1, cam_config, quiet=True):
                 return -1
 
-            expected_delay = exposures * (self.config['rasa']['exposure'] + 10)
-            expected_complete = datetime.datetime.utcnow() \
-                + datetime.timedelta(seconds=expected_delay)
+            delay = self.config['rasa']['exposure'] + MAX_PROCESSING_TIME
+            expected_complete = datetime.datetime.utcnow() + datetime.timedelta(seconds=delay)
 
             while True:
-                if self.aborted or not self.dome_is_open:
-                    print('aborted or dome closed')
+                if not self.dome_is_open:
+                    log.error(self.log_name, 'AutoFocus: Aborting because dome is not open')
+                    print(failed, 'AutoFocus: Aborting because dome is not open')
+                    return -1
+
+                if self.aborted:
+                    log.error(self.log_name, 'AutoFocus: Aborted by user')
+                    print('AutoFocus: Aborted by user')
                     return -1
 
                 measurement = self._focus_measurement
                 if measurement:
                     self._focus_measurement = None
-                    if measurement[1] > count_threshold and measurement[0] > MINIMUM_HFD:
+                    if measurement[1] > MINIMUM_OBJECT_COUNT and measurement[0] > MINIMUM_HFD:
                         samples.append(measurement[0])
                     else:
+                        warning = 'AutoFocus: Discarding frame with {} samples ({} HFD)'.format(
+                            measurement[1], measurement[0])
+                        print(warning)
+                        log.warning(self.log_name, warning)
                         failed += 1
                     break
 
-                # TODO: might need to consider a better check for the camera status
                 if datetime.datetime.utcnow() > expected_complete:
-                    print('Exposure timed out - retrying')
+                    print('AutoFocus: Exposure timed out - retrying')
+                    log.warning(self.log_name, 'AutoFocus: Exposure timed out - retrying')
                     failed += 1
                     break
 
