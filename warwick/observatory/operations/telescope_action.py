@@ -18,8 +18,13 @@
 """Base telescope action that is extended by other actions"""
 
 # pylint: disable=too-few-public-methods
+# pylint: disable=bare-except
+# pylint: disable=too-many-instance-attributes
 
+import sys
 import threading
+import traceback
+from warwick.observatory.common import log
 
 class TelescopeActionStatus:
     """Constants representing the status of a telescope action"""
@@ -60,13 +65,26 @@ class TelescopeAction(object):
         # Start the run thread on the first tick
         self.dome_is_open = dome_is_open
         if self._run_thread is None:
-            self._run_thread = threading.Thread(target=self.run_thread)
+            self._run_thread = threading.Thread(target=self.__run_thread_wrapper)
             self._run_thread.daemon = True
             self._run_thread.start()
 
     def dome_status_changed(self, dome_is_open):
         """Notification called when the dome is fully open or fully closed"""
         self.dome_is_open = dome_is_open
+
+
+    def __run_thread_wrapper(self):
+        """Wrapper that catches exceptions thrown in run_thread implementations
+           and sets the error status
+        """
+        try:
+            self.run_thread()
+        except:
+            print('error: exception in action run thread:')
+            traceback.print_exc(file=sys.stdout)
+            log.error(self.log_name, 'Exception in action run thread')
+            self.status = TelescopeActionStatus.Error
 
     def run_thread(self):
         """Thread that runs the hardware actions
