@@ -28,7 +28,9 @@
 
 import datetime
 import math
+import sys
 import threading
+import traceback
 import Pyro4
 
 from astropy.coordinates import (
@@ -74,6 +76,10 @@ CONFIG = {
     # Clamp exposure time deltas to this range (e.g. 5 -> 15 or 5 -> 1.6)
     'max_exposure_delta': 3,
 
+    # Number of seconds to add to the exposure time to account for readout + object detection
+    # Consider the frame lost if this is exceeded
+    'max_processing_time': 10,
+
     # Exposure limits in seconds
     'min_exposure': 0.1,
     'max_exposure': 30,
@@ -112,24 +118,26 @@ class InstrumentArm:
         self._daemon = daemon
         self._log_name = log_name
         self._camera_config = camera_config
-        self._expected_next_exposure = datetime.datetime.utcnow()
+        self._expected_complete = datetime.datetime.utcnow()
         self._is_evening = is_evening
         self._scale = CONFIG['evening_scale'] if is_evening else CONFIG['dawn_scale']
         self._start_exposure = CONFIG['min_exposure'] if is_evening else CONFIG['min_save_exposure']
+        self._start_time = None
+        self._exposure_count = 0
 
     def start(self):
         """Starts the flat sequence for this arm"""
         self.__take_image(0, 0)
+        self._start_time = datetime.datetime.utcnow()
 
     def check_timeout(self):
         """Sets error state if an expected frame is more than 30 seconds late"""
         if self.state not in [AutoFlatState.Waiting, AutoFlatState.Saving]:
             return
 
-        delta = (datetime.datetime.utcnow() - self._expected_next_exposure).total_seconds()
-        if delta > 30:
-            print(self.name + ' camera exposure timed out')
-            log.error(self._log_name, self.name + ' camera exposure timed out')
+        if datetime.datetime.utcnow() > self._expected_complete:
+            print('AutoFlat: ' + self.name + ' camera exposure timed out')
+            log.error(self._log_name, 'AutoFlat: ' + self.name + ' camera exposure timed out')
             self.state = AutoFlatState.Error
 
     def __take_image(self, exposure, delay):
@@ -137,8 +145,8 @@ class InstrumentArm:
            if exposure is 0 then it will reset the camera
            configuration and take a bias with the shutter closed
         """
-        self._expected_next_exposure = datetime.datetime.utcnow() \
-            + datetime.timedelta(seconds=exposure + delay)
+        self._expected_complete = datetime.datetime.utcnow() \
+            + datetime.timedelta(seconds=exposure + delay + CONFIG['max_processing_time'])
         try:
             # Need to communicate directly with camera daemon
             # to allow set_exposure_delay and set_exosure
@@ -159,12 +167,12 @@ class InstrumentArm:
 
                 cam.start_sequence(1, quiet=True)
         except Pyro4.errors.CommunicationError:
-            print('Failed to communicate with ' + self.name + ' camera daemon')
+            print('AutoFlat: Failed to communicate with ' + self.name + ' camera daemon')
             log.error(self._log_name, 'Failed to communicate with ' + self.name + ' camera daemon')
             self.state = AutoFlatState.Error
-        except Exception as e:
-            print('Unknown error with ' + self.name + ' camera')
-            print(e)
+        except Exception:
+            print('AutoFlat: Unknown error with ' + self.name + ' camera')
+            traceback.print_exc(file=sys.stdout)
             log.error(self._log_name, 'Unknown error with ' + self.name + ' camera')
             self.state = AutoFlatState.Error
 
@@ -175,14 +183,17 @@ class InstrumentArm:
 
         if self.state == AutoFlatState.Bias:
             self.bias = headers['MEDCNTS']
-            print(self.name + ' bias level is {:.0f} ADU'.format(self.bias))
-            log.info(self._log_name, '{} bias is {:.0f} ADU'.format(self.name, self.bias))
+            print('AutoFlat: {} bias level is {:.0f} ADU'.format(self.name, self.bias))
+            log.info(self._log_name, 'AutoFlat: {} bias is {:.0f} ADU'.format(self.name, self.bias))
 
             # Take the first flat image
             self.state = AutoFlatState.Waiting
             self.__take_image(self._start_exposure, delay_exposure)
 
         elif self.state == AutoFlatState.Waiting or self.state == AutoFlatState.Saving:
+            if self.state == AutoFlatState.Saving:
+                self._exposure_count += 1
+
             exposure = headers['EXPTIME']
             counts = headers['MEDCNTS'] - self.bias
 
@@ -200,11 +211,8 @@ class InstrumentArm:
 
             clamped_desc = ' (clamped from {:.2f}s)'.format(new_exposure) \
                 if new_exposure > clamped_exposure else ''
-            print(self.name + ' exposure {:.2f}s counts {:.0f} ADU -> {:.2f}s{}'
-                  .format(exposure, counts, clamped_exposure, clamped_desc))
-
-            log.info(self._log_name, 'autoflat: {} {:.2f}s {:.0f} ADU -> {:.2f}s{}'
-                     .format(self.name, exposure, counts, clamped_exposure, clamped_desc))
+            print('AutoFlat: {} exposure {:.2f}s counts {:.0f} ADU -> {:.2f}s{}'
+                  .format(self.name, exposure, counts, clamped_exposure, clamped_desc))
 
             if self._is_evening:
                 # Sky is decreasing in brightness
@@ -213,7 +221,7 @@ class InstrumentArm:
                         delay_exposure += CONFIG['evening_exposure_delays'][min_exposure]
 
                 if delay_exposure > 0:
-                    print(self.name + ' waiting ' + str(delay_exposure) + \
+                    print('AutoFlat: ' + self.name + ' waiting ' + str(delay_exposure) + \
                           's for it to get darker')
 
                 if clamped_exposure == CONFIG['max_exposure'] \
@@ -235,10 +243,17 @@ class InstrumentArm:
                     self.state = AutoFlatState.Error
                     return
 
-                print('autoflat: ' + self.name + ' ' + AutoFlatState.Names[last_state] \
+                print('AutoFlat: ' + self.name + ' ' + AutoFlatState.Names[last_state] \
                     + ' -> ' + AutoFlatState.Names[self.state])
-                log.info(self._log_name, 'autoflat: {} arm {} -> {}'.format(
-                    self.name, AutoFlatState.Names[last_state], AutoFlatState.Names[self.state]))
+
+                if self.state == AutoFlatState.Saving:
+                    log.info(self._log_name, 'AutoFlat: {} saving enabled'.format(self.name))
+                elif self.state == AutoFlatState.Complete:
+                    runtime = (datetime.datetime.utcnow() - self._start_time).total_seconds()
+                    message = 'AutoFlat: {} acquired {} flats in {:.0f} seconds'.format(
+                        self.name, self._exposure_count, runtime)
+                    print(message)
+                    log.info(self._log_name, message)
 
             if self.state != AutoFlatState.Complete:
                 self.__take_image(clamped_exposure, delay_exposure)
@@ -290,30 +305,47 @@ class SkyFlats(TelescopeAction):
                                  height=ts['site_elevation']*u.m)
         # pylint: enable=no-member
 
-        self.set_task('Waiting for dome and sun')
         while not self.aborted:
+            waiting_for = []
             sun_altitude = sun_position(location)[0]
             if self.config['evening']:
                 if sun_altitude < CONFIG['min_sun_altitude']:
-                    print('autoflat: sun already too low - continuing')
-                    log.info(self.log_name, 'autoflat: sun already too low - continuing')
+                    print('AutoFlat: Sun already below minimum altitude')
+                    log.info(self.log_name, 'AutoFlat: Sun already below minimum altitude')
                     self.status = TelescopeActionStatus.Complete
                     return
+
                 if sun_altitude < CONFIG['max_sun_altitude'] and self.dome_is_open:
                     break
-                print('{:.1f} > {:.1f}; dome {} - keep waiting'.format(
+
+                if not self.dome_is_open:
+                    waiting_for.append('Dome')
+
+                if sun_altitude >= CONFIG['max_sun_altitude']:
+                    waiting_for.append('Sun < {:.1f} deg'.format(CONFIG['min_sun_altitude']))
+
+                print('AutoFlat: {:.1f} > {:.1f}; dome {} - keep waiting'.format(
                     sun_altitude, CONFIG['max_sun_altitude'], self.dome_is_open))
             else:
                 if sun_altitude > CONFIG['max_sun_altitude']:
-                    print('autoflat: sun already too high - continuing')
-                    log.info(self.log_name, 'autoflat: sun already too high - continuing')
+                    print('AutoFlat: Sun already above maximum altitude')
+                    log.info(self.log_name, 'AutoFlat: Sun already above maximum altitude')
                     self.status = TelescopeActionStatus.Complete
                     return
+
                 if sun_altitude > CONFIG['min_sun_altitude'] and self.dome_is_open:
                     break
-                print('{:.1f} < {:.1f}; dome {} - keep waiting'.format(
+
+                if not self.dome_is_open:
+                    waiting_for.append('Dome')
+
+                if sun_altitude < CONFIG['min_sun_altitude']:
+                    waiting_for.append('Sun > {:.1f} deg'.format(CONFIG['min_sun_altitude']))
+
+                print('AutoFlat: {:.1f} < {:.1f}; dome {} - keep waiting'.format(
                     sun_altitude, CONFIG['min_sun_altitude'], self.dome_is_open))
 
+            self.set_task('Waiting for ' + ', '.join(waiting_for))
             with self._wait_condition:
                 self._wait_condition.wait(CONFIG['sun_altitude_check_interval'])
 
@@ -321,15 +353,15 @@ class SkyFlats(TelescopeAction):
 
         # The anti-solar point is opposite the sun at 75 degrees
         sun_altaz = sun_position(location)
-        print('Sun position is', sun_altaz)
+        print('AutoFlat: Sun position is', sun_altaz)
 
         if not tel_slew_altaz(self.log_name,
                               math.radians(75),
                               math.radians(sun_altaz[1] + 180),
                               False, SLEW_TIMEOUT):
             if not self.aborted:
-                print('Failed to slew telescope')
-                log.error(self.log_name, 'Failed to slew telescope')
+                print('AutoFlat: Failed to slew telescope')
+                log.error(self.log_name, 'AutoFlat: Failed to slew telescope')
                 self.status = TelescopeActionStatus.Error
                 return
 
@@ -375,8 +407,8 @@ class SkyFlats(TelescopeAction):
                 for arm in self._instrument_arms.values():
                     arm.abort()
 
-                print('Aborting: dome has closed')
-                log.error(self.log_name, 'Dome has closed')
+                print('AutoFlat: Dome has closed')
+                log.error(self.log_name, 'AutoFlat: Dome has closed')
                 break
 
             # We are done once all arms are either complete or have errored
@@ -405,4 +437,4 @@ class SkyFlats(TelescopeAction):
         if 'INSTRARM' in headers and headers['INSTRARM'] in self._instrument_arms:
             self._instrument_arms[headers['INSTRARM']].received_frame(headers)
         else:
-            print('Ignoring unknown frame')
+            print('AutoFlat: Ignoring unknown frame')
