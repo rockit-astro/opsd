@@ -80,6 +80,7 @@ class DomeController(object):
         self._status_updated = datetime.datetime.utcnow()
         self._log_name = log_name
 
+        self._environment_safe = False
         self._environment_safe_date = datetime.datetime.min
 
         loop = threading.Thread(target=self.__loop)
@@ -114,6 +115,7 @@ class DomeController(object):
                     self._requested_close_date is not None and \
                     current_date > self._requested_open_date and \
                     current_date < self._requested_close_date and \
+                    self._environment_safe and \
                     self._environment_safe_date > self._requested_open_date
 
                 requested_status = DomeStatus.Open if requested_open else DomeStatus.Closed
@@ -208,6 +210,10 @@ class DomeController(object):
                     print('error: failed to communicate with the dome daemon: ', e)
                     self.__set_mode(OperationsMode.Error)
 
+            # Clear the schedule if we have passed the close date
+            if self._requested_close_date and current_date > self._requested_close_date:
+                self.clear_open_window()
+
             # Wait for the next loop period, unless woken up early by __shortcut_loop_wait
             with self._wait_condition:
                 self._wait_condition.wait(self._loop_delay)
@@ -274,20 +280,16 @@ class DomeController(object):
         log.info(self._log_name, 'Cleared dome window')
         self.__shortcut_loop_wait()
 
-    def notify_environment_safe(self):
-        """Called by the enviroment monitor to notify that the weather is still safe
+    def notify_environment_status(self, is_safe):
+        """Called by the enviroment monitor to notify the current environment status
            The dome will only open once a safe ping is received inside the open window
            The heartbeat ping will only be sent if the environment was pinged within
            the last 30 seconds
         """
-        self._environment_safe_date = datetime.datetime.utcnow()
-
-    def active(self):
-        """Returns true if the dome is currently under active control
-           and should be notified about a weather alert
-        """
-        if not self._requested_open_date or not self._requested_close_date:
-            return False
-
         now = datetime.datetime.utcnow()
-        return now > self._requested_open_date and now < self._requested_close_date
+        self._environment_safe = is_safe
+        self._environment_safe_date = now
+
+        # Clear the dome schedule (forcing it to close) if the night has started
+        if not is_safe and self._requested_open_date and now > self._requested_open_date:
+            self.clear_open_window()

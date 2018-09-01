@@ -128,8 +128,11 @@ class EnvironmentWatcher(object):
                 self.updated = datetime.datetime.utcnow()
 
             if was_safe and not safe:
-                log.warning(self._log_name, 'Environment has become unsafe')
+                message = 'Environment has become unsafe (' + ', '.join(unsafe_conditions) + ')'
+                print(message)
+                log.warning(self._log_name, message)
             elif not was_safe and safe:
+                print('Environment trigger timed out')
                 log.info(self._log_name, 'Environment trigger timed out')
         except Exception as e:
             with self._lock:

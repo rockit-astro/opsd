@@ -101,15 +101,7 @@ class OperationsDaemon:
         """
         while True:
             self._environment.update()
-
-            if self._environment.safe:
-                self._dome.notify_environment_safe()
-            elif self._dome.active():
-                self._dome.clear_open_window()
-                print('Cancelling dome schedule (environment: '
-                      + ', '.join(self._environment.unsafe_conditions) + ')')
-                log.warning('rasa_opsd', 'Cancelling dome schedule (environment: '
-                            + ', '.join(self._environment.unsafe_conditions) + ')')
+            self._dome.notify_environment_status(self._environment.safe)
 
             # Wait for the next loop period, unless woken up early by __shortcut_loop_wait
             with self._wait_condition:
