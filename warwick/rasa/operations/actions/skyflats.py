@@ -322,7 +322,7 @@ class SkyFlats(TelescopeAction):
                     waiting_for.append('Dome')
 
                 if sun_altitude >= CONFIG['max_sun_altitude']:
-                    waiting_for.append('Sun < {:.1f} deg'.format(CONFIG['min_sun_altitude']))
+                    waiting_for.append('Sun < {:.1f} deg'.format(CONFIG['max_sun_altitude']))
 
                 print('AutoFlat: {:.1f} > {:.1f}; dome {} - keep waiting'.format(
                     sun_altitude, CONFIG['max_sun_altitude'], self.dome_is_open))
