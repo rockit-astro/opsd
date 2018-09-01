@@ -102,7 +102,9 @@ class OperationsDaemon:
         while True:
             self._environment.update()
 
-            if not self._environment.safe and self._dome.active():
+            if self._environment.safe:
+                self._dome.notify_environment_safe()
+            elif self._dome.active():
                 self._dome.clear_open_window()
                 print('Cancelling dome schedule (environment: '
                       + ', '.join(self._environment.unsafe_conditions) + ')')

@@ -80,6 +80,8 @@ class DomeController(object):
         self._status_updated = datetime.datetime.utcnow()
         self._log_name = log_name
 
+        self._environment_safe_date = datetime.datetime.min
+
         loop = threading.Thread(target=self.__loop)
         loop.daemon = True
         loop.start()
@@ -111,8 +113,11 @@ class DomeController(object):
                 requested_open = self._requested_open_date is not None and \
                     self._requested_close_date is not None and \
                     current_date > self._requested_open_date and \
-                    current_date < self._requested_close_date
+                    current_date < self._requested_close_date and \
+                    self._environment_safe_date > self._requested_open_date
+
                 requested_status = DomeStatus.Open if requested_open else DomeStatus.Closed
+                environment_safe_age = (current_date - self._environment_safe_date).total_seconds()
 
             auto_failure = self._mode == OperationsMode.Error and \
                 requested_mode == OperationsMode.Automatic
@@ -191,8 +196,7 @@ class DomeController(object):
                             self.__set_status(DomeStatus.Open)
                         else:
                             self.__set_mode(OperationsMode.Error)
-
-                    elif requested_status == status:
+                    elif requested_status == status and environment_safe_age < 30:
                         print('dome: sending heartbeat ping')
                         with self._daemon.connect() as dome:
                             dome.set_heartbeat_timer(self._heartbeat_timeout)
@@ -268,6 +272,14 @@ class DomeController(object):
         self._requested_open_date = self._requested_close_date = None
         print('Cleared dome window')
         log.info(self._log_name, 'Cleared dome window')
+
+    def notify_environment_safe(self):
+        """Called by the enviroment monitor to notify that the weather is still safe
+           The dome will only open once a safe ping is received inside the open window
+           The heartbeat ping will only be sent if the environment was pinged within
+           the last 30 seconds
+        """
+        self._environment_safe_date = datetime.datetime.utcnow()
 
     def active(self):
         """Returns true if the dome is currently under active control
