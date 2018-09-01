@@ -272,6 +272,7 @@ class DomeController(object):
         self._requested_open_date = self._requested_close_date = None
         print('Cleared dome window')
         log.info(self._log_name, 'Cleared dome window')
+        self.__shortcut_loop_wait()
 
     def notify_environment_safe(self):
         """Called by the enviroment monitor to notify that the weather is still safe
