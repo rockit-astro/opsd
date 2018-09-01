@@ -144,6 +144,8 @@ def get_focus(log_name, channel):
             # Maybe push this into focusd itself
             status = focusd.report_status()['channels'][channel-1]
             if status['status'] != FocuserStatus.Idle:
+                print('Focuser status is not idle')
+                log.error(log_name, 'Focuser status is not idle')
                 return None
             return status['current_steps']
     except Pyro4.errors.CommunicationError:
