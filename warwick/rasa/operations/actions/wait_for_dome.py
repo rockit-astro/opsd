@@ -69,6 +69,12 @@ class WaitForDome(TelescopeAction):
 
         self.status = TelescopeActionStatus.Complete
 
+    def abort(self):
+        """Notification called when the telescope is stopped by the user"""
+        super().abort()
+        with self._wait_condition:
+            self._wait_condition.notify_all()
+
     def dome_status_changed(self, dome_is_open):
         """Notification called when the dome is fully open or fully closed"""
         super().dome_status_changed(dome_is_open)
