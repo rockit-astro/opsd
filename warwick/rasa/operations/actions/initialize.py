@@ -168,7 +168,7 @@ class Initialize(TelescopeAction):
             self.status = TelescopeActionStatus.Error
 
     def abort(self):
-        """Aborted by a weather alert or user action"""
+        """Notification called when the telescope is stopped by the user"""
         super().abort()
 
         # Aborting while homing isn't a good idea

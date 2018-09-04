@@ -62,7 +62,7 @@ class Wait(TelescopeAction):
         self.status = TelescopeActionStatus.Complete
 
     def abort(self):
-        """Aborted by a weather alert or user action"""
+        """Notification called when the telescope is stopped by the user"""
         super().abort()
         with self._wait_condition:
             self._wait_condition.notify_all()

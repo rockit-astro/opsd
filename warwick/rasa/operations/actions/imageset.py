@@ -143,13 +143,13 @@ class ImageSet(TelescopeAction):
             self.status = TelescopeActionStatus.Error
 
     def received_frame(self, headers):
-        """Received a frame from the pipeline"""
+        """Notification called when a frame has been processed by the data pipeline"""
         with self._wait_condition:
             self._acquired_images += 1
             self._wait_condition.notify_all()
 
     def abort(self):
-        """Aborted by a weather alert or user action"""
+        """Notification called when the telescope is stopped by the user"""
         super().abort()
 
         stop_camera(self.log_name, self._camera)

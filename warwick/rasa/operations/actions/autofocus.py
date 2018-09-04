@@ -311,7 +311,7 @@ class AutoFocus(TelescopeAction):
                     self._wait_condition.wait(10)
 
     def received_frame(self, headers):
-        """Received a frame from the pipeline"""
+        """Notification called when a frame has been processed by the data pipeline"""
         with self._wait_condition:
             if 'MEDHFD' in headers and 'HFDCNT' in headers:
                 self._focus_measurement = (headers['MEDHFD'], headers['HFDCNT'])
@@ -322,7 +322,7 @@ class AutoFocus(TelescopeAction):
             self._wait_condition.notify_all()
 
     def abort(self):
-        """Aborted by a weather alert or user action"""
+        """Notification called when the telescope is stopped by the user"""
         super().abort()
 
         tel_stop(self.log_name)

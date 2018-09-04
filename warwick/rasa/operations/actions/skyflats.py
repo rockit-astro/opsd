@@ -424,7 +424,7 @@ class SkyFlats(TelescopeAction):
             self.status = TelescopeActionStatus.Error
 
     def abort(self):
-        """Aborted by a weather alert or user action"""
+        """Notification called when the telescope is stopped by the user"""
         super().abort()
         for arm in self._instrument_arms.values():
             arm.abort()
@@ -433,7 +433,7 @@ class SkyFlats(TelescopeAction):
             self._wait_condition.notify_all()
 
     def received_frame(self, headers):
-        """Callback to process an acquired frame. headers is a dictionary of header keys"""
+        """Notification called when a frame has been processed by the data pipeline"""
         if 'INSTRARM' in headers and headers['INSTRARM'] in self._instrument_arms:
             self._instrument_arms[headers['INSTRARM']].received_frame(headers)
         else:

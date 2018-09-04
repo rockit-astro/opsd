@@ -69,11 +69,6 @@ class TelescopeAction(object):
             self._run_thread.daemon = True
             self._run_thread.start()
 
-    def dome_status_changed(self, dome_is_open):
-        """Notification called when the dome is fully open or fully closed"""
-        self.dome_is_open = dome_is_open
-
-
     def __run_thread_wrapper(self):
         """Wrapper that catches exceptions thrown in run_thread implementations
            and sets the error status
@@ -94,9 +89,13 @@ class TelescopeAction(object):
         self.status = TelescopeActionStatus.Complete
 
     def abort(self):
-        """Aborted by a weather alert or user action"""
+        """Notification called when the telescope is stopped by the user"""
         self.aborted = True
 
+    def dome_status_changed(self, dome_is_open):
+        """Notification called when the dome is fully open or fully closed"""
+        self.dome_is_open = dome_is_open
+
     def received_frame(self, headers):
-        """Received a frame from the pipeline"""
+        """Notification called when a frame has been processed by the data pipeline"""
         pass

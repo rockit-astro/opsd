@@ -69,6 +69,6 @@ class OffsetTelescope(TelescopeAction):
         self.status = TelescopeActionStatus.Complete
 
     def abort(self):
-        """Aborted by a weather alert or user action"""
+        """Notification called when the telescope is stopped by the user"""
         super().abort()
         tel_stop(self.log_name)
