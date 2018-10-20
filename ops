@@ -123,6 +123,16 @@ def tel_control(args):
     print('usage: {} tel (auto|manual|stop)'.format(SCRIPT_NAME))
     return -1
 
+def dehumidifier_control(args):
+    """Changes the dehumidifier between automatic and manual control"""
+    if args:
+        if args[0] in ['auto', 'manual']:
+            with daemons.rasa_operations.connect() as ops:
+                return ops.dehumidifier_control(args[0] == 'auto')
+
+    print('usage: {} dehumidifier (auto|manual)'.format(SCRIPT_NAME))
+    return -1
+
 def validate_schedule_json(args):
     """checks a schedule file for errors"""
     if len(args) != 1:
@@ -245,6 +255,25 @@ def print_status():
     elif tel['mode'] == 1:
         print('    Action name: ' + FMT_BOLD + 'IDLE' + FMT_CLEAR)
 
+
+    dehumidifier = status['dehumidifier']
+    dehumidifier_date = datetime.datetime.strptime(dehumidifier['active_updated'], '%Y-%m-%dT%H:%M:%SZ')
+    print('Dehumidifier status at ' + FMT_BOLD + dehumidifier_date.strftime('%H:%M:%S') + FMT_CLEAR + ':')
+
+    dehumidifier_mode = '    Control: ' + FMT_BOLD + OPS_MODES[dehumidifier['mode']] + FMT_CLEAR
+    if dehumidifier['mode'] != dehumidifier['requested_mode']:
+        dehumidifier_mode += ' (' + FMT_BOLD + OPS_MODES[dehumidifier['requested_mode']] + \
+            FMT_CLEAR + ' queued)'
+    print(dehumidifier_mode)
+
+    if dehumidifier['mode'] == 1:
+        dehumidifier_active = '     Status: ' + FMT_BOLD
+        if dehumidifier['active']:
+            dehumidifier_active += FMT_RED + 'ENABLED' + FMT_CLEAR
+        else:
+            dehumidifier_active += FMT_GREEN + 'DISABLED' + FMT_CLEAR
+        print(dehumidifier_active)
+
     return 0
 
 def print_conditions(condition, params):
@@ -274,6 +303,7 @@ def print_usage(name):
     print('   status       print a human-readable summary of the operations status')
     print('   dome         toggle dome between manual and automatic control or clear schedule')
     print('   tel          toggle telescope between manual and automatic control or cancel actions')
+    print('   dehumidifier toggle dehumidifier between manual and automatic control')
     print('   validate     checks a schedule file for errors')
     print('   schedule     schedule observations for the night')
     print()
@@ -292,6 +322,8 @@ if __name__ == '__main__':
         run_command(lambda: dome_control(sys.argv[2:]))
     elif sys.argv[1] == 'tel':
         run_command(lambda: tel_control(sys.argv[2:]))
+    elif sys.argv[1] == 'dehumidifier':
+        run_command(lambda: dehumidifier_control(sys.argv[2:]))
     elif sys.argv[1] == 'validate':
         run_command(lambda: validate_schedule_json(sys.argv[2:]))
     elif sys.argv[1] == 'schedule':

@@ -32,7 +32,9 @@ from warwick.observatory.common import (
 from warwick.observatory.common.helpers import pyro_client_matches
 from warwick.observatory.operations import (
     DomeController,
+    DomeStatus,
     TelescopeController,
+    DehumidifierController,
     EnvironmentWatcher,
     CommandStatus,
     OperationsMode,
@@ -89,6 +91,10 @@ class OperationsDaemon:
             self._config.log_name,
             self._config.get_enviroment_conditions())
 
+        self._dehumidifier = DehumidifierController(
+            self._config.power_daemon,
+            self._config.log_name)
+
         runloop = threading.Thread(target=self.__ops_loop)
         runloop.daemon = True
         runloop.start()
@@ -102,6 +108,11 @@ class OperationsDaemon:
         while True:
             self._environment.update()
             self._dome.notify_environment_status(self._environment.safe)
+
+            self._dehumidifier.notify_environment_status(
+                self._environment.internal_humidity,
+                self._environment.external_humidity,
+                self._dome.status()['status'] == DomeStatus.Open)
 
             # Wait for the next loop period, unless woken up early by __shortcut_loop_wait
             with self._wait_condition:
@@ -130,7 +141,7 @@ class OperationsDaemon:
             mode = OperationsMode.Automatic if automatic else OperationsMode.Manual
             self._dome.request_mode(mode)
 
-            log.info('rasa_opsd', 'Dome control manually changed to '
+            log.info(self._config.log_name, 'Dome control changed to '
                      + ('automatic' if automatic else 'manual'))
 
             return CommandStatus.Succeeded
@@ -153,7 +164,25 @@ class OperationsDaemon:
             mode = OperationsMode.Automatic if automatic else OperationsMode.Manual
             self._telescope.request_mode(mode)
 
-            log.info('rasa_opsd', 'Telescope control manually changed to '
+            log.info(self._config.log_name, 'Telescope control changed to '
+                     + ('automatic' if automatic else 'manual'))
+
+            return CommandStatus.Succeeded
+
+    @Pyro4.expose
+    def dehumidifier_control(self, automatic):
+        """Switch the dehumidifier between manual (observer) and automatic (opsd) control"""
+        if not pyro_client_matches(CONTROL_IPS):
+            return CommandStatus.InvalidControlIP
+
+        with TryLock(self._command_lock) as success:
+            if not success:
+                return CommandStatus.Blocked
+
+            mode = OperationsMode.Automatic if automatic else OperationsMode.Manual
+            self._dehumidifier.request_mode(mode)
+
+            log.info(self._config.log_name, 'Dehumidifier control changed to '
                      + ('automatic' if automatic else 'manual'))
 
             return CommandStatus.Succeeded
@@ -164,7 +193,8 @@ class OperationsDaemon:
         return {
             'dome': self._dome.status(),
             'telescope': self._telescope.status(),
-            'environment': self._environment.status()
+            'environment': self._environment.status(),
+            'dehumidifier': self._dehumidifier.status(),
         }
 
     @Pyro4.expose

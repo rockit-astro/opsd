@@ -37,6 +37,7 @@ class RASAConfig:
     control_ips = [IP.RASAMain]
     dome_daemon = daemons.rasa_dome
     environment_daemon = daemons.rasa_environment
+    power_daemon = daemons.rasa_power
     log_name = 'rasa_opsd'
     telescope_initialize_action = Initialize
     telescope_shutdown_action = Shutdown

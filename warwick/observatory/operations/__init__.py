@@ -19,6 +19,7 @@
 
 from .dome_controller import DomeController, DomeStatus
 from .environment import EnvironmentWatcher, ConditionWatcher
+from .dehumidifier_controller import DehumidifierController
 from .constants import CommandStatus, OperationsMode
 from .schedule import validate_schedule, parse_dome_window, parse_schedule_actions
 from .telescope_action import TelescopeAction, TelescopeActionStatus
