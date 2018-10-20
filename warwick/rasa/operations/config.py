@@ -83,7 +83,6 @@ class RASAConfig:
 
             # Disk space
             ConditionWatcher('diskspace', 'diskspace', 'data_fs_available_bytes', 'Bytes'),
-            ConditionWatcher('diskspace', 'diskspace', 'data_fs_percent_available', 'Percent'),
 
             # Sun altitude
             ConditionWatcher('sun', 'ephem', 'sun_alt', 'Altitude')
