@@ -8,8 +8,8 @@ all:
 	mkdir -p build
 	${RPMBUILD} -ba rasa-operations-server.spec
 	${RPMBUILD} -ba rasa-operations-client.spec
-	${RPMBUILD} -ba python34-warwick-observatory-operations.spec
-	${RPMBUILD} -ba python34-warwick-rasa-operations.spec
+	${RPMBUILD} -ba python36-warwick-observatory-operations.spec
+	${RPMBUILD} -ba python36-warwick-rasa-operations.spec
 	mv build/noarch/*.rpm .
 	rm -rf build
 

@@ -1,17 +1,12 @@
 Name:      onemetre-operations-client
-Version:   2.1.1
+Version:   2.3.0
 Release:   0
 Url:       https://github.com/warwick-one-metre/opsd
 Summary:   Operations client for the Warwick one-metre telescope.
 License:   GPL-3.0
 Group:     Unspecified
 BuildArch: noarch
-%if 0%{?suse_version}
-Requires:  python3, python34-Pyro4, python34-warwick-observatory-common, python34-warwick-w1m-operations, python34-astropy
-%endif
-%if 0%{?centos_ver}
-Requires:  python34, python34-Pyro4, python34-warwick-observatory-common, python34-warwick-w1m-operations, python34-astropy
-%endif
+Requires:  python36, python36-Pyro4, python36-warwick-observatory-common, python36-warwick-w1m-operations, python36-astropy
 
 %description
 Part of the observatory software for the Warwick one-meter telescope.

@@ -7,9 +7,9 @@ After=network-online.target
 [Service]
 Restart=on-failure
 Type=simple
-ExecStart=/usr/bin/env python3.4 -u /usr/bin/opsd
-ExecStartPost=/usr/bin/env python3.4 -u /usr/bin/obslog info rasa_opsd Started by systemd
-ExecStopPost=/usr/bin/env python3.4 -u /usr/bin/obslog info rasa_opsd Stopped by systemd
+ExecStart=/usr/bin/env python3.6 -u /usr/bin/opsd
+ExecStartPost=/usr/bin/env python3.6 -u /usr/bin/obslog info rasa_opsd Started by systemd
+ExecStopPost=/usr/bin/env python3.6 -u /usr/bin/obslog info rasa_opsd Stopped by systemd
 StandardOutput=syslog
 StandardError=syslog
 
