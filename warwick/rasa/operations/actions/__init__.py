@@ -21,6 +21,7 @@ from .focussweep import FocusSweep
 from .imageset import ImageSet
 from .offset_telescope import OffsetTelescope
 from .slew_telescope import SlewTelescope
+from .slew_telescope_altaz import SlewTelescopeAltAz
 from .skyflats import SkyFlats
 from .initialize import Initialize
 from .shutdown import Shutdown

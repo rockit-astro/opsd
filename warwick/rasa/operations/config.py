@@ -26,6 +26,7 @@ from .actions import (
     ImageSet,
     OffsetTelescope,
     SlewTelescope,
+    SlewTelescopeAltAz,
     SkyFlats,
     Wait,
     WaitForDome,
