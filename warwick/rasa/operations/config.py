@@ -34,7 +34,22 @@ from .actions import (
 
 class RASAConfig:
     """Configuration for the RASA prototype"""
+    # Machines that are allowed to issue commands
     control_ips = [IP.RASAMain]
+
+    # Machines that are allowed to notify processed frames
+    processed_frame_ips = [IP.RASAMain]
+
+    # Communications timeout when opening or closing the dome (takes up to ~80 seconds)
+    dome_pyro_openclose_timeout = 120
+
+    # Timeout period (seconds) for the dome controller
+    # The dome heartbeat is pinged once per LOOP_DELAY when the dome is under
+    # automatic control and is fully open or fully closed.  This timeout should
+    # be large enough to account for the time it takes to open and close the dome
+    dome_heartbeat_timeout = 119
+
+    ops_daemon = daemons.rasa_operations
     dome_daemon = daemons.rasa_dome
     environment_daemon = daemons.rasa_environment
     power_daemon = daemons.rasa_power
@@ -96,6 +111,7 @@ class RASAConfig:
             'ImageSet': ImageSet,
             'OffsetTelescope': OffsetTelescope,
             'SlewTelescope': SlewTelescope,
+            'SlewTelescopeAltAz': SlewTelescopeAltAz,
             'Wait': Wait,
             'WaitForDome': WaitForDome,
             'WaitUntil': WaitUntil
