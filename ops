@@ -24,13 +24,15 @@ import json
 import os
 import sys
 import Pyro4
-from warwick.observatory.common import daemons
 from warwick.observatory.operations import (
     CommandStatus,
     validate_schedule
 )
 
 from warwick.rasa.operations import RASAConfig
+from warwick.w1m.operations import OneMetreConfig
+
+CONFIG = RASAConfig
 
 SCRIPT_NAME = os.path.basename(sys.argv[0])
 sys.excepthook = Pyro4.util.excepthook
@@ -99,11 +101,11 @@ def dome_control(args):
     """Changes the dome between automatic and manual control and cancels automated observing"""
     if args:
         if args[0] == 'clear':
-            with daemons.rasa_operations.connect() as ops:
+            with CONFIG.ops_daemon.connect() as ops:
                 return ops.clear_dome_window()
 
         if args[0] in ['auto', 'manual']:
-            with daemons.rasa_operations.connect() as ops:
+            with CONFIG.ops_daemon.connect() as ops:
                 return ops.dome_control(args[0] == 'auto')
 
     print('usage: {} dome (auto|manual|clear)'.format(SCRIPT_NAME))
@@ -113,11 +115,11 @@ def tel_control(args):
     """Changes the telescope between automatic and manual control and cancels automated observing"""
     if args:
         if args[0] == 'stop':
-            with daemons.rasa_operations.connect() as ops:
+            with CONFIG.ops_daemon.connect() as ops:
                 return ops.stop_telescope()
 
         if args[0] in ['auto', 'manual']:
-            with daemons.rasa_operations.connect() as ops:
+            with CONFIG.ops_daemon.connect() as ops:
                 return ops.tel_control(args[0] == 'auto')
 
     print('usage: {} tel (auto|manual|stop)'.format(SCRIPT_NAME))
@@ -127,7 +129,7 @@ def dehumidifier_control(args):
     """Changes the dehumidifier between automatic and manual control"""
     if args:
         if args[0] in ['auto', 'manual']:
-            with daemons.rasa_operations.connect() as ops:
+            with CONFIG.ops_daemon.connect() as ops:
                 return ops.dehumidifier_control(args[0] == 'auto')
 
     print('usage: {} dehumidifier (auto|manual)'.format(SCRIPT_NAME))
@@ -150,7 +152,7 @@ def validate_schedule_json(args):
         print('error was: ' + str(e))
         return -1
 
-    valid, errors = validate_schedule(schedule, RASAConfig.get_action_types())
+    valid, errors = validate_schedule(schedule, CONFIG.get_action_types())
     status = FMT_GREEN + 'PASSED' if valid else FMT_RED + 'FAILED'
     print('Validation ' + FMT_BOLD + status + FMT_CLEAR)
     for e in errors:
@@ -175,7 +177,7 @@ def schedule(args):
         print('error was: ' + str(e))
         return -1
 
-    with daemons.rasa_operations.connect() as ops:
+    with CONFIG.ops_daemon.connect() as ops:
         return ops.schedule_observations(schedule)
 
     return -1
@@ -184,7 +186,7 @@ def print_status():
     """Prints the latest ops data in machine-readable form"""
     status = None
     try:
-        with daemons.rasa_operations.connect() as ops:
+        with CONFIG.ops_daemon.connect() as ops:
             status = ops.status()
     except Pyro4.errors.CommunicationError:
         print('error: unable to communicate with the operations daemon')
@@ -285,7 +287,7 @@ def print_json():
     """Prints the latest ops data in machine-readable form"""
     status = None
     try:
-        with daemons.rasa_operations.connect() as ops:
+        with CONFIG.ops_daemon.connect() as ops:
             status = ops.status()
     except Pyro4.errors.CommunicationError:
         print('error: unable to communicate with the operations daemon')

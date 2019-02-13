@@ -2,14 +2,14 @@ Name:      onemetre-operations-client
 Version:   2.3.0
 Release:   0
 Url:       https://github.com/warwick-one-metre/opsd
-Summary:   Operations client for the RASA prototype telescope.
+Summary:   Operations client for the Warwick one-metre telescope.
 License:   GPL-3.0
 Group:     Unspecified
 BuildArch: noarch
-Requires:  python36, python36-Pyro4, python36-warwick-observatory-common, python36-warwick-rasa-operations, python36-astropy
+Requires:  python36, python36-Pyro4, python36-warwick-observatory-common, python36-warwick-w1m-operations, python36-astropy
 
 %description
-Part of the observatory software for the RASA prototype telescope.
+Part of the observatory software for the Warwick one-meter telescope.
 
 ops is a commandline utility for configuring the operational status of the observatory.
 

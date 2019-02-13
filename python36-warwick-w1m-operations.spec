@@ -8,19 +8,19 @@ BuildArch:      noarch
 Requires:       python36-warwick-observatory-operations
 
 %description
-Part of the observatory software for the RASA prototype telescope.
+Part of the observatory software for the Warwick one-meter telescope.
 
-python36-warwick-rasa-operations holds the RASA-specific operations code.
+python36-warwick-w1m-operations holds the W1m-specific operations code.
 
 %prep
 
 rsync -av --exclude=build .. .
 
 %build
-%{__python3_other} setup_rasa.py build
+%{__python3_other} setup_w1m.py build
 
 %install
-%{__python3_other} setup_rasa.py install --prefix=%{_prefix} --root=%{buildroot}
+%{__python3_other} setup_w1m.py install --prefix=%{_prefix} --root=%{buildroot}
 
 %files
 %defattr(-,root,root,-)

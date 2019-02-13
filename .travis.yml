@@ -21,9 +21,12 @@ script:
  # Clone the centos-packages repository to deploy/repository/
  - deploy/fetch-package-repository.sh
  # Set the spec Revision field to <latest in repo> + 1
+ - deploy/repository/set-spec-release.sh onemetre-operations-server.spec
+ - deploy/repository/set-spec-release.sh onemetre-operations-client.spec
  - deploy/repository/set-spec-release.sh rasa-operations-server.spec
  - deploy/repository/set-spec-release.sh rasa-operations-client.spec
  - deploy/repository/set-spec-release.sh python34-warwick-observatory-operations.spec
+ - deploy/repository/set-spec-release.sh python34-warwick-w1m-operations.spec
  - deploy/repository/set-spec-release.sh python34-warwick-rasa-operations.spec
  # Compile rpm packages by running `make` in a centos7 container
  - docker run --rm=true -e "USERID=${UID}" -v `pwd`:/src:rw centos:centos7 /bin/sh -c "cd src && deploy/make-on-centos7.sh"
