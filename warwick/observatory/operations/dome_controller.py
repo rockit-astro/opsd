@@ -28,7 +28,7 @@ import datetime
 import threading
 
 from warwick.observatory.common import log
-from warwick.w1m.dome import (
+from warwick.observatory.dome import (
     CommandStatus as DomeCommandStatus,
     DomeShutterStatus,
     DomeHeartbeatStatus)
