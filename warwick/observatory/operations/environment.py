@@ -64,7 +64,7 @@ class ConditionWatcher:
             return param['latest']
         return None
 
-class EnvironmentWatcher(object):
+class EnvironmentWatcher:
     '''Class that handles parsing and exposing the data from environmentd'''
     def __init__(self, log_name, conditions):
         self.safe = False

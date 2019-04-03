@@ -34,7 +34,7 @@ class CameraStatus:
     """Camera status, from camd"""
     Disabled, Initializing, Idle, Acquiring, Reading, Aborting = range(6)
 
-class TelescopeController(object):
+class TelescopeController:
     """Class managing automatic telescope control for the operations daemon"""
     def __init__(self, log_name, dome_controller, initialize_action, shutdown_action, loop_delay=5):
         self._wait_condition = threading.Condition()

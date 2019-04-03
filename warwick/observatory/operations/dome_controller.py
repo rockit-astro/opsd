@@ -57,7 +57,7 @@ class DomeStatus:
 
         return DomeStatus.Open
 
-class DomeController(object):
+class DomeController:
     """Class managing automatic dome control for the operations daemon"""
     def __init__(self, daemon, log_name, open_close_timeout, heartbeat_timeout, loop_delay=10):
         self._lock = threading.Lock()

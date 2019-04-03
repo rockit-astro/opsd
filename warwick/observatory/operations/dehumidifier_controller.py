@@ -39,7 +39,7 @@ DEHUMIDIFIER_CONFIG = {
     'disable_below': 65
 }
 
-class DehumidifierController(object):
+class DehumidifierController:
     """Class managing automatic dome control for the operations daemon"""
     def __init__(self, power_daemon, log_name):
         self._power_daemon = power_daemon

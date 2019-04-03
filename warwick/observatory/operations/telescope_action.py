@@ -29,7 +29,7 @@ class TelescopeActionStatus:
     """Constants representing the status of a telescope action"""
     Incomplete, Complete, Error = range(3)
 
-class TelescopeAction(object):
+class TelescopeAction:
     """Base telescope action that is extended by other actions"""
     def __init__(self, name, config):
         self.name = name
