@@ -51,41 +51,40 @@ class RASAConfig:
 
     ops_daemon = daemons.rasa_operations
     dome_daemon = daemons.rasa_dome
-    environment_daemon = daemons.rasa_environment
     power_daemon = daemons.rasa_power
     log_name = 'rasa_opsd'
     telescope_initialize_action = Initialize
     telescope_shutdown_action = Shutdown
 
-    def get_enviroment_conditions():
+    def get_environment_conditions():
         return [
             # Wind
-            ConditionWatcher('wind', 'vaisala', 'wind_speed', 'W1m'),
+            ConditionWatcher('wind', 'w1m_vaisala', 'wind_speed', 'W1m'),
             ConditionWatcher('wind', 'goto_vaisala', 'wind_speed', 'GOTO'),
-            ConditionWatcher('wind', 'superwasp', 'wind_speed', 'SWASP'),
-            ConditionWatcher('median_wind', 'vaisala', 'median_wind_speed', 'W1m'),
+            #ConditionWatcher('wind', 'superwasp', 'wind_speed', 'SWASP'),
+            ConditionWatcher('median_wind', 'w1m_vaisala', 'median_wind_speed', 'W1m'),
             ConditionWatcher('median_wind', 'goto_vaisala', 'median_wind_speed', 'GOTO'),
-            ConditionWatcher('median_wind', 'superwasp', 'median_wind_speed', 'SWASP'),
+            #ConditionWatcher('median_wind', 'superwasp', 'median_wind_speed', 'SWASP'),
 
             # Temperature
-            ConditionWatcher('temperature', 'vaisala', 'temperature', 'W1m'),
+            ConditionWatcher('temperature', 'w1m_vaisala', 'temperature', 'W1m'),
             ConditionWatcher('temperature', 'goto_vaisala', 'temperature', 'GOTO'),
             ConditionWatcher('temperature', 'superwasp', 'ext_temperature', 'SWASP'),
 
             # Humidity
-            ConditionWatcher('humidity', 'vaisala', 'relative_humidity', 'W1m'),
+            ConditionWatcher('humidity', 'w1m_vaisala', 'relative_humidity', 'W1m'),
             ConditionWatcher('humidity', 'goto_vaisala', 'relative_humidity', 'GOTO'),
             ConditionWatcher('humidity', 'superwasp', 'ext_humidity', 'SWASP'),
             ConditionWatcher('internal_humidity', 'goto_roomalert',
                              'dome2_internal_humidity', 'RASA'),
 
             # Dew point
-            ConditionWatcher('dewpt', 'vaisala', 'dew_point_delta', 'W1m'),
+            ConditionWatcher('dewpt', 'w1m_vaisala', 'dew_point_delta', 'W1m'),
             ConditionWatcher('dewpt', 'goto_vaisala', 'dew_point_delta', 'GOTO'),
             ConditionWatcher('dewpt', 'superwasp', 'dew_point_delta', 'SWASP'),
 
             # Rain detectors
-            ConditionWatcher('rain', 'vaisala', 'accumulated_rain', 'W1m'),
+            ConditionWatcher('rain', 'w1m_vaisala', 'accumulated_rain', 'W1m'),
             ConditionWatcher('rain', 'goto_vaisala', 'accumulated_rain', 'GOTO'),
 
             # Network
@@ -93,11 +92,11 @@ class RASAConfig:
             ConditionWatcher('netping', 'netping', 'ngtshead', 'NGTSHead'),
 
             # Power
-            ConditionWatcher('ups', 'power', 'ups_status', 'Status'),
-            ConditionWatcher('ups', 'power', 'ups_battery_remaining', 'Battery'),
+            ConditionWatcher('ups', 'rasa_power', 'ups_status', 'Status'),
+            ConditionWatcher('ups', 'rasa_power', 'ups_battery_remaining', 'Battery'),
 
             # Disk space
-            ConditionWatcher('diskspace', 'diskspace', 'data_fs_available_bytes', 'Bytes'),
+            ConditionWatcher('diskspace', 'rasa_diskspace', 'data_fs_available_bytes', 'Bytes'),
 
             # Sun altitude
             ConditionWatcher('sun', 'ephem', 'sun_alt', 'Altitude')

@@ -39,13 +39,12 @@ class OneMetreConfig:
 
     ops_daemon = daemons.onemetre_operations
     dome_daemon = daemons.onemetre_dome
-    environment_daemon = daemons.onemetre_environment
     power_daemon = daemons.onemetre_power
     log_name = 'opsd'
     telescope_initialize_action = Initialize
     telescope_shutdown_action = Shutdown
 
-    def get_enviroment_conditions():
+    def get_environment_conditions():
         return [
             # Wind
             ConditionWatcher('wind', 'vaisala', 'wind_speed', 'W1m'),

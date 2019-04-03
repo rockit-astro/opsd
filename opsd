@@ -75,9 +75,8 @@ class OperationsDaemon:
             self._config.telescope_shutdown_action)
 
         self._environment = EnvironmentWatcher(
-            self._config.environment_daemon,
             self._config.log_name,
-            self._config.get_enviroment_conditions())
+            self._config.get_environment_conditions())
 
         self._dehumidifier = DehumidifierController(
             self._config.power_daemon,

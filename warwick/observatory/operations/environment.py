@@ -28,7 +28,7 @@ import sys
 import threading
 import traceback
 
-from warwick.observatory.common import log
+from warwick.observatory.common import daemons, log
 
 class ConditionStatus:
     """Represents the status of a condition type"""
@@ -47,8 +47,8 @@ class ConditionWatcher:
     def update(self, data):
         """Updates the condition status based on the given environment data"""
         self.status = ConditionStatus.Unknown
-        if self._device in data and self._parameter in data[self._device]:
-            param = data[self._device][self._parameter]
+        param = data.get(self._device, {}).get('parameters', {}).get(self._parameter, {})
+        if param:
             if param['unsafe']:
                 self.status = ConditionStatus.Unsafe
             elif param['warning']:
@@ -58,16 +58,15 @@ class ConditionWatcher:
 
     def latest(self, data):
         """Returns the latest value of the parameter, or None if it is not current"""
-        if self._device in data and self._parameter in data[self._device]:
-            param = data[self._device][self._parameter]
-            if param['current']:
-                return param['latest']
+        param = data.get(self._device, {}).get('parameters', {}).get(self._parameter, {})
+
+        if param and param['current']:
+            return param['latest']
         return None
 
 class EnvironmentWatcher(object):
     '''Class that handles parsing and exposing the data from environmentd'''
-    def __init__(self, daemon, log_name, conditions):
-        self._daemon = daemon
+    def __init__(self, log_name, conditions):
         self.safe = False
         self.wants_dehumidifier = False
         self.updated = datetime.datetime.utcnow()
@@ -91,7 +90,7 @@ class EnvironmentWatcher(object):
         '''Queries environmentd for new data and updates flags'''
         was_safe = self.safe
         try:
-            with self._daemon.connect() as environment:
+            with daemons.observatory_environment.connect() as environment:
                 data = environment.status()
 
             safe = True
