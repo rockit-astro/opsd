@@ -32,6 +32,7 @@ from .actions import (
     WaitForDome,
     WaitUntil)
 
+# TODO: Ship most of this into a json file!
 class RASAConfig:
     """Configuration for the RASA prototype"""
     # Machines that are allowed to issue commands
@@ -55,6 +56,21 @@ class RASAConfig:
     log_name = 'rasa_opsd'
     telescope_initialize_action = Initialize
     telescope_shutdown_action = Shutdown
+
+    # Must be kept in sync with get_environment_conditions
+    environment_condition_labels = {
+        'wind': 'Wind',
+        'median_wind': 'Median Wind',
+        'temperature': 'Temperature',
+        'humidity': 'Humidity',
+        'internal_humidity': 'Int. Humidity',
+        'dewpt': 'Dew Point',
+        'rain': 'Rain',
+        'netping': 'Network',
+        'ups': 'UPS',
+        'diskspace': 'Disk Space',
+        'sun': 'Sun'
+    }
 
     def get_environment_conditions():
         return [

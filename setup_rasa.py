@@ -18,7 +18,7 @@ from distutils.core import setup
 
 setup(name='warwick.rasa.operations',
       version='0',
-      packages = ['warwick.rasa.operations'],
+      packages = ['warwick.rasa.operations', 'warwick.rasa.operations.actions'],
       author='Paul Chote',
       description='RASA specific operations code',
       license='GNU GPLv3',

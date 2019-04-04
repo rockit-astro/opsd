@@ -1,4 +1,4 @@
-Name:           python36-warwick-rasa-operations
+Name:           python36-warwick-w1m-operations
 Version:        2.3.0
 Release:        0
 License:        GPL3

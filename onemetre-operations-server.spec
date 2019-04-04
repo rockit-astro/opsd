@@ -6,7 +6,7 @@ Summary:   Operations server for the Warwick one-metre telescope.
 License:   GPL-3.0
 Group:     Unspecified
 BuildArch: noarch
-Requires:  python36, python36-numpy, python36-strict-rfc3339, python36-jsonschema, python36-Pyro4
+Requires:  python36, python36-numpy, python36-strict-rfc3339, python36-jsonschema, python36-Pyro4, python36-pyephem
 Requires:  python36-warwick-observatory-common, python36-warwick-w1m-operations, python36-warwick-w1m-pipeline
 Requires:  python36-warwick-observatory-environment, python36-warwick-observatory-dome, python36-warwick-w1m-camera
 Requires:  observatory-log-client, %{?systemd_requires}

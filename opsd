@@ -40,19 +40,11 @@ from warwick.observatory.operations import (
     validate_schedule,
 )
 
-from warwick.rasa.operations import RASAConfig
-from warwick.w1m.operations import OneMetreConfig
-
 # Include more detailed exceptions
 sys.excepthook = Pyro4.util.excepthook
 
 # Delay between ops and dome loop ticks (seconds)
 LOOP_DELAY = 10
-
-CONFIG = {
-    'onemetre': OneMetreConfig,
-    'rasa': RASAConfig
-}
 
 class OperationsDaemon:
     """Daemon class that controls the overall observatory operations"""
@@ -239,7 +231,15 @@ class OperationsDaemon:
 if __name__ == '__main__':
     description = 'Operations Control'
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument('telescope', choices=CONFIG.keys(), help='Select a telescope')
+    parser.add_argument('telescope', choices=['onemetre', 'rasa'], help='Select a telescope')
     args = parser.parse_args()
-    config = CONFIG[args.telescope]
+
+    # TODO: Clean this up properly
+    if args.telescope == 'rasa':
+        from warwick.rasa.operations import RASAConfig
+        config = RASAConfig
+    else:
+        from warwick.w1m.operations import OneMetreConfig
+        config = OneMetreConfig
+
     config.ops_daemon.launch(OperationsDaemon(config))

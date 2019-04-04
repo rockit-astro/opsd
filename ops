@@ -29,10 +29,32 @@ from warwick.observatory.operations import (
     validate_schedule
 )
 
-from warwick.rasa.operations import RASAConfig
-from warwick.w1m.operations import OneMetreConfig
+# TODO: Clean this up properly
+TELESCOPE = 'onemetre'
+if TELESCOPE == 'rasa':
+    from warwick.rasa.operations import RASAConfig
+    CONFIG = RASAConfig
+    CONDITIONS = [
+        'wind', 'median_wind', 'temperature', 'humidity', 'internal_humidity', 'dewpt',
+        'rain', 'netping', 'ups', 'diskspace', 'sun'
+    ]
 
-CONFIG = RASAConfig
+    CONDITION_NAMES = {
+        'wind': 'Wind',
+        'median_wind': 'Median Wind',
+        'temperature': 'Temperature',
+        'humidity': 'Humidity',
+        'internal_humidity': 'Int. Humidity',
+        'dewpt': 'Dew Point',
+        'rain': 'Rain',
+        'netping': 'Network',
+        'ups': 'UPS',
+        'diskspace': 'Disk Space',
+        'sun': 'Sun'
+    }
+else:
+    from warwick.w1m.operations import OneMetreConfig
+    CONFIG = OneMetreConfig
 
 SCRIPT_NAME = os.path.basename(sys.argv[0])
 sys.excepthook = Pyro4.util.excepthook
@@ -54,23 +76,6 @@ DOME_STATUS_CODES = {
     0: FMT_RED + 'CLOSED',
     1: FMT_GREEN + 'OPEN',
     2: FMT_YELLOW + 'MOVING'
-}
-
-CONDITIONS = ['wind', 'median_wind', 'temperature', 'humidity', 'internal_humidity', 'dewpt',
-              'rain', 'netping', 'ups', 'diskspace', 'sun']
-
-CONDITION_NAMES = {
-    'wind': 'Wind',
-    'median_wind': 'Median Wind',
-    'temperature': 'Temperature',
-    'humidity': 'Humidity',
-    'internal_humidity': 'Int. Humidity',
-    'dewpt': 'Dew Point',
-    'rain': 'Rain',
-    'netping': 'Network',
-    'ups': 'UPS',
-    'diskspace': 'Disk Space',
-    'sun': 'Sun'
 }
 
 CONDITION_STATUS_COLORS = [
@@ -198,13 +203,14 @@ def print_status():
     if status['environment']['safe']:
         env_status += FMT_BOLD + FMT_GREEN + 'SAFE' + FMT_CLEAR
     else:
-        unsafe = [CONDITION_NAMES[c] for c in status['environment']['unsafe_conditions']]
+        unsafe = [CONFIG.environment_condition_labels[c]
+                  for c in status['environment']['unsafe_conditions']]
         env_status += FMT_BOLD + FMT_RED + 'NOT SAFE' + FMT_CLEAR + FMT_BOLD + ' [' \
             + ', '.join(unsafe) + ']' + FMT_CLEAR
     print(env_status)
 
-    for c in CONDITIONS:
-        print_conditions(c, status['environment']['conditions'][c])
+    for c, label in CONFIG.environment_condition_labels.items():
+        print_conditions(label, status['environment']['conditions'][c])
     print()
 
     dome = status['dome']
@@ -246,17 +252,14 @@ def print_status():
 
     if 'action_name' in tel:
         name = '       Name: ' + FMT_BOLD + tel['action_name'] + FMT_CLEAR
-        
         if tel['action_number'] > 0:
             name += ' (' + str(tel['action_number']) + ' of ' + str(tel['action_count']) + ')'
         print(name)
-
 
         if tel['action_task']:
             print('       Task: ' + FMT_BOLD + tel['action_task'] + FMT_CLEAR)
     elif tel['mode'] == 1:
         print('    Action name: ' + FMT_BOLD + 'IDLE' + FMT_CLEAR)
-
 
     dehumidifier = status['dehumidifier']
     dehumidifier_date = datetime.datetime.strptime(dehumidifier['active_updated'], '%Y-%m-%dT%H:%M:%SZ')
@@ -278,9 +281,9 @@ def print_status():
 
     return 0
 
-def print_conditions(condition, params):
+def print_conditions(label, params):
     """Prints the status line for a given condition type"""
-    print('{:>17}'.format(CONDITION_NAMES[condition]) + ': ' \
+    print('{:>17}'.format(label) + ': ' \
         + ', '.join([FMT_BOLD + CONDITION_STATUS_COLORS[p[1]] + p[0] + FMT_CLEAR for p in params]))
 
 def print_json():

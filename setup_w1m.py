@@ -18,7 +18,7 @@ from distutils.core import setup
 
 setup(name='warwick.w1m.operations',
       version='0',
-      packages = ['warwick.w1m.operations'],
+      packages = ['warwick.w1m.operations', 'warwick.w1m.operations.actions'],
       author='Paul Chote',
       description='W1m specific operations code',
       license='GNU GPLv3',

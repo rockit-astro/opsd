@@ -1,4 +1,4 @@
-Name:      onemetre-operations-client
+Name:      rasa-operations-client
 Version:   2.3.0
 Release:   0
 Url:       https://github.com/warwick-one-metre/opsd
