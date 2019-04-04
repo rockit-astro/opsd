@@ -17,13 +17,13 @@ python36-warwick-w1m-operations holds the W1m-specific operations code.
 rsync -av --exclude=build .. .
 
 %build
-%{__python3_other} setup_w1m.py build
+%{__python3} setup_w1m.py build
 
 %install
-%{__python3_other} setup_w1m.py install --prefix=%{_prefix} --root=%{buildroot}
+%{__python3} setup_w1m.py install --prefix=%{_prefix} --root=%{buildroot}
 
 %files
 %defattr(-,root,root,-)
-%{python3_other_sitelib}/*
+%{python3_sitelib}/*
 
 %changelog

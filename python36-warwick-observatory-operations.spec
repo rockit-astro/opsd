@@ -17,13 +17,13 @@ python36-warwick-observatory-operations holds the common operations code.
 rsync -av --exclude=build .. .
 
 %build
-%{__python3_other} setup_observatory.py build
+%{__python3} setup_observatory.py build
 
 %install
-%{__python3_other} setup_observatory.py install --prefix=%{_prefix} --root=%{buildroot}
+%{__python3} setup_observatory.py install --prefix=%{_prefix} --root=%{buildroot}
 
 %files
 %defattr(-,root,root,-)
-%{python3_other_sitelib}/*
+%{python3_sitelib}/*
 
 %changelog

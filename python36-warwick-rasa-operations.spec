@@ -17,13 +17,13 @@ python36-warwick-rasa-operations holds the RASA-specific operations code.
 rsync -av --exclude=build .. .
 
 %build
-%{__python3_other} setup_rasa.py build
+%{__python3} setup_rasa.py build
 
 %install
-%{__python3_other} setup_rasa.py install --prefix=%{_prefix} --root=%{buildroot}
+%{__python3} setup_rasa.py install --prefix=%{_prefix} --root=%{buildroot}
 
 %files
 %defattr(-,root,root,-)
-%{python3_other_sitelib}/*
+%{python3_sitelib}/*
 
 %changelog
