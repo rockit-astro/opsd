@@ -180,7 +180,7 @@ class DomeController:
                         print('dome: closing')
                         self.__set_status(DomeStatus.Moving)
                         with self._daemon.connect(timeout=self._open_close_timeout) as dome:
-                            ret = dome.close_shutters(east=True, west=True)
+                            ret = dome.close_shutters('ba')
                         if ret == DomeCommandStatus.Succeeded:
                             self.__set_status(DomeStatus.Closed)
                         else:
@@ -192,7 +192,7 @@ class DomeController:
                         print('dome: opening')
                         self.__set_status(DomeStatus.Moving)
                         with self._daemon.connect(timeout=self._open_close_timeout) as dome:
-                            ret = dome.open_shutters(east=True, west=True)
+                            ret = dome.open_shutters('ab')
                         if ret == DomeCommandStatus.Succeeded:
                             self.__set_status(DomeStatus.Open)
                         else:
