@@ -47,12 +47,12 @@ class DomeStatus:
                                           DomeHeartbeatStatus.TrippedIdle]:
             return DomeStatus.Timeout
 
-        if status['east_shutter'] == DomeShutterStatus.Closed and \
-                status['west_shutter'] == DomeShutterStatus.Closed:
+        if status['shutter_a'] == DomeShutterStatus.Closed and \
+                status['shutter_b'] == DomeShutterStatus.Closed:
             return DomeStatus.Closed
 
-        if status['east_shutter'] in [DomeShutterStatus.Opening, DomeShutterStatus.Closing] or \
-                status['west_shutter'] in [DomeShutterStatus.Opening, DomeShutterStatus.Closing]:
+        if status['shutter_a'] in [DomeShutterStatus.Opening, DomeShutterStatus.Closing] or \
+                status['shutter_b'] in [DomeShutterStatus.Opening, DomeShutterStatus.Closing]:
             return DomeStatus.Moving
 
         return DomeStatus.Open
