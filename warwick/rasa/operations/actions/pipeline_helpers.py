@@ -45,11 +45,11 @@ def pipeline_enable_archiving(log_name, arm, enabled):
         log.error(log_name, 'Unknown error while configuring pipeline')
         return False
 
-def configure_pipeline(log_name, config):
+def configure_pipeline(log_name, config, quiet=False):
     """Toggle archiving on or off for a given arm name"""
     try:
         with daemons.rasa_pipeline.connect() as pipeline:
-            return pipeline.configure(config) == PipelineCommandStatus.Succeeded
+            return pipeline.configure(config, quiet=quiet) == PipelineCommandStatus.Succeeded
     except Pyro4.errors.CommunicationError:
         print('Failed to communicate with pipeline daemon')
         log.error(log_name, 'Failed to communicate with pipeline daemon')
