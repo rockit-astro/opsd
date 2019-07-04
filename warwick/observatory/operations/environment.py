@@ -107,13 +107,13 @@ class EnvironmentWatcher:
                     unsafe_conditions.append(condition)
 
             internal_humidity = None
-            for watcher in self._conditions['internal_humidity']:
+            for watcher in self._conditions.get('internal_humidity', {}):
                 internal_humidity = watcher.latest(data)
                 if internal_humidity is not None:
                     break
 
             external_humidity = None
-            for watcher in self._conditions['humidity']:
+            for watcher in self._conditions.get('humidity', {}):
                 external_humidity = watcher.latest(data)
                 if external_humidity is not None:
                     break

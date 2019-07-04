@@ -34,24 +34,6 @@ TELESCOPE = 'onemetre'
 if TELESCOPE == 'rasa':
     from warwick.rasa.operations import RASAConfig
     CONFIG = RASAConfig
-    CONDITIONS = [
-        'wind', 'median_wind', 'temperature', 'humidity', 'internal_humidity', 'dewpt',
-        'rain', 'netping', 'ups', 'diskspace', 'sun'
-    ]
-
-    CONDITION_NAMES = {
-        'wind': 'Wind',
-        'median_wind': 'Median Wind',
-        'temperature': 'Temperature',
-        'humidity': 'Humidity',
-        'internal_humidity': 'Int. Humidity',
-        'dewpt': 'Dew Point',
-        'rain': 'Rain',
-        'netping': 'Network',
-        'ups': 'UPS',
-        'diskspace': 'Disk Space',
-        'sun': 'Sun'
-    }
 else:
     from warwick.w1m.operations import OneMetreConfig
     CONFIG = OneMetreConfig
