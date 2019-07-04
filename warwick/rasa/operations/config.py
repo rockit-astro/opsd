@@ -28,6 +28,7 @@ from .actions import (
     SlewTelescope,
     SlewTelescopeAltAz,
     SkyFlats,
+    ObserveTLESidereal,
     Wait,
     WaitForDome,
     WaitUntil)
@@ -127,6 +128,7 @@ class RASAConfig:
             'OffsetTelescope': OffsetTelescope,
             'SlewTelescope': SlewTelescope,
             'SlewTelescopeAltAz': SlewTelescopeAltAz,
+            'ObserveTLESidereal': ObserveTLESidereal,
             'Wait': Wait,
             'WaitForDome': WaitForDome,
             'WaitUntil': WaitUntil
