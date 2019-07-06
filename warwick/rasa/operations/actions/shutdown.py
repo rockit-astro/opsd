@@ -16,14 +16,16 @@
 
 """Telescope action to park the telescope and switch off the drive power"""
 
+import math
 from warwick.observatory.operations import (
     TelescopeAction,
     TelescopeActionStatus)
 from .telescope_helpers import tel_slew_altaz
 
 # Position to park the telescope after homing
-STOW_ALTAZ = (0.616, 0.405)
+STOW_ALTAZ = (math.radians(1), math.radians(300))
 STOW_TIMEOUT = 60
+
 
 class Shutdown(TelescopeAction):
     """Telescope action to park the telescope and switch off the drive power"""
