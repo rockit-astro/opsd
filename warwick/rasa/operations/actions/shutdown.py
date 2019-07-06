@@ -16,15 +16,10 @@
 
 """Telescope action to park the telescope and switch off the drive power"""
 
-import math
 from warwick.observatory.operations import (
     TelescopeAction,
     TelescopeActionStatus)
-from .telescope_helpers import tel_slew_altaz
-
-# Position to park the telescope after homing
-STOW_ALTAZ = (math.radians(1), math.radians(300))
-STOW_TIMEOUT = 60
+from .telescope_helpers import tel_park_stow
 
 
 class Shutdown(TelescopeAction):
@@ -35,8 +30,7 @@ class Shutdown(TelescopeAction):
     def run_thread(self):
         """Thread that runs the hardware actions"""
         self.set_task('Parking Telescope')
-        if not tel_slew_altaz(self.log_name, STOW_ALTAZ[0], STOW_ALTAZ[1],
-                              False, STOW_TIMEOUT):
+        if not tel_park_stow(self.log_name):
             self.status = TelescopeActionStatus.Error
             return
         self.status = TelescopeActionStatus.Complete

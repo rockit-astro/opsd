@@ -30,11 +30,9 @@ from warwick.observatory.operations import (
     TelescopeAction,
     TelescopeActionStatus)
 from warwick.rasa.camera import CommandStatus as CamCommandStatus
+from warwick.rasa.operations.actions.telescope_helpers import tel_park_stow
 from warwick.rasa.telescope import CommandStatus as TelCommandStatus
 
-# Position to park the telescope after homing
-STOW_ALTAZ = (0.616, 0.405)
-STOW_TIMEOUT = 60
 HOME_TIMEOUT = 120
 
 CAM_INIT_TIMEOUT = 30
@@ -132,12 +130,9 @@ class Initialize(TelescopeAction):
                     return False
 
             self.set_task('Slewing to park position')
-            with daemons.rasa_telescope.connect(timeout=STOW_TIMEOUT) as teld:
-                status = teld.slew_altaz(STOW_ALTAZ[0], STOW_ALTAZ[1])
-                if status != TelCommandStatus.Succeeded:
-                    print('Failed to park telescope')
-                    log.error(self.log_name, 'Failed to park telescope')
-                    return False
+            if not tel_park_stow(self.log_name):
+                return False
+
         except Pyro4.errors.CommunicationError:
             print('Failed to communicate with telescope daemon')
             log.error(self.log_name, 'Failed to communicate with telescope daemon')

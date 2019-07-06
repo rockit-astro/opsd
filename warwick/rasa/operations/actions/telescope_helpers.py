@@ -23,6 +23,7 @@
 # pylint: disable=too-many-branches
 # pylint: disable=too-many-statements
 
+import math
 import sys
 import traceback
 import Pyro4
@@ -33,6 +34,9 @@ from warwick.rasa.focuser import (
     CommandStatus as FocCommandStatus,
     FocuserStatus)
 from warwick.rasa.telescope import CommandStatus as TelCommandStatus
+
+STOW_ALTAZ = (math.radians(1), math.radians(300))
+STOW_TIMEOUT = 60
 
 def tel_status(log_name):
     """Returns the telescope status dict or None on error"""
@@ -132,6 +136,10 @@ def tel_stop(log_name):
         traceback.print_exc(file=sys.stdout)
         log.error(log_name, 'Unknown error while stopping telescope')
         return False
+
+def tel_park_stow(log_name):
+    """Park the telescope in the stow position"""
+    return tel_slew_altaz(log_name, STOW_ALTAZ[0], STOW_ALTAZ[1], False, STOW_TIMEOUT)
 
 def get_focus(log_name, channel):
     """Returns the requested focuser position or None on error
