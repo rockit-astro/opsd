@@ -24,11 +24,14 @@
 # pylint: disable=too-many-statements
 
 import sys
+import time
 import traceback
+from astropy.time import Time
+import astropy.units as u
 import Pyro4
 from warwick.observatory.common import log
-from warwick.rasa.camera import (
-    CommandStatus as CamCommandStatus)
+from warwick.rasa.camera import CameraStatus, CommandStatus as CamCommandStatus
+
 
 def take_images(log_name, daemon, count=1, config=None, quiet=False):
     """Start an exposure sequence with count images
@@ -61,6 +64,7 @@ def take_images(log_name, daemon, count=1, config=None, quiet=False):
         log.error(log_name, 'Unknown error with camera')
         return False
 
+
 def get_camera_status(log_name, daemon):
     """Returns the status dictionary for the camera"""
     try:
@@ -76,15 +80,37 @@ def get_camera_status(log_name, daemon):
         log.error(log_name, 'Unknown error with camera')
         return None
 
-def stop_camera(log_name, daemon):
-    """Aborts any active exposure sequences"""
+
+def stop_camera(log_name, daemon, timeout=-1):
+    """Aborts any active exposure sequences
+       if timeout > 0 block for up to this many seconds for the
+       camera to return to Idle (or Disabled) status before returning
+    """
     try:
         with daemon.connect() as camd:
-            return camd.stop_sequence() == CamCommandStatus.Succeeded
+            status = camd.stop_sequence()
+
+        if status != CamCommandStatus.Succeeded:
+            return False
+
+        if timeout > 0:
+            timeout_end = Time.now() + timeout * u.second
+            while True:
+                with daemon.connect() as camd:
+                    data = camd.report_status()
+                    if data.get('state', CameraStatus.Idle) in [CameraStatus.Idle, CameraStatus.Disabled]:
+                        return True
+
+                wait = min(1, (timeout_end - Time.now()).to(u.second).value)
+                if wait <= 0:
+                    return False
+
+                time.sleep(wait)
+        return True
     except Pyro4.errors.CommunicationError:
         print('Failed to communicate with camera daemon')
         log.error(log_name, 'Failed to communicate with camera daemon')
-        return False
     except Exception:
         print('Unknown error while stopping camera')
         traceback.print_exc(file=sys.stdout)
+    return False

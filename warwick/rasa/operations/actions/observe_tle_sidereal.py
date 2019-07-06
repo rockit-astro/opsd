@@ -49,8 +49,8 @@ SLEW_TIMEOUT = 120
 # Consider the frame lost if this is exceeded
 MAX_PROCESSING_TIME = TimeDelta(25, format='sec')
 
-# Time to allow for the camera to complete a stop request
-ABORT_SEQUENCE_DELAY = TimeDelta(2.5, format='sec')
+# Amount of time to wait before retrying if an image acquisition generates an error
+CAM_ERROR_RETRY_DELAY = TimeDelta(10, format='sec')
 
 # Expected time to converge on target field
 SETUP_DELAY = TimeDelta(15, format='sec')
@@ -61,8 +61,10 @@ FIELD_END_SEARCH_STEP = TimeDelta(5, format='sec')
 # Exposure time to use when taking a WCS field image
 WCS_EXPOSURE_TIME = TimeDelta(5, format='sec')
 
+
 class WCSStatus:
     Inactive, WaitingForWCS, WCSFailed, WCSComplete = range(4)
+
 
 class ObserveTLESidereal(TelescopeAction):
     """Telescope action to observe a GEO object by allowing it to trail in front of tracked stars"""
@@ -93,7 +95,7 @@ class ObserveTLESidereal(TelescopeAction):
         return {
             'type': 'object',
             'additionalProperties': False,
-            'required': ['tle', 'start', 'end'],
+            'required': ['tle', 'start', 'end', 'rasa', 'pipeline'],
             'properties': {
                 'type': {'type': 'string'},
                 'start': {
@@ -141,7 +143,6 @@ class ObserveTLESidereal(TelescopeAction):
         t = self._timescale.from_astropy(target_time)
         ra, dec, _ = (self._target - self._observer).at(t).radec()
         return ra.to(u.degree), dec.to(u.degree)
-
 
     def __field_radec(self, start_time):
         """
@@ -260,7 +261,7 @@ class ObserveTLESidereal(TelescopeAction):
                 if not take_images(self.log_name, self._camera, 1, cam_config, quiet=True):
                     # Try stopping the camera, waiting a bit, then try again
                     stop_camera(self.log_name, self._camera)
-                    self.__wait_until_or_aborted(Time.now() + ABORT_SEQUENCE_DELAY)
+                    self.__wait_until_or_aborted(Time.now() + CAM_ERROR_RETRY_DELAY)
                     attempt += 1
                     if attempt == 6:
                         self.__set_failed_status()
@@ -350,8 +351,8 @@ class ObserveTLESidereal(TelescopeAction):
                 self.__set_failed_status()
                 return
 
-            stop_camera(self.log_name, self._camera)
-            self.__wait_until_or_aborted(Time.now() + ABORT_SEQUENCE_DELAY)
+            exposure = self.config.get('rasa', {}).get('exposure', -1)
+            stop_camera(self.log_name, self._camera, timeout=exposure + 1)
 
         stop_camera(self.log_name, self._camera)
         tel_stop(self.log_name)
