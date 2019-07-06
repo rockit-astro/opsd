@@ -353,6 +353,9 @@ class ObserveTLESidereal(TelescopeAction):
             stop_camera(self.log_name, self._camera)
             self.__wait_until_or_aborted(Time.now() + ABORT_SEQUENCE_DELAY)
 
+        stop_camera(self.log_name, self._camera)
+        tel_stop(self.log_name)
+
         self.status = TelescopeActionStatus.Complete
 
     def received_frame(self, headers):
