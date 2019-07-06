@@ -67,13 +67,7 @@ class WCSStatus:
 class ObserveTLESidereal(TelescopeAction):
     """Telescope action to observe a GEO object by allowing it to trail in front of tracked stars"""
     def __init__(self, config):
-        self._target_name = config['tle'][0]
-
-        # SpaceTrack TLEs include a leading '0 ' in the target name
-        if self._target_name.startswith('0 '):
-            self._target_name = self._target_name[2:]
-
-        super().__init__(self._target_name, config)
+        super().__init__('Observe TLE', config)
         self._wait_condition = threading.Condition()
         self._camera = daemons.rasa_camera
 
@@ -338,14 +332,7 @@ class ObserveTLESidereal(TelescopeAction):
             print('Leaves field at {}'.format(field_end))
 
             # Start science observations
-            pipeline_config = {}
-            pipeline_config.update(self.config.get('pipeline', {}))
-            pipeline_config.update({
-                'type': 'SCIENCE',
-                'object': self._target_name,
-            })
-
-            if not configure_pipeline(self.log_name, pipeline_config, quiet=not first_field):
+            if not configure_pipeline(self.log_name, self.config.get('pipeline', {}), quiet=not first_field):
                 self.__set_failed_status()
                 return
 
