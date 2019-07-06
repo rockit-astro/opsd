@@ -39,9 +39,9 @@ from warwick.rasa.camera import (
 from warwick.rasa.pipeline import (
     configure_standard_validation_schema as pipeline_schema)
 
-from warwick.rasa.operations.actions.camera_helpers import take_images, stop_camera
-from warwick.rasa.operations.actions.pipeline_helpers import configure_pipeline
-from warwick.rasa.operations.actions.telescope_helpers import tel_slew_radec, tel_offset_radec, tel_stop
+from .camera_helpers import take_images, stop_camera
+from .pipeline_helpers import configure_pipeline
+from .telescope_helpers import tel_slew_radec, tel_offset_radec, tel_stop
 
 SLEW_TIMEOUT = 120
 

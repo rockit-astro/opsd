@@ -1,5 +1,5 @@
 Name:           python36-warwick-rasa-operations
-Version:        2.3.4
+Version:        2.3.5
 Release:        0
 License:        GPL3
 Summary:        RASA prototype specific operations code
