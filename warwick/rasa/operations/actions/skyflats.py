@@ -348,6 +348,10 @@ class SkyFlats(TelescopeAction):
             with self._wait_condition:
                 self._wait_condition.wait(CONFIG['sun_altitude_check_interval'])
 
+        if self.aborted:
+            self.status = TelescopeActionStatus.Complete
+            return
+
         self.set_task('Slewing to antisolar point')
 
         # The anti-solar point is opposite the sun at 75 degrees
