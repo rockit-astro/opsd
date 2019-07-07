@@ -304,6 +304,19 @@ class SkyFlats(TelescopeAction):
                                  height=ts['site_elevation']*u.m)
         # pylint: enable=no-member
 
+        # Configure pipeline immedately so the dashboard can show target name etc
+        # Archiving will be enabled when the brightness is inside the required range
+        pipeline_config = {}
+        pipeline_config.update(self.config['pipeline'])
+        pipeline_config.update({
+            'intstats': True,
+            'type': 'FLAT',
+        })
+
+        if not configure_pipeline(self.log_name, pipeline_config):
+            self.status = TelescopeActionStatus.Error
+            return
+
         while not self.aborted:
             waiting_for = []
             sun_altitude = sun_position(location)[0]
@@ -371,19 +384,6 @@ class SkyFlats(TelescopeAction):
         # Last chance to bail out before starting the main logic
         if self.aborted:
             self.status = TelescopeActionStatus.Complete
-            return
-
-        # Configure pipeline and camera for flats
-        # Archiving will be enabled when the brightness is inside the required range
-        pipeline_config = {}
-        pipeline_config.update(self.config['pipeline'])
-        pipeline_config.update({
-            'intstats': True,
-            'type': 'FLAT',
-        })
-
-        if not configure_pipeline(self.log_name, pipeline_config):
-            self.status = TelescopeActionStatus.Error
             return
 
         # Take an initial bias frame for calibration

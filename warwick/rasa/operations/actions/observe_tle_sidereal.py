@@ -201,6 +201,11 @@ class ObserveTLESidereal(TelescopeAction):
     def run_thread(self):
         """Thread that runs the hardware actions"""
 
+        # Configure pipeline immedately so the dashboard can show target name etc
+        if not configure_pipeline(self.log_name, self.config.get('pipeline', {}), quiet=True):
+            self.__set_failed_status()
+            return
+
         self.set_task('Waiting for observation start')
         self.__wait_until_or_aborted(self._start_date)
 
@@ -337,7 +342,7 @@ class ObserveTLESidereal(TelescopeAction):
                 self.__set_failed_status()
                 return
 
-            self.set_task('Observing')
+            self.set_task('Ends {} / {}'.format(field_end.strftime('%H:%M:%SZ'), self._end_date.strftime('%H:%M:%SZ')))
             if not take_images(self.log_name, self._camera, 0, self.config.get('rasa', {})):
                 print('Failed to take_images - will retry for next field')
 
