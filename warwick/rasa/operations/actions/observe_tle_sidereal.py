@@ -342,7 +342,7 @@ class ObserveTLESidereal(TelescopeAction):
                 self.__set_failed_status()
                 return
 
-            self.set_task('Ends {} / {}'.format(field_end.strftime('%H:%M:%SZ'), self._end_date.strftime('%H:%M:%SZ')))
+            self.set_task('Ends {} / {}'.format(field_end.strftime('%H:%M:%S'), self._end_date.strftime('%H:%M:%S')))
             if not take_images(self.log_name, self._camera, 0, self.config.get('rasa', {})):
                 print('Failed to take_images - will retry for next field')
 
