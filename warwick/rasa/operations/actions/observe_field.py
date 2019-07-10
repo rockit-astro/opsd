@@ -312,7 +312,8 @@ class ObserveField(TelescopeAction):
                         log.info(self.log_name, 'Restarting exposures')
                         break
 
-        stop_camera(self.log_name, self._camera)
+        exposure = self.config.get('rasa', {}).get('exposure', -1)
+        stop_camera(self.log_name, self._camera, timeout=exposure + 1)
         tel_stop(self.log_name)
 
         self.status = TelescopeActionStatus.Complete
