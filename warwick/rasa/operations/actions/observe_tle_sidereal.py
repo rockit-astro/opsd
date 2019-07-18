@@ -23,6 +23,7 @@
 
 import threading
 
+from astropy.coordinates import SkyCoord
 from astropy.time import Time, TimeDelta
 import astropy.units as u
 import astropy.wcs as wcs
@@ -134,17 +135,17 @@ class ObserveTLESidereal(TelescopeAction):
         else:
             self.status = TelescopeActionStatus.Error
 
-    def __target_radec(self, target_time):
+    def __target_coord(self, target_time):
         """
         Calculate the target RA and Dec at a given time
         :param time: Astropy time to evaluate
-        :returns: RA, Dec Astropy quantities
+        :returns: SkyCoord with the target RA and Dec
         """
         t = self._timescale.from_astropy(target_time)
         ra, dec, _ = (self._target - self._observer).at(t).radec()
-        return ra.to(u.degree), dec.to(u.degree)
+        return SkyCoord(ra.to(u.degree), dec.to(u.degree))
 
-    def __field_radec(self, start_time):
+    def __field_coord(self, start_time):
         """
         Calculate the RA, Dec that places the target in the corner of the CCD
         at a given time. Returns the Astropy Time that the target leaves the opposite
@@ -152,14 +153,12 @@ class ObserveTLESidereal(TelescopeAction):
 
         :param start_time: Astropy Time to start tracking the object
         :returns:
-            RA
-            Dec
-            end_time
+            SkyCoord defining field center
+            Time defining field end
         """
-        start_ra, start_dec = self.__target_radec(start_time)
+        start_coord = self.__target_coord(start_time)
         end_time = start_time
-        end_ra = start_ra
-        end_dec = start_dec
+        end_coord = start_coord
 
         # Step forward until the target moves outside the requested footprint
         while True:
@@ -167,20 +166,18 @@ class ObserveTLESidereal(TelescopeAction):
             if end_time > self._end_date:
                 break
 
-            test_ra, test_dec = self.__target_radec(test_time)
-            delta_ra = test_ra - start_ra
-            delta_dec = test_dec - start_dec
-            if delta_ra > self._field_width / np.cos(test_dec) or delta_dec > self._field_height:
+            test_coord = self.__target_coord(test_time)
+            delta_ra, delta_dec = start_coord.spherical_offsets_to(test_coord)
+            if np.abs(delta_ra) > self._field_width / np.cos(test_coord.dec) or np.abs(delta_dec) > self._field_height:
                 break
 
             end_time = test_time
-            end_ra = test_ra
-            end_dec = test_dec
+            end_coord = test_coord
 
         # Point in the middle of the start and end
-        field_ra = (start_ra + end_ra) / 2
-        field_dec = (start_dec + end_dec) / 2
-        return field_ra, field_dec, end_time
+        points = SkyCoord([start_coord, end_coord], unit=u.degree)
+        midpoint = SkyCoord(points.data.mean(), frame=points)
+        return midpoint, end_time
 
     def __wait_until_or_aborted(self, target_time):
         """
@@ -201,7 +198,7 @@ class ObserveTLESidereal(TelescopeAction):
     def run_thread(self):
         """Thread that runs the hardware actions"""
 
-        # Configure pipeline immedately so the dashboard can show target name etc
+        # Configure pipeline immediately so the dashboard can show target name etc
         if not configure_pipeline(self.log_name, self.config.get('pipeline', {}), quiet=True):
             self.__set_failed_status()
             return
@@ -221,11 +218,11 @@ class ObserveTLESidereal(TelescopeAction):
 
             self.set_task('Acquiring field')
             field_start = acquire_start + SETUP_DELAY
-            target_ra, target_dec, field_end = self.__field_radec(field_start)
+            target_coord, field_end = self.__field_coord(field_start)
 
             if not tel_slew_radec(self.log_name,
-                                  (target_ra + last_offset_ra).to_value(u.rad),
-                                  (target_dec + last_offset_dec).to_value(u.rad),
+                                  (target_coord.ra + last_offset_ra).to_value(u.rad),
+                                  (target_coord.dec + last_offset_dec).to_value(u.rad),
                                   True, SLEW_TIMEOUT):
                 print('failed to slew to target')
                 self.__set_failed_status()
@@ -306,8 +303,8 @@ class ObserveTLESidereal(TelescopeAction):
 
                 # Calculate frame center and offset from expected pointing
                 actual_ra, actual_dec = self._wcs.all_pix2world(1024, 1024, 0, ra_dec_order=True)
-                offset_ra = target_ra - actual_ra * u.degree
-                offset_dec = target_dec - actual_dec * u.degree
+                actual_coord = SkyCoord(actual_ra, actual_dec, unit=u.degree)
+                offset_ra, offset_dec = actual_coord.spherical_offsets_to(target_coord)
 
                 # Store accumulated offset for the next frame
                 last_offset_ra += offset_ra
