@@ -16,21 +16,47 @@
 
 """Telescope action to park the telescope and switch off the drive power"""
 
+from warwick.observatory.common import daemons
 from warwick.observatory.operations import (
     TelescopeAction,
     TelescopeActionStatus)
+from warwick.rasa.telescope import CommandStatus as TelCommandStatus
 from .telescope_helpers import tel_park_stow
 
 
 class Shutdown(TelescopeAction):
     """Telescope action to park the telescope and switch off the drive power"""
-    def __init__(self):
+    def __init__(self, config):
         super().__init__('Shutdown', {})
+
+    @classmethod
+    def validation_schema(cls):
+        return {
+            'type': 'object',
+            'additionalProperties': False,
+            'properties': {
+                'type': {'type': 'string'}
+            }
+        }
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
+
         self.set_task('Parking Telescope')
         if not tel_park_stow(self.log_name):
             self.status = TelescopeActionStatus.Error
             return
+
+        self.set_task('Shutting down')
+
+        with daemons.rasa_telescope.connect() as teld:
+            status = teld.shutdown()
+            if status not in [TelCommandStatus.Succeeded,
+                              TelCommandStatus.TelescopeNotEnabled]:
+                print('Failed to shutdown telescope')
+                self.status = TelescopeActionStatus.Error
+                return
+
+        # TODO: Warm up camera, disable camera/focuser, turn off power
+
         self.status = TelescopeActionStatus.Complete

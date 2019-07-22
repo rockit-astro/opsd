@@ -18,18 +18,20 @@
 
 from warwick.observatory.common import daemons, IP
 from warwick.observatory.operations import ConditionWatcher
-from .actions import Initialize, Shutdown
 
 from .actions import (
     AutoFocus,
     FocusSweep,
     ImageSet,
+    Initialize,
     OffsetTelescope,
     SlewTelescope,
     SlewTelescopeAltAz,
+    Shutdown,
     SkyFlats,
     ObserveField,
     ObserveTLESidereal,
+    ParkTelescope,
     Wait,
     WaitForDome,
     WaitUntil)
@@ -58,7 +60,7 @@ class RASAConfig:
     power_daemon = daemons.rasa_power
     log_name = 'rasa_opsd'
     telescope_initialize_action = Initialize
-    telescope_park_action = Shutdown
+    telescope_park_action = ParkTelescope
 
     # Must be kept in sync with get_environment_conditions
     environment_condition_labels = {
@@ -132,6 +134,7 @@ class RASAConfig:
             'SlewTelescopeAltAz': SlewTelescopeAltAz,
             'ObserveField': ObserveField,
             'ObserveTLESidereal': ObserveTLESidereal,
+            'Shutdown': Shutdown,
             'Wait': Wait,
             'WaitForDome': WaitForDome,
             'WaitUntil': WaitUntil

@@ -1,5 +1,5 @@
 Name:      rasa-operations-server
-Version:   2.3.0
+Version:   2.3.1
 Release:   0
 Url:       https://github.com/warwick-one-metre/opsd
 Summary:   Operations server for the RASA prototype telescope.

@@ -27,6 +27,7 @@ from .observe_field import ObserveField
 from .observe_tle_sidereal import ObserveTLESidereal
 from .initialize import Initialize
 from .shutdown import Shutdown
+from .park_telescope import ParkTelescope
 from .wait import Wait
 from .wait_for_dome import WaitForDome
 from .wait_until import WaitUntil
