@@ -36,12 +36,12 @@ class CameraStatus:
 
 class TelescopeController:
     """Class managing automatic telescope control for the operations daemon"""
-    def __init__(self, log_name, dome_controller, initialize_action, shutdown_action, loop_delay=5):
+    def __init__(self, log_name, dome_controller, initialize_action, park_action, loop_delay=5):
         self._wait_condition = threading.Condition()
         self._loop_delay = loop_delay
 
         self._initialize_action = initialize_action
-        self._shutdown_action = shutdown_action
+        self._park_action = park_action
 
         self._action_lock = threading.Lock()
         self._action_queue = collections.deque()
@@ -118,7 +118,7 @@ class TelescopeController:
                         # We have nothing left to do, so stow the telescope until next time
                         elif not self._action_queue and self._initialized and \
                                 self._requested_mode != OperationsMode.Manual:
-                            self._active_action = self._shutdown_action()
+                            self._active_action = self._park_action()
                             self._action_count = self._current_action_number = 0
 
                         # Start the action running
@@ -144,8 +144,8 @@ class TelescopeController:
                             if isinstance(self._active_action, self._initialize_action):
                                 print('Initialization complete')
                                 self._initialized = True
-                            elif isinstance(self._active_action, self._shutdown_action):
-                                print('Shutdown complete')
+                            elif isinstance(self._active_action, self._park_action):
+                                print('Park complete')
                                 self._initialized = False
 
                             self._active_action = None

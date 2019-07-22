@@ -43,7 +43,7 @@ class OneMetreConfig:
     power_daemon = daemons.onemetre_power
     log_name = 'opsd'
     telescope_initialize_action = Initialize
-    telescope_shutdown_action = Shutdown
+    telescope_park_action = Shutdown
 
     # Must be kept in sync with get_environment_conditions
     environment_condition_labels = {

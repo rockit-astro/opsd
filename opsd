@@ -64,7 +64,7 @@ class OperationsDaemon:
             self._config.log_name,
             self._dome,
             self._config.telescope_initialize_action,
-            self._config.telescope_shutdown_action)
+            self._config.telescope_park_action)
 
         self._environment = EnvironmentWatcher(
             self._config.log_name,

@@ -34,6 +34,7 @@ from .actions import (
     WaitForDome,
     WaitUntil)
 
+
 # TODO: Ship most of this into a json file!
 class RASAConfig:
     """Configuration for the RASA prototype"""
@@ -57,7 +58,7 @@ class RASAConfig:
     power_daemon = daemons.rasa_power
     log_name = 'rasa_opsd'
     telescope_initialize_action = Initialize
-    telescope_shutdown_action = Shutdown
+    telescope_park_action = Shutdown
 
     # Must be kept in sync with get_environment_conditions
     environment_condition_labels = {
