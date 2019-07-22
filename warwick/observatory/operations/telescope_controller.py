@@ -26,7 +26,8 @@ import datetime
 import threading
 from warwick.observatory.common import log
 
-from . import TelescopeActionStatus, DomeStatus
+from .telescope_action import TelescopeActionStatus
+from .dome_controller  import DomeStatus
 from .constants import OperationsMode
 
 # This should be kept in sync with the dictionary in ops
