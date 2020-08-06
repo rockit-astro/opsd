@@ -1,14 +1,14 @@
 Name:      rasa-operations-server
-Version:   2.3.1
+Version:   2.3.2
 Release:   0
 Url:       https://github.com/warwick-one-metre/opsd
 Summary:   Operations server for the RASA prototype telescope.
 License:   GPL-3.0
 Group:     Unspecified
 BuildArch: noarch
-Requires:  python36, python36-numpy, python36-strict-rfc3339, python36-jsonschema, python36-Pyro4, python36-pyephem
-Requires:  python36-warwick-observatory-common, python36-warwick-rasa-operations, python36-warwick-rasa-pipeline
-Requires:  python36-warwick-observatory-environment, python36-warwick-observatory-dome, python36-warwick-rasa-camera
+Requires:  python3, python3-numpy, python3-strict-rfc3339, python3-jsonschema, python3-Pyro4, python3-pyephem
+Requires:  python3-warwick-observatory-common, python3-warwick-rasa-operations, python3-warwick-rasa-pipeline
+Requires:  python3-warwick-observatory-environment, python3-warwick-observatory-dome, python3-warwick-rasa-camera
 Requires:  observatory-log-client, %{?systemd_requires}
 
 %description

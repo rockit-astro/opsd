@@ -1,11 +1,11 @@
-Name:           python36-warwick-rasa-operations
+Name:           python3-warwick-rasa-operations
 Version:        2.3.10
 Release:        0
 License:        GPL3
 Summary:        RASA prototype specific operations code
 Url:            https://github.com/warwick-one-metre/
 BuildArch:      noarch
-Requires:       python36-warwick-observatory-common, python36-warwick-observatory-operations, python36-warwick-rasa-telescope
+Requires:       python3-warwick-observatory-common, python3-warwick-observatory-operations, python3-warwick-rasa-telescope
 
 %description
 Part of the observatory software for the RASA prototype telescope.

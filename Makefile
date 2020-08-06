@@ -14,11 +14,11 @@ all:
 	${RPMBUILD} -ba rasa-operations-client.spec
 	mv ops.bak ops
 	rm -rf build/build
-	${RPMBUILD} -ba python36-warwick-observatory-operations.spec
+	${RPMBUILD} -ba python3-warwick-observatory-operations.spec
 	rm -rf build/build
-	${RPMBUILD} -ba python36-warwick-w1m-operations.spec
+	${RPMBUILD} -ba python3-warwick-w1m-operations.spec
 	rm -rf build/build
-	${RPMBUILD} -ba python36-warwick-rasa-operations.spec
+	${RPMBUILD} -ba python3-warwick-rasa-operations.spec
 	mv build/noarch/*.rpm .
 	rm -rf build
 
