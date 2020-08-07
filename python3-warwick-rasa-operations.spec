@@ -1,5 +1,5 @@
 Name:           python3-warwick-rasa-operations
-Version:        2.3.10
+Version:        2.3.11
 Release:        0
 License:        GPL3
 Summary:        RASA prototype specific operations code

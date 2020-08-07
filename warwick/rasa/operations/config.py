@@ -96,8 +96,8 @@ class RASAConfig:
             ConditionWatcher('humidity', 'w1m_vaisala', 'relative_humidity', 'W1m'),
             ConditionWatcher('humidity', 'goto_vaisala', 'relative_humidity', 'GOTO'),
             ConditionWatcher('humidity', 'superwasp', 'ext_humidity', 'SWASP'),
-            ConditionWatcher('internal_humidity', 'goto_roomalert',
-                             'dome2_internal_humidity', 'RASA'),
+            ConditionWatcher('internal_humidity', 'rasa_internal',
+                             'relative_humidity', 'RASA'),
 
             # Dew point
             ConditionWatcher('dewpt', 'w1m_vaisala', 'dew_point_delta', 'W1m'),
