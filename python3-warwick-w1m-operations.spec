@@ -1,5 +1,5 @@
 Name:           python3-warwick-w1m-operations
-Version:        2.3.1
+Version:        2.3.2
 Release:        0
 License:        GPL3
 Summary:        RASA prototype specific operations code

@@ -105,8 +105,7 @@ class RASAConfig:
             ConditionWatcher('dewpt', 'superwasp', 'dew_point_delta', 'SWASP'),
 
             # Rain detectors
-            ConditionWatcher('rain', 'w1m_vaisala', 'accumulated_rain', 'W1m'),
-            ConditionWatcher('rain', 'goto_vaisala', 'accumulated_rain', 'GOTO'),
+            ConditionWatcher('rain', 'rain', 'unsafe_boards', 'W1m'),
 
             # Network
             ConditionWatcher('netping', 'netping', 'google', 'Google'),

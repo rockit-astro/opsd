@@ -1,5 +1,5 @@
 Name:           python3-warwick-rasa-operations
-Version:        2.3.12
+Version:        2.3.13
 Release:        0
 License:        GPL3
 Summary:        RASA prototype specific operations code
@@ -11,7 +11,7 @@ Requires:       python3-skyfield
 %description
 Part of the observatory software for the RASA prototype telescope.
 
-python36-warwick-rasa-operations holds the RASA-specific operations code.
+python3-warwick-rasa-operations holds the RASA-specific operations code.
 
 %prep
 
