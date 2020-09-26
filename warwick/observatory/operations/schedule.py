@@ -25,13 +25,12 @@
 import datetime
 import sys
 import traceback
-import ephem
 import jsonschema
+from skyfield import almanac
+from skyfield.api import Topos, Loader
 
 # Measured from GPS receiver
-SITE_LATITUDE = 28.7603135
-SITE_LONGITUDE = -17.8796168
-SITE_ELEVATION = 2387
+SITE_TOPOS = Topos('28.7603135N', '17.8796168 W', elevation_m=2387)
 
 def __create_validator(night):
     """Returns a template validator that includes support for the
@@ -41,25 +40,27 @@ def __create_validator(night):
     """
     validators = dict(jsonschema.Draft4Validator.VALIDATORS)
 
-    # Calculate the night start and end times
-    # pylint: disable=assigning-non-slot
-    # pylint: disable=no-member
-    obs = ephem.Observer()
-    obs.lat = SITE_LATITUDE*ephem.degree
-    obs.lon = SITE_LONGITUDE*ephem.degree
-    obs.elev = SITE_ELEVATION
-    obs.date = datetime.datetime.strptime(night, '%Y-%m-%d') + datetime.timedelta(hours=12)
-    night_start = obs.next_setting(ephem.Sun()).datetime()
-    night_end = obs.next_rising(ephem.Sun()).datetime()
-    # pylint: enable=no-member
-    # pylint: enable=assigning-non-slot
+    loader = Loader('/var/tmp/')
+    ts = loader.timescale()
+    eph = loader('de421.bsp')
+
+    # Note that the USNO definition of sunset is when the center (not limb) of the sun is at -0.8333 deg
+    sun_above_horizon = almanac.risings_and_settings(eph, eph['Sun'], SITE_TOPOS, horizon_degrees=-0.8333)
+
+    # Search for sunset/sunrise between midday on 'night' and midday the following day
+    night_date = datetime.datetime.strptime(night, '%Y-%m-%d')
+    night_search_start = ts.utc(night_date.year, night_date.month, night_date.day, 12)
+    night_search_end = ts.tt_jd(night_search_start.tt + 1)
+    events, _ = almanac.find_discrete(night_search_start, night_search_end, sun_above_horizon)
+    night_start = events[0].utc_datetime()
+    night_end = events[1].utc_datetime()
 
     def require_night(validator, value, instance, schema):
         """Create a validator object that forces a tagged date to match
            the night defined in the observing plan
         """
         try:
-            date = datetime.datetime.strptime(instance, '%Y-%m-%dT%H:%M:%SZ')
+            date = datetime.datetime.strptime(instance, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc)
         except Exception:
             yield jsonschema.ValidationError('{} is not a valid datetime'.format(instance))
             return
@@ -68,7 +69,7 @@ def __create_validator(night):
             start_str = night_start.strftime('%Y-%m-%dT%H:%M:%SZ')
             end_str = night_end.strftime('%Y-%m-%dT%H:%M:%SZ')
             yield jsonschema.ValidationError("{} is not between {} and {}".format(
-                date, start_str, end_str))
+                instance, start_str, end_str))
 
     validators['require-night'] = require_night
     return jsonschema.validators.create(meta_schema=jsonschema.Draft4Validator.META_SCHEMA,
