@@ -44,8 +44,10 @@ def __create_validator(night):
     ts = loader.timescale()
     eph = loader('de421.bsp')
 
+    # Allow the dome to be open when the sun is below 4.9 degrees above the horizon
+    # This is slightly less than the environment conditions limit of 5 degrees to allow for polling latency
     # Note that the USNO definition of sunset is when the center (not limb) of the sun is at -0.8333 deg
-    sun_above_horizon = almanac.risings_and_settings(eph, eph['Sun'], SITE_TOPOS, horizon_degrees=-0.8333)
+    sun_above_horizon = almanac.risings_and_settings(eph, eph['Sun'], SITE_TOPOS, horizon_degrees=4.9)
 
     # Search for sunset/sunrise between midday on 'night' and midday the following day
     night_date = datetime.datetime.strptime(night, '%Y-%m-%d')

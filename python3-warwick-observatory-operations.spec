@@ -1,5 +1,5 @@
 Name:           python3-warwick-observatory-operations
-Version:        2.3.5
+Version:        2.3.6
 Release:        0
 License:        GPL3
 Summary:        Common backend code for the RASA prototype telescope operations daemon
