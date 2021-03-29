@@ -16,10 +16,10 @@
 
 """opsd common code"""
 
-from .dome_controller import DomeController, DomeStatus
-from .environment import EnvironmentWatcher, ConditionWatcher
-from .dehumidifier_controller import DehumidifierController
-from .constants import CommandStatus, OperationsMode
+from .dome_controller import DomeController
+from .environment import EnvironmentWatcher
+from .config import Config
+from .constants import CommandStatus, OperationsMode, DomeStatus, ConditionStatus
 from .schedule import validate_schedule, parse_dome_window, parse_schedule_actions
 from .telescope_action import TelescopeAction, TelescopeActionStatus
 from .telescope_controller import TelescopeController

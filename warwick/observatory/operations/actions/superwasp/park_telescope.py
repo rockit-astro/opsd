@@ -14,18 +14,25 @@
 # You should have received a copy of the GNU General Public License
 # along with opsd.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Telescope action to park the telescope and switch off the drive power"""
+"""Telescope action to park the telescope"""
 
-from warwick.observatory.operations import (
-    TelescopeAction,
-    TelescopeActionStatus)
+from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
+from warwick.observatory.operations.actions.superwasp.telescope_helpers import tel_stop, tel_park
 
-class Shutdown(TelescopeAction):
-    """Telescope action to park the telescope and switch off the drive power"""
+
+class ParkTelescope(TelescopeAction):
+    """Telescope action to park the telescope"""
     def __init__(self):
-        super().__init__('Shutdown', {})
+        super().__init__('Park Telescope', {})
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
-        # TODO: Shutdown
+        if not tel_stop(self.log_name):
+            self.status = TelescopeActionStatus.Error
+            return
+
+        if not tel_park(self.log_name):
+            self.status = TelescopeActionStatus.Error
+            return
+
         self.status = TelescopeActionStatus.Complete

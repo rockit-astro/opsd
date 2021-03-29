@@ -24,14 +24,14 @@
 import argparse
 import sys
 import threading
+import numpy as np
 import Pyro4
 from warwick.observatory.common import log, TryLock
 from warwick.observatory.common.helpers import pyro_client_matches
 from warwick.observatory.operations import (
+    Config,
     DomeController,
-    DomeStatus,
     TelescopeController,
-    DehumidifierController,
     EnvironmentWatcher,
     CommandStatus,
     OperationsMode,
@@ -53,26 +53,9 @@ class OperationsDaemon:
         self._wait_condition = threading.Condition()
         self._config = config
 
-        self._dome = DomeController(
-            self._config.dome_daemon,
-            self._config.log_name,
-            self._config.dome_pyro_openclose_timeout,
-            self._config.dome_heartbeat_timeout,
-            LOOP_DELAY)
-
-        self._telescope = TelescopeController(
-            self._config.log_name,
-            self._dome,
-            self._config.telescope_initialize_action,
-            self._config.telescope_park_action)
-
-        self._environment = EnvironmentWatcher(
-            self._config.log_name,
-            self._config.get_environment_conditions())
-
-        self._dehumidifier = DehumidifierController(
-            self._config.power_daemon,
-            self._config.log_name)
+        self._environment = EnvironmentWatcher(self._config)
+        self._dome = DomeController(self._config)
+        self._telescope = TelescopeController(self._config, self._dome)
 
         runloop = threading.Thread(target=self.__ops_loop)
         runloop.daemon = True
@@ -88,14 +71,9 @@ class OperationsDaemon:
             self._environment.update()
             self._dome.notify_environment_status(self._environment.safe)
 
-            self._dehumidifier.notify_environment_status(
-                self._environment.internal_humidity,
-                self._environment.external_humidity,
-                self._dome.status()['status'] == DomeStatus.Open)
-
             # Wait for the next loop period, unless woken up early by __shortcut_loop_wait
             with self._wait_condition:
-                self._wait_condition.wait(LOOP_DELAY)
+                self._wait_condition.wait(self._config.loop_delay)
 
     def __shortcut_loop_wait(self):
         """Makes the run loop continue immediately if it is currently sleeping"""
@@ -120,8 +98,8 @@ class OperationsDaemon:
             mode = OperationsMode.Automatic if automatic else OperationsMode.Manual
             self._dome.request_mode(mode)
 
-            log.info(self._config.log_name, 'Dome control changed to '
-                     + ('automatic' if automatic else 'manual'))
+            label = 'automatic' if automatic else 'manual'
+            log.info(self._config.log_name, 'Dome control changed to ' + label)
 
             return CommandStatus.Succeeded
 
@@ -143,26 +121,8 @@ class OperationsDaemon:
             mode = OperationsMode.Automatic if automatic else OperationsMode.Manual
             self._telescope.request_mode(mode)
 
-            log.info(self._config.log_name, 'Telescope control changed to '
-                     + ('automatic' if automatic else 'manual'))
-
-            return CommandStatus.Succeeded
-
-    @Pyro4.expose
-    def dehumidifier_control(self, automatic):
-        """Switch the dehumidifier between manual (observer) and automatic (opsd) control"""
-        if not pyro_client_matches(self._config.control_ips):
-            return CommandStatus.InvalidControlIP
-
-        with TryLock(self._command_lock) as success:
-            if not success:
-                return CommandStatus.Blocked
-
-            mode = OperationsMode.Automatic if automatic else OperationsMode.Manual
-            self._dehumidifier.request_mode(mode)
-
-            log.info(self._config.log_name, 'Dehumidifier control changed to '
-                     + ('automatic' if automatic else 'manual'))
+            label = 'automatic' if automatic else 'manual'
+            log.info(self._config.log_name, 'Telescope control changed to ' + label)
 
             return CommandStatus.Succeeded
 
@@ -173,17 +133,27 @@ class OperationsDaemon:
             'dome': self._dome.status(),
             'telescope': self._telescope.status(),
             'environment': self._environment.status(),
-            'dehumidifier': self._dehumidifier.status(),
         }
 
     @Pyro4.expose
     def notify_processed_frame(self, headers):
         """Called by the pipeline daemon to notify that a new frame has completed processing
            headers is a dictionary holding the key-value pairs from the fits header"""
-        if not pyro_client_matches(self._config.processed_frame_ips):
+        if not pyro_client_matches(self._config.pipeline_ips):
             return
 
         self._telescope.notify_processed_frame(headers)
+
+    @Pyro4.expose
+    def notify_guide_profiles(self, headers, profile_x, profile_y):
+        """Called by the pipeline daemon to notify that a new guide profile has been calculated
+           headers is a dictionary holding the key-value pairs from the fits header
+           profile_x and profile_y are python (not numpy) arrays holding the collapsed profiles"""
+        if not pyro_client_matches(self._config.pipeline_ips):
+            return
+
+        # Pyro doesn't support numpy arrays, so convert from the built-in array type
+        self._telescope.notify_guide_profile(headers, np.array(profile_x), np.array(profile_y))
 
     @Pyro4.expose
     def stop_telescope(self):
@@ -213,7 +183,7 @@ class OperationsDaemon:
         if dome_status['mode'] == OperationsMode.Error:
             return CommandStatus.InErrorState
 
-        valid, _ = validate_schedule(schedule, self._config.get_action_types())
+        valid, _ = validate_schedule(schedule, self._config)
         if not valid:
             return CommandStatus.InvalidSchedule
 
@@ -221,25 +191,17 @@ class OperationsDaemon:
         if dome_window and not self._dome.set_open_window(dome_window):
             return CommandStatus.Failed
 
-        if not self._telescope.queue_actions(parse_schedule_actions(
-                schedule, self._config.get_action_types())):
+        actions = parse_schedule_actions(schedule, self._config.actions)
+        if not self._telescope.queue_actions(actions):
             return CommandStatus.Failed
 
         self.__shortcut_loop_wait()
         return CommandStatus.Succeeded
 
+
 if __name__ == '__main__':
-    description = 'Operations Control'
-    parser = argparse.ArgumentParser(description=description)
-    parser.add_argument('telescope', choices=['onemetre', 'rasa'], help='Select a telescope')
+    parser = argparse.ArgumentParser(description='Operations Server')
+    parser.add_argument('config', help='Path to configuration json file')
     args = parser.parse_args()
-
-    # TODO: Clean this up properly
-    if args.telescope == 'rasa':
-        from warwick.rasa.operations import RASAConfig
-        config = RASAConfig
-    else:
-        from warwick.w1m.operations import OneMetreConfig
-        config = OneMetreConfig
-
-    config.ops_daemon.launch(OperationsDaemon(config))
+    c = Config(args.config)
+    c.daemon.launch(OperationsDaemon(c))

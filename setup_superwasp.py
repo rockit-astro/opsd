@@ -14,6 +14,14 @@
 # You should have received a copy of the GNU General Public License
 # along with opsd.  If not, see <http://www.gnu.org/licenses/>.
 
-"""opsd common code"""
+from distutils.core import setup
 
-from .config import RASAConfig
+setup(name='warwick.superwasp.operations',
+      version='0',
+      packages=['warwick.observatory.operations.actions.superwasp', 'warwick.observatory.operations.dome.simulated'],
+      author='Paul Chote',
+      description='SuperWASP specific operations code',
+      license='GNU GPLv3',
+      author_email='p.chote@warwick.ac.uk',
+      url="https://github.com/warwick-one-metre/opsd",
+)

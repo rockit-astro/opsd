@@ -14,6 +14,19 @@
 # You should have received a copy of the GNU General Public License
 # along with opsd.  If not, see <http://www.gnu.org/licenses/>.
 
-"""opsd common code"""
+"""Telescope action to park the telescope"""
 
-from .config import OneMetreConfig
+from warwick.observatory.operations import (
+    TelescopeAction,
+    TelescopeActionStatus)
+
+
+class ParkTelescope(TelescopeAction):
+    """Telescope action to park the telescope"""
+    def __init__(self):
+        super().__init__('Park Telescope', {})
+
+    def run_thread(self):
+        """Thread that runs the hardware actions"""
+        # TODO: Implement park logic
+        self.status = TelescopeActionStatus.Complete

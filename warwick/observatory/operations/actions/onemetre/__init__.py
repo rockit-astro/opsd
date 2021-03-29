@@ -17,4 +17,4 @@
 """opsd common code"""
 
 from .initialize import Initialize
-from .shutdown import Shutdown
+from .park_telescope import ParkTelescope

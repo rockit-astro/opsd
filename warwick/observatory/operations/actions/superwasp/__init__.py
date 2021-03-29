@@ -14,14 +14,11 @@
 # You should have received a copy of the GNU General Public License
 # along with opsd.  If not, see <http://www.gnu.org/licenses/>.
 
-from distutils.core import setup
+"""opsd common code"""
 
-setup(name='warwick.rasa.operations',
-      version='0',
-      packages = ['warwick.rasa.operations', 'warwick.rasa.operations.actions'],
-      author='Paul Chote',
-      description='RASA specific operations code',
-      license='GNU GPLv3',
-      author_email='p.chote@warwick.ac.uk',
-      url="https://github.com/warwick-one-metre/opsd",
-)
+from .initialize import Initialize
+from .park_telescope import ParkTelescope
+from .slew_telescope import SlewTelescope
+from .slew_telescope_altaz import SlewTelescopeAltAz
+from .wait import Wait
+from .wait_until import WaitUntil

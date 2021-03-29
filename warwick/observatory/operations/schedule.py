@@ -16,23 +16,15 @@
 
 """Helper functions for validating and parsing schedule JSON objects into actions"""
 
-# pylint: disable=too-many-instance-attributes
-# pylint: disable=too-few-public-methods
-# pylint: disable=too-many-branches
-# pylint: disable=broad-except
-# pylint: disable=invalid-name
-
 import datetime
 import sys
 import traceback
 import jsonschema
 from skyfield import almanac
-from skyfield.api import Topos, Loader
+from skyfield.api import Loader
 
-# Measured from GPS receiver
-SITE_TOPOS = Topos('28.7603135N', '17.8796168 W', elevation_m=2387)
 
-def __create_validator(night):
+def __create_validator(config, night):
     """Returns a template validator that includes support for the
        custom schema tags used by the observation schedules:
             require-night: add to string properties to require times between sunset and sunrise
@@ -44,10 +36,7 @@ def __create_validator(night):
     ts = loader.timescale()
     eph = loader('de421.bsp')
 
-    # Allow the dome to be open when the sun is below 4.9 degrees above the horizon
-    # This is slightly less than the environment conditions limit of 5 degrees to allow for polling latency
-    # Note that the USNO definition of sunset is when the center (not limb) of the sun is at -0.8333 deg
-    sun_above_horizon = almanac.risings_and_settings(eph, eph['Sun'], SITE_TOPOS, horizon_degrees=4.9)
+    sun_above_horizon = almanac.risings_and_settings(eph, eph['Sun'], config.site_location)
 
     # Search for sunset/sunrise between midday on 'night' and midday the following day
     night_date = datetime.datetime.strptime(night, '%Y-%m-%d')
@@ -57,6 +46,7 @@ def __create_validator(night):
     night_start = events[0].utc_datetime()
     night_end = events[1].utc_datetime()
 
+    # pylint: disable=unused-argument
     def require_night(validator, value, instance, schema):
         """Create a validator object that forces a tagged date to match
            the night defined in the observing plan
@@ -72,10 +62,12 @@ def __create_validator(night):
             end_str = night_end.strftime('%Y-%m-%dT%H:%M:%SZ')
             yield jsonschema.ValidationError("{} is not between {} and {}".format(
                 instance, start_str, end_str))
+    # pylint: enable=unused-argument
 
     validators['require-night'] = require_night
     return jsonschema.validators.create(meta_schema=jsonschema.Draft4Validator.META_SCHEMA,
                                         validators=validators)
+
 
 def __validate_schema(validator, schema, block):
     try:
@@ -91,6 +83,7 @@ def __validate_schema(validator, schema, block):
         traceback.print_exc(file=sys.stdout)
         errors = ['exception while validating']
     return errors
+
 
 def __validate_dome(validator, block):
     """Returns a list of error messages that stop json from defining a valid dome schedule"""
@@ -121,6 +114,7 @@ def __validate_dome(validator, block):
     # Prefix each message with the action index and type
     return ['dome: ' + e for e in errors]
 
+
 def __validate_action(validator, index, block, action_types):
     """Validates an action block and returns a list of any schema violations"""
     if 'type' not in block:
@@ -142,11 +136,13 @@ def __validate_action(validator, index, block, action_types):
     # Prefix each message with the action index and type
     return ['action ' + str(index) + ' (' + block['type'] + '): ' + e for e in errors]
 
-def validate_schedule(json, action_types):
-    """Tests whether a json object defines a valid opsd schedule
-       Returns a tuple of (valid, messages) where:
-          valid is a boolean indicating whether the schedule is valid
-          messages is a list of strings describing errors in the schedule
+
+def validate_schedule(json, config):
+    """
+    Tests whether a json object defines a valid opsd schedule
+    Returns a tuple of (valid, messages) where:
+       valid is a boolean indicating whether the schedule is valid
+       messages is a list of strings describing errors in the schedule
     """
 
     # Schedule requires a night to be defined
@@ -155,10 +151,7 @@ def validate_schedule(json, action_types):
 
     # TODO: Require schedule to be for tonight!
 
-    try:
-        validator = __create_validator(json['night'])
-    except Exception:
-        pass
+    validator = __create_validator(config, json['night'])
 
     if 'dome' in json:
         errors = __validate_dome(validator, json['dome'])
@@ -168,7 +161,7 @@ def validate_schedule(json, action_types):
     if 'actions' in json:
         if isinstance(json['actions'], list):
             for i, action in enumerate(json['actions']):
-                errors.extend(__validate_action(validator, i, action, action_types))
+                errors.extend(__validate_action(validator, i, action, config.actions))
         else:
             errors.append('syntax: error \'actions\' must be a list')
     else:
@@ -176,14 +169,18 @@ def validate_schedule(json, action_types):
 
     return not errors, errors
 
+
 def schedule_is_tonight(json):
     """Returns true if a given schedule is valid to execute tonight"""
     # TODO: Implement me!
     pass
 
+
 def parse_schedule_actions(json, action_types):
-    """Parses a json object into a list of TelescopeActions
-       to be run by the telescope control thread"""
+    """
+    Parses a json object into a list of TelescopeActions
+    to be run by the telescope control thread
+    """
     actions = []
     try:
         for action in json['actions']:
@@ -194,15 +191,17 @@ def parse_schedule_actions(json, action_types):
         return []
     return actions
 
+
 def parse_dome_window(json):
-    """Parses dome open and close dates from a schedule
-       Returns a tuple of the open and close dates
-       or None if the json does not define a dome block
+    """
+    Parses dome open and close dates from a schedule
+    Returns a tuple of the open and close dates
+    or None if the json does not define a dome block
     """
     if 'dome' in json and 'open' in json['dome'] and 'close' in json['dome']:
         # These dates have already been validated by __validate_dome
         open_date = datetime.datetime.strptime(json['dome']['open'], '%Y-%m-%dT%H:%M:%SZ')
         close_date = datetime.datetime.strptime(json['dome']['close'], '%Y-%m-%dT%H:%M:%SZ')
-        return (open_date, close_date)
+        return open_date, close_date
 
     return None

@@ -1,0 +1,204 @@
+{
+  "daemon": "superwasp_operations",
+  "log_name": "opsd@superwasp",
+  "control_machines": ["SWASPTCS"],
+  "pipeline_machines": ["SWASPTCS"],
+  "actions_module": "warwick.observatory.operations.actions.superwasp",
+  "loop_delay": 10,
+  "site_latitude": "28.76022 N",
+  "site_longitude": "17.87928 W",
+  "site_elevation": 2350,
+  "dome": {
+    "module": "warwick.observatory.operations.dome.simulated",
+    "open_delay": 60,
+    "close_delay": 120
+  },
+  "environment_daemon": "observatory_environment",
+  "environment_conditions": [
+    {
+      "label": "Wind",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_vaisala",
+          "parameter": "wind_speed"
+        },
+        {
+          "label": "GOTO",
+          "sensor": "goto_vaisala",
+          "parameter": "wind_speed"
+        }
+      ]
+    },
+    {
+      "label": "Median Wind",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_vaisala",
+          "parameter": "median_wind_speed"
+        },
+        {
+          "label": "GOTO",
+          "sensor": "goto_vaisala",
+          "parameter": "median_wind_speed"
+        }
+      ]
+    },
+    {
+      "label": "Temperature",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_vaisala",
+          "parameter": "temperature"
+        },
+        {
+          "label": "GOTO",
+          "sensor": "goto_vaisala",
+          "parameter": "temperature"
+        }
+      ]
+    },
+    {
+      "label": "Humidity",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_vaisala",
+          "parameter": "relative_humidity"
+        },
+        {
+          "label": "GOTO",
+          "sensor": "goto_vaisala",
+          "parameter": "relative_humidity"
+        }
+      ]
+    },
+    {
+      "label": "Int. Humidity",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_roomalert",
+          "parameter": "internal_humidity"
+        }
+      ]
+    },
+    {
+      "label": "Dew Point",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_vaisala",
+          "parameter": "dew_point_delta"
+        },
+        {
+          "label": "GOTO",
+          "sensor": "goto_vaisala",
+          "parameter": "dew_point_delta"
+        }
+      ]
+    },
+    {
+      "label": "Rain",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "rain",
+          "parameter": "unsafe_boards"
+        }
+      ]
+    },
+    {
+      "label": "Sec. Sys.",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_roomalert",
+          "parameter": "security_system_safe"
+        }
+      ]
+    },
+    {
+      "label": "Network",
+      "sensors": [
+        {
+          "label": "Google",
+          "sensor": "netping",
+          "parameter": "google"
+        },
+        {
+          "label": "NGTSHead",
+          "sensor": "netping",
+          "parameter": "ngtshead"
+        }
+      ]
+    },
+    {
+      "label": "UPS 1",
+      "sensors": [
+        {
+          "label": "Status",
+          "sensor": "superwasp_power",
+          "parameter": "ups1_status"
+        },
+        {
+          "label": "Battery",
+          "sensor": "superwasp_power",
+          "parameter": "ups1_battery_remaining"
+        }
+      ]
+    },
+    {
+      "label": "UPS 2",
+      "sensors": [
+        {
+          "label": "Status",
+          "sensor": "superwasp_power",
+          "parameter": "ups2_status"
+        },
+        {
+          "label": "Battery",
+          "sensor": "superwasp_power",
+          "parameter": "ups2_battery_remaining"
+        }
+      ]
+    },
+    {
+      "label": "UPS 3",
+      "sensors": [
+        {
+          "label": "Status",
+          "sensor": "superwasp_power",
+          "parameter": "ups3_status"
+        },
+        {
+          "label": "Battery",
+          "sensor": "superwasp_power",
+          "parameter": "ups3_battery_remaining"
+        }
+      ]
+    },
+    {
+      "label": "Disk Space",
+      "sensors": [
+        {
+          "label": "Bytes",
+          "sensor": "superwasp_diskspace",
+          "parameter": "data_fs_available_bytes"
+        }
+      ]
+    },
+    {
+      "label": "Sun",
+      "sensors": [
+        {
+          "label": "Altitude",
+          "sensor": "ephem",
+          "parameter": "sun_alt"
+        }
+      ]
+    }
+  ]
+}

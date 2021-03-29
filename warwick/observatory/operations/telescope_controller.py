@@ -16,33 +16,24 @@
 
 """Class managing automatic telescope control for the operations daemon"""
 
-# pylint: disable=too-many-instance-attributes
-# pylint: disable=too-few-public-methods
-# pylint: disable=too-many-branches
-# pylint: disable=too-many-statements
-
 import collections
 import datetime
 import threading
 from warwick.observatory.common import log
 
 from .telescope_action import TelescopeActionStatus
-from .dome_controller  import DomeStatus
+from .dome_controller import DomeStatus
 from .constants import OperationsMode
 
-# This should be kept in sync with the dictionary in ops
-class CameraStatus:
-    """Camera status, from camd"""
-    Disabled, Initializing, Idle, Acquiring, Reading, Aborting = range(6)
 
 class TelescopeController:
     """Class managing automatic telescope control for the operations daemon"""
-    def __init__(self, log_name, dome_controller, initialize_action, park_action, loop_delay=5):
+    def __init__(self, config, dome_controller):
+        self._config = config
         self._wait_condition = threading.Condition()
-        self._loop_delay = loop_delay
 
-        self._initialize_action = initialize_action
-        self._park_action = park_action
+        self._initialize_action = config.actions['Initialize']
+        self._park_action = config.actions['ParkTelescope']
 
         self._action_lock = threading.Lock()
         self._action_queue = collections.deque()
@@ -55,8 +46,6 @@ class TelescopeController:
         self._mode = OperationsMode.Manual
         self._mode_updated = datetime.datetime.utcnow()
         self._requested_mode = OperationsMode.Manual
-
-        self._log_name = log_name
 
         self._action_count = 0
         self._current_action_number = 0
@@ -77,22 +66,21 @@ class TelescopeController:
                     self._requested_mode == OperationsMode.Automatic
 
                 if self._requested_mode != self._mode and not auto_failure:
-                    print('telescope: changing mode from ' + OperationsMode.Names[self._mode] + \
-                        ' to ' + OperationsMode.Names[self._requested_mode])
+                    print('telescope: changing mode from ' + OperationsMode.label(self._mode) +
+                          ' to ' + OperationsMode.label(self._requested_mode))
 
                     # When switching to manual mode we abort the queue
                     # but must wait for the current action to clean itself
                     # up and finish before changing _mode
                     if self._requested_mode == OperationsMode.Manual:
                         if self._action_queue:
-                            print('switching to manual mode - aborting queue')
                             if self._active_action is not None:
                                 self._active_action.abort()
-                            log.info(self._log_name, 'Aborting action queue')
+
+                            log.info(self._config.log_name, 'Aborting action queue')
                             self._action_queue.clear()
                             self._action_count = self._current_action_number = 0
                         elif self._active_action is None:
-                            print('queue aborted - switching to manual')
                             self._mode = OperationsMode.Manual
 
                     # When switching to automatic mode we must reinitialize
@@ -131,9 +119,8 @@ class TelescopeController:
                         # Query the status into a variable here to avoid race conditions
                         status = self._active_action.status
                         if status == TelescopeActionStatus.Error:
-                            print('action is error - aborting queue')
-                            log.error(self._log_name, 'Action failed: ' + self._active_action.name)
-                            log.info(self._log_name, 'Aborting action queue and parking telescope')
+                            log.error(self._config.log_name, 'Action failed: ' + self._active_action.name)
+                            log.info(self._config.log_name, 'Aborting action queue and parking telescope')
                             self._action_queue.clear()
                             self._mode = OperationsMode.Error
                             self._action_count = self._current_action_number = 0
@@ -143,10 +130,8 @@ class TelescopeController:
                                 self._active_action.dome_status_changed(dome_is_open)
                         else:
                             if isinstance(self._active_action, self._initialize_action):
-                                print('Initialization complete')
                                 self._initialized = True
                             elif isinstance(self._active_action, self._park_action):
-                                print('Park complete')
                                 self._initialized = False
 
                             self._active_action = None
@@ -156,7 +141,7 @@ class TelescopeController:
 
             # Wait for the next loop period, unless woken up early by __shortcut_loop_wait
             with self._wait_condition:
-                self._wait_condition.wait(self._loop_delay)
+                self._wait_condition.wait(self._config.loop_delay)
 
     def __shortcut_loop_wait(self):
         """Makes the run loop continue immediately if it is currently sleeping"""
@@ -191,30 +176,41 @@ class TelescopeController:
             self.__shortcut_loop_wait()
 
     def queue_actions(self, actions):
-        """Append TelescopeActions to the action queue
-           Returns True on success or False if the
-           telescope is not under automatic control.
         """
-        print('queue actions')
+        Append TelescopeActions to the action queue
+        Returns True on success or False if the
+        telescope is not under automatic control.
+        """
         with self._action_lock:
             if self._mode != OperationsMode.Automatic:
-                print('not automatic')
                 return False
 
             for action in actions:
-                print('queuing', action.name)
                 self._action_queue.appendleft(action)
                 self._action_count += 1
             self.__shortcut_loop_wait()
         return True
 
     def notify_processed_frame(self, headers):
-        """Called by the pipeline daemon to notify that a new frame has completed processing
-           headers is a dictionary holding the key-value pairs from the fits header"""
+        """
+        Called by the pipeline daemon to notify that a new frame has completed processing
+        headers is a dictionary holding the key-value pairs from the fits header
+        """
         with self._action_lock:
             if self._active_action:
                 if self._active_action.status == TelescopeActionStatus.Incomplete:
                     self._active_action.received_frame(headers)
+
+    def notify_guide_profile(self, headers, profile_x, profile_y):
+        """
+        Called by the pipeline daemon to notify that a new guide profile has been calculated
+        headers is a dictionary holding the key-value pairs from the fits header
+        profile_x and profile_y are numpy arrays holding the collapsed profiles
+        """
+        with self._action_lock:
+            if self._active_action:
+                if self._active_action.status == TelescopeActionStatus.Incomplete:
+                    self._active_action.received_guide_profile(headers, profile_x, profile_y)
 
     def abort(self):
         """Placeholder logic to cancel the active telescope task"""

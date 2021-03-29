@@ -16,18 +16,16 @@
 
 """Base telescope action that is extended by other actions"""
 
-# pylint: disable=too-few-public-methods
-# pylint: disable=bare-except
-# pylint: disable=too-many-instance-attributes
-
 import sys
 import threading
 import traceback
 from warwick.observatory.common import log
 
+
 class TelescopeActionStatus:
     """Constants representing the status of a telescope action"""
     Incomplete, Complete, Error = range(3)
+
 
 class TelescopeAction:
     """Base telescope action that is extended by other actions"""
@@ -69,20 +67,22 @@ class TelescopeAction:
             self._run_thread.start()
 
     def __run_thread_wrapper(self):
-        """Wrapper that catches exceptions thrown in run_thread implementations
-           and sets the error status
+        """
+        Wrapper that catches exceptions thrown in run_thread implementations
+        and sets the error status
         """
         try:
             self.run_thread()
-        except:
+        except Exception:
             print('error: exception in action run thread:')
             traceback.print_exc(file=sys.stdout)
             log.error(self.log_name, 'Exception in action run thread')
             self.status = TelescopeActionStatus.Error
 
     def run_thread(self):
-        """Thread that runs the hardware actions
-           All actions that interact with hardware should run from here
+        """
+        Thread that runs the hardware actions
+        All actions that interact with hardware should run from here
         """
         # Dummy implementation that succeeds immediately
         self.status = TelescopeActionStatus.Complete
@@ -97,4 +97,8 @@ class TelescopeAction:
 
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
+        pass
+
+    def received_guide_profile(self, headers, profile_x, profile_y):
+        """Notification called when a guide profile has been calculated by the data pipeline"""
         pass

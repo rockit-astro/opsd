@@ -1,16 +1,13 @@
 Name:           python3-warwick-observatory-operations
-Version:        2.3.6
+Version:        20210713
 Release:        0
 License:        GPL3
-Summary:        Common backend code for the RASA prototype telescope operations daemon
-Url:            https://github.com/warwick-one-metre/
+Summary:        Common backend code for the operations daemon
+Url:            https://github.com/warwick-one-metre/opsd
 BuildArch:      noarch
 Requires:       python3-jsonschema, python3-skyfield
 
 %description
-Part of the observatory software for the W1m and RASA prototype telescopes.
-
-python36-warwick-observatory-operations holds the common operations code.
 
 %prep
 

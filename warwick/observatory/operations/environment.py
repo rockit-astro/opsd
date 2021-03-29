@@ -16,144 +16,122 @@
 
 """Class managing the environment status checks"""
 
-# pylint: disable=too-few-public-methods
-# pylint: disable=too-many-statements
-# pylint: disable=too-many-branches
-# pylint: disable=too-many-instance-attributes
-# pylint: disable=invalid-name
-# pylint: disable=broad-except
-
 import datetime
-import sys
 import threading
-import traceback
+from warwick.observatory.common import log
+from .constants import ConditionStatus
 
-from warwick.observatory.common import daemons, log
-
-class ConditionStatus:
-    """Represents the status of a condition type"""
-    Unknown, Safe, Warning, Unsafe = range(4)
-    Names = ['Unknown', 'Safe', 'Warning', 'Unsafe']
 
 class ConditionWatcher:
     """Represents a parameter source for a condition flag"""
-    def __init__(self, condition, device, parameter, name):
-        self.name = name
-        self.condition = condition
+    def __init__(self, config):
+        self.label = config['label']
         self.status = ConditionStatus.Unknown
-        self._device = device
-        self._parameter = parameter
+        self._sensor = config['sensor']
+        self._parameter = config['parameter']
+
+        self._unsafe_key = 'unsafe'
+        if 'unsafe_key' in config:
+            self._unsafe_key = config['unsafe_key']
+
+        self._warning_key = 'warning'
+        if 'warning_key' in config:
+            self._warning_key = config['warning_key']
 
     def update(self, data):
         """Updates the condition status based on the given environment data"""
         self.status = ConditionStatus.Unknown
-        param = data.get(self._device, {}).get('parameters', {}).get(self._parameter, {})
+        param = data.get(self._sensor, {}).get('parameters', {}).get(self._parameter, {})
         if param:
-            if param['unsafe']:
+            if param[self._unsafe_key]:
                 self.status = ConditionStatus.Unsafe
-            elif param['warning']:
+            elif param[self._warning_key]:
                 self.status = ConditionStatus.Warning
             elif param['current']:
                 self.status = ConditionStatus.Safe
 
     def latest(self, data):
         """Returns the latest value of the parameter, or None if it is not current"""
-        param = data.get(self._device, {}).get('parameters', {}).get(self._parameter, {})
-
+        param = data.get(self._sensor, {}).get('parameters', {}).get(self._parameter, {})
         if param and param['current']:
             return param['latest']
+
         return None
 
+
+class ConditionType:
+    """Represents a condition type (e.g. external humidity) with one or more sensors"""
+    def __init__(self, config):
+        self.label = config['label']
+        self._sensors = [ConditionWatcher(sensor) for sensor in config['sensors']]
+
+    def update(self, data):
+        """
+        Updates the condition status based on the given environment data.
+        Returns true if this condition is safe for operations
+        Returns false if any of the sensors are unsafe or if all are unknown
+        """
+        for s in self._sensors:
+            s.update(data)
+
+        all_unknown = all([s.status == ConditionStatus.Unknown for s in self._sensors])
+        any_unsafe = any([s.status == ConditionStatus.Unsafe for s in self._sensors])
+        return not (all_unknown or any_unsafe)
+
+    def status(self):
+        """
+        Returns a dictionary of sensor label: condition status
+        """
+        return {s.label: s.status for s in self._sensors}
+
+
 class EnvironmentWatcher:
-    '''Class that handles parsing and exposing the data from environmentd'''
-    def __init__(self, log_name, conditions):
-        self.safe = False
-        self.wants_dehumidifier = False
-        self.updated = datetime.datetime.utcnow()
+    """Class that handles parsing and exposing the data from environmentd"""
+    def __init__(self, config):
+        self._config = config
         self._lock = threading.Lock()
-        self._log_name = log_name
+        self._conditions = [ConditionType(condition) for condition in config.environment_conditions]
 
-        self._conditions = {}
-        for c in conditions:
-            if c.condition not in self._conditions:
-                self._conditions[c.condition] = []
-
-            self._conditions[c.condition].append(c)
-
-        self.unsafe_conditions = list(self._conditions.keys())
-
-        # Used by dehumidifier controller
-        self.internal_humidity = None
-        self.external_humidity = None
+        self.safe = False
+        self.updated = datetime.datetime.utcnow()
 
     def update(self):
-        '''Queries environmentd for new data and updates flags'''
+        """Queries environmentd for new data and updates flags"""
         was_safe = self.safe
         try:
-            with daemons.observatory_environment.connect() as environment:
+            with self._config.environment_daemon.connect() as environment:
                 data = environment.status()
 
             safe = True
             unsafe_conditions = []
-            for condition, watchers in self._conditions.items():
-                for w in watchers:
-                    w.update(data)
-
-                # Condition is considered unsafe if all parameters are unknown
-                # or if any condition is unsafe
-                if all([w.status == ConditionStatus.Unknown for w in watchers]) or \
-                       any([w.status == ConditionStatus.Unsafe for w in watchers]):
+            for condition in self._conditions:
+                if not condition.update(data):
                     safe = False
-                    unsafe_conditions.append(condition)
-
-            internal_humidity = None
-            for watcher in self._conditions.get('internal_humidity', {}):
-                internal_humidity = watcher.latest(data)
-                if internal_humidity is not None:
-                    break
-
-            external_humidity = None
-            for watcher in self._conditions.get('humidity', {}):
-                external_humidity = watcher.latest(data)
-                if external_humidity is not None:
-                    break
+                    unsafe_conditions.append(condition.label)
 
             with self._lock:
-                self.safe = safe
-                self.unsafe_conditions = unsafe_conditions
-                self.internal_humidity = internal_humidity
-                self.external_humidity = external_humidity
                 self.updated = datetime.datetime.utcnow()
+                self.safe = safe
 
             if was_safe and not safe:
-                message = 'Environment has become unsafe (' + ', '.join(unsafe_conditions) + ')'
-                print(message)
-                log.warning(self._log_name, message)
+                unsafe_list = ', '.join(unsafe_conditions)
+                log.warning(self._config.log_name, 'Environment has become unsafe (' + unsafe_list + ')')
             elif not was_safe and safe:
-                print('Environment trigger timed out')
-                log.info(self._log_name, 'Environment trigger timed out')
+                log.info(self._config.log_name, 'Environment trigger timed out')
         except Exception as e:
             with self._lock:
-                self.safe = False
-                for condition, watchers in self._conditions.items():
-                    for w in watchers:
-                        w.update({})
-                self.unsafe_conditions = list(self._conditions.keys())
-                self.internal_humidity = None
-                self.external_humidity = None
                 self.updated = datetime.datetime.utcnow()
+                self.safe = False
+                for condition in self._conditions:
+                    condition.update({})
 
-            print('error: failed to query environment:')
-            traceback.print_exc(file=sys.stdout)
-            log.info(self._log_name, 'Failed to query environment (' + str(e) + ')')
+            log.info(self._config.log_name, 'Failed to query environment (' + str(e) + ')')
 
     def status(self):
         """Returns a dictionary with the current environment status"""
         with self._lock:
             return {
                 'safe': self.safe,
-                'unsafe_conditions': self.unsafe_conditions,
                 'updated': self.updated.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                'conditions': {k: [(c.name, c.status) for c in v] \
-                    for k, v in self._conditions.items()}
+                'conditions': {c.label: c.status() for c in self._conditions}
             }
