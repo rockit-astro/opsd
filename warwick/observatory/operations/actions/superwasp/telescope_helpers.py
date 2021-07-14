@@ -102,6 +102,24 @@ def tel_slew_altaz(log_name, alt, az, tracking, timeout):
         return False
 
 
+def tel_slew_hadec(log_name, ha, dec, timeout):
+    """Slew the telescope to a given HA, Dec"""
+    try:
+        with daemons.superwasp_telescope.connect(timeout=timeout) as teld:
+            status = teld.slew_hadec(ha, dec)
+            if status != TelCommandStatus.Succeeded:
+                log.error(log_name, 'Failed to slew telescope')
+                return False
+            return True
+    except Pyro4.errors.CommunicationError:
+        log.error(log_name, 'Failed to communicate with telescope daemon')
+        return False
+    except Exception:
+        log.error(log_name, 'Unknown error while slewing telescope')
+        traceback.print_exc(file=sys.stdout)
+        return False
+
+
 def tel_stop(log_name):
     """Stop the telescope tracking or movement"""
     try:
