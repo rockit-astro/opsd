@@ -97,8 +97,6 @@ class TelescopeAction:
 
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
-        pass
 
     def received_guide_profile(self, headers, profile_x, profile_y):
         """Notification called when a guide profile has been calculated by the data pipeline"""
-        pass

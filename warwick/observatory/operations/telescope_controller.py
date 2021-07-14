@@ -16,6 +16,8 @@
 
 """Class managing automatic telescope control for the operations daemon"""
 
+# pylint: disable=too-many-branches
+
 import collections
 import datetime
 import threading

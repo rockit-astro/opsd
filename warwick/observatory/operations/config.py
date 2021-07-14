@@ -166,7 +166,8 @@ class Config:
                     for e in module.validate_config(instance):
                         yield e
                 else:
-                    yield jsonschema.ValidationError('{} does not define a DomeInterface class'.format(instance['module']))
+                    yield jsonschema.ValidationError(
+                        '{} does not define a DomeInterface class'.format(instance['module']))
 
             except Exception as e:
                 traceback.print_exc(file=sys.stdout)
