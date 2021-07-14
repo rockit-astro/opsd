@@ -23,8 +23,8 @@ from warwick.observatory.operations import (
 
 class ParkTelescope(TelescopeAction):
     """Telescope action to park the telescope"""
-    def __init__(self):
-        super().__init__('Park Telescope', {})
+    def __init__(self, log_name):
+        super().__init__('Park Telescope', log_name, {})
 
     def run_thread(self):
         """Thread that runs the hardware actions"""

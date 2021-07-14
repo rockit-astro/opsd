@@ -37,8 +37,8 @@ CONFIG_SCHEMA = {
 
 class WaitUntil(TelescopeAction):
     """Telescope action to power on and prepare the telescope for observing"""
-    def __init__(self, config):
-        super().__init__('Waiting', config)
+    def __init__(self, log_name, config):
+        super().__init__('Waiting', log_name, config)
         self._target_date = datetime.datetime.strptime(config['date'], '%Y-%m-%dT%H:%M:%SZ')
         self._wait_condition = threading.Condition()
 

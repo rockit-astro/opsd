@@ -176,7 +176,7 @@ def validate_schedule(json, config, require_tonight):
     return is_valid, errors
 
 
-def parse_schedule_actions(json, action_types):
+def parse_schedule_actions(config, json):
     """
     Parses a json object into a list of TelescopeActions
     to be run by the telescope control thread
@@ -184,7 +184,7 @@ def parse_schedule_actions(json, action_types):
     actions = []
     try:
         for action in json['actions']:
-            actions.append(action_types[action['type']](action))
+            actions.append(config.actions[action['type']](config.log_name, action))
     except Exception:
         print('exception while parsing schedule')
         traceback.print_exc(file=sys.stdout)

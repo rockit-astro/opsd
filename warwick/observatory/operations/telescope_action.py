@@ -29,11 +29,11 @@ class TelescopeActionStatus:
 
 class TelescopeAction:
     """Base telescope action that is extended by other actions"""
-    def __init__(self, name, config):
+    def __init__(self, name, log_name, config):
         self.name = name
         self.config = config
         self.task = None
-        self.log_name = 'rasa_opsd'
+        self.log_name = log_name
 
         # The current status of the action, queried by the controller thread
         # This should only change to Complete or Error immediately before

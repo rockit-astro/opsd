@@ -27,8 +27,8 @@ from warwick.observatory.operations import (
 
 class Initialize(TelescopeAction):
     """Telescope action to power on and prepare the telescope for observing"""
-    def __init__(self):
-        super().__init__('Initializing', {})
+    def __init__(self, log_name):
+        super().__init__('Initializing', log_name, {})
 
     def run_thread(self):
         """Thread that runs the hardware actions"""

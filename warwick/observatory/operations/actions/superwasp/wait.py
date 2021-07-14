@@ -37,8 +37,8 @@ CONFIG_SCHEMA = {
 
 class Wait(TelescopeAction):
     """Telescope action to power on and prepare the telescope for observing"""
-    def __init__(self, config):
-        super().__init__('Waiting', config)
+    def __init__(self, log_name, config):
+        super().__init__('Waiting', log_name, config)
         self._wait_condition = threading.Condition()
 
     @classmethod

@@ -191,7 +191,7 @@ class OperationsDaemon:
         if dome_window and not self._dome.set_open_window(dome_window):
             return CommandStatus.DomeNotAutomatic
 
-        actions = parse_schedule_actions(schedule, self._config.actions)
+        actions = parse_schedule_actions(self._config, schedule)
         if not self._telescope.queue_actions(actions):
             return CommandStatus.TelescopeNotAutomatic
 

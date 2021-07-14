@@ -34,8 +34,8 @@ CAMERA_CHECK_INTERVAL = 10
 
 class Initialize(TelescopeAction):
     """Telescope action to power on and prepare the telescope for observing"""
-    def __init__(self):
-        super().__init__('Initializing', {})
+    def __init__(self, log_name):
+        super().__init__('Initializing', log_name, {})
 
         self._cooling_condition = threading.Condition()
 

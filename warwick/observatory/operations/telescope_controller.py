@@ -102,14 +102,14 @@ class TelescopeController:
                         # We have something to do, but may need to initialize the telescope
                         if self._action_queue:
                             if not self._initialized:
-                                self._active_action = self._initialize_action()
+                                self._active_action = self._initialize_action(self._config.log_name)
                             else:
                                 self._active_action = self._action_queue.pop()
                                 self._current_action_number += 1
                         # We have nothing left to do, so stow the telescope until next time
                         elif not self._action_queue and self._initialized and \
                                 self._requested_mode != OperationsMode.Manual:
-                            self._active_action = self._park_action()
+                            self._active_action = self._park_action(self._config.log_name)
                             self._action_count = self._current_action_number = 0
 
                         # Start the action running

@@ -47,8 +47,8 @@ CONFIG_SCHEMA = {
 
 class SlewTelescope(TelescopeAction):
     """Telescope action to slew the telescope to a given ra, dec"""
-    def __init__(self, config):
-        super().__init__('Slew Telescope', config)
+    def __init__(self, log_name, config):
+        super().__init__('Slew Telescope', log_name, config)
 
     @classmethod
     def validate_config(cls, config_json):
