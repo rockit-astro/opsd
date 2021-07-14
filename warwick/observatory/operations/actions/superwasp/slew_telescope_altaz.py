@@ -16,10 +16,33 @@
 
 """Telescope action to slew the telescope to a given ra, dec"""
 
+from warwick.observatory.common import validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from .telescope_helpers import tel_slew_altaz, tel_stop
 
 SLEW_TIMEOUT = 120
+
+CONFIG_SCHEMA = {
+    'type': 'object',
+    'additionalProperties': False,
+    'required': ['alt', 'az', 'tracking'],
+    'properties': {
+        'type': {'type': 'string'},
+        'az': {
+            'type': 'number',
+            'minimum': 0,
+            'maximum': 360
+        },
+        'alt': {
+            'type': 'number',
+            'minimum': 0,
+            'maximum': 90
+        },
+        'tracking': {
+            'type': 'boolean'
+        }
+    }
+}
 
 
 class SlewTelescopeAltAz(TelescopeAction):
@@ -28,28 +51,9 @@ class SlewTelescopeAltAz(TelescopeAction):
         super().__init__('Slew Telescope', config)
 
     @classmethod
-    def validation_schema(cls):
-        return {
-            'type': 'object',
-            'additionalProperties': False,
-            'required': ['alt', 'az', 'tracking'],
-            'properties': {
-                'type': {'type': 'string'},
-                'az': {
-                    'type': 'number',
-                    'minimum': 0,
-                    'maximum': 360
-                },
-                'alt': {
-                    'type': 'number',
-                    'minimum': 0,
-                    'maximum': 90
-                },
-                'tracking': {
-                    'type': 'boolean'
-                }
-            }
-        }
+    def validate_config(cls, config_json):
+        """Returns an iterator of schema violations for the given json configuration"""
+        return validation.validation_errors(config_json, CONFIG_SCHEMA)
 
     def run_thread(self):
         """Thread that runs the hardware actions"""

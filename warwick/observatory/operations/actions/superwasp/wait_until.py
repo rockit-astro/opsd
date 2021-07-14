@@ -18,7 +18,21 @@
 
 import datetime
 import threading
+from warwick.observatory.common import validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
+
+CONFIG_SCHEMA = {
+    'type': 'object',
+    'additionalProperties': False,
+    'required': ['date'],
+    'properties': {
+        'type': {'type': 'string'},
+        'date': {
+            'type': 'string',
+            'format': 'date-time',
+        },
+    }
+}
 
 
 class WaitUntil(TelescopeAction):
@@ -29,19 +43,9 @@ class WaitUntil(TelescopeAction):
         self._wait_condition = threading.Condition()
 
     @classmethod
-    def validation_schema(cls):
-        return {
-            'type': 'object',
-            'additionalProperties': False,
-            'required': ['date'],
-            'properties': {
-                'type': {'type': 'string'},
-                'date': {
-                    'type': 'string',
-                    'format': 'date-time',
-                },
-            }
-        }
+    def validate_config(cls, config_json):
+        """Returns an iterator of schema violations for the given json configuration"""
+        return validation.validation_errors(config_json, CONFIG_SCHEMA)
 
     def run_thread(self):
         """Thread that runs the hardware actions"""

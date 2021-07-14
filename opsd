@@ -183,17 +183,17 @@ class OperationsDaemon:
         if dome_status['mode'] == OperationsMode.Error:
             return CommandStatus.InErrorState
 
-        valid, _ = validate_schedule(schedule, self._config)
+        valid, _ = validate_schedule(schedule, self._config, True)
         if not valid:
             return CommandStatus.InvalidSchedule
 
         dome_window = parse_dome_window(schedule)
         if dome_window and not self._dome.set_open_window(dome_window):
-            return CommandStatus.Failed
+            return CommandStatus.DomeNotAutomatic
 
         actions = parse_schedule_actions(schedule, self._config.actions)
         if not self._telescope.queue_actions(actions):
-            return CommandStatus.Failed
+            return CommandStatus.TelescopeNotAutomatic
 
         self.__shortcut_loop_wait()
         return CommandStatus.Succeeded

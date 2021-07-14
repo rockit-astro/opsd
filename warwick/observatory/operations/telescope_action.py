@@ -48,10 +48,12 @@ class TelescopeAction:
         # Set when the action is started or by notification
         self.dome_is_open = False
 
+    # pylint: disable=unused-argument
     @classmethod
-    def validation_schema(cls):
-        """Returns the schema to use for validating input configuration"""
-        return None
+    def validate_config(cls, config_json):
+        """Returns an iterator of schema violations for the given json configuration"""
+        yield iter()
+    # pylint: enable=unused-argument
 
     def set_task(self, task):
         """Updates the task shown to the user"""

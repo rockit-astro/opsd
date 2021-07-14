@@ -111,7 +111,7 @@ def validate_schedule_json(config, args):
         print('error was: ' + str(e))
         return -1
 
-    valid, errors = validate_schedule(schedule, config)
+    valid, errors = validate_schedule(schedule, config, False)
     status = TFmt.Green + 'PASSED' if valid else TFmt.Red + 'FAILED'
     print('Validation ' + TFmt.Bold + status + TFmt.Clear)
     for e in errors:
@@ -135,6 +135,14 @@ def schedule(config, args):
     except Exception as e:
         print('error: invalid json file')
         print('error was: ' + str(e))
+        return -1
+
+    # Make sure the schedule is valid first!
+    valid, errors = validate_schedule(schedule, config, True)
+    if not valid:
+        print('error: invalid json file:')
+        for e in errors:
+            print('   ' + e)
         return -1
 
     with config.daemon.connect() as ops:

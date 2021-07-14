@@ -22,72 +22,55 @@ import traceback
 import jsonschema
 from skyfield import almanac
 from skyfield.api import Loader
+from astropy.time import Time
+import astropy.units as u
+from warwick.observatory.common import validation
+
+def __format_errors(errors):
+    for error in sorted(errors, key=lambda e: e.path):
+        if error.path:
+            path = '->'.join([str(p) for p in error.path])
+            yield path + ': ' + error.message
+        else:
+            yield error.message
 
 
-def __create_validator(config, night):
-    """Returns a template validator that includes support for the
-       custom schema tags used by the observation schedules:
-            require-night: add to string properties to require times between sunset and sunrise
-                           on the schema's defined date
-    """
-    validators = dict(jsonschema.Draft4Validator.VALIDATORS)
-
-    loader = Loader('/var/tmp/')
-    ts = loader.timescale()
-    eph = loader('de421.bsp')
-
-    sun_above_horizon = almanac.risings_and_settings(eph, eph['Sun'], config.site_location)
-
-    # Search for sunset/sunrise between midday on 'night' and midday the following day
-    night_date = datetime.datetime.strptime(night, '%Y-%m-%d')
-    night_search_start = ts.utc(night_date.year, night_date.month, night_date.day, 12)
-    night_search_end = ts.tt_jd(night_search_start.tt + 1)
-    events, _ = almanac.find_discrete(night_search_start, night_search_end, sun_above_horizon)
-    night_start = events[0].utc_datetime()
-    night_end = events[1].utc_datetime()
-
-    # pylint: disable=unused-argument
-    def require_night(validator, value, instance, schema):
-        """Create a validator object that forces a tagged date to match
-           the night defined in the observing plan
-        """
-        try:
-            date = datetime.datetime.strptime(instance, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc)
-        except Exception:
-            yield jsonschema.ValidationError('{} is not a valid datetime'.format(instance))
-            return
-
-        if value and (date < night_start or date > night_end):
-            start_str = night_start.strftime('%Y-%m-%dT%H:%M:%SZ')
-            end_str = night_end.strftime('%Y-%m-%dT%H:%M:%SZ')
-            yield jsonschema.ValidationError("{} is not between {} and {}".format(
-                instance, start_str, end_str))
-    # pylint: enable=unused-argument
-
-    validators['require-night'] = require_night
-    return jsonschema.validators.create(meta_schema=jsonschema.Draft4Validator.META_SCHEMA,
-                                        validators=validators)
-
-
-def __validate_schema(validator, schema, block):
-    try:
-        errors = []
-        for error in sorted(validator(schema).iter_errors(block), key=lambda e: e.path):
-            if error.path:
-                path = '->'.join([str(p) for p in error.path])
-                message = path + ': ' + error.message
-            else:
-                message = error.message
-            errors.append(message)
-    except Exception:
-        traceback.print_exc(file=sys.stdout)
-        errors = ['exception while validating']
-    return errors
-
-
-def __validate_dome(validator, block):
+def __validate_dome(block, config, night):
     """Returns a list of error messages that stop json from defining a valid dome schedule"""
     try:
+        loader = Loader('/var/tmp/')
+        ts = loader.timescale()
+        eph = loader('de421.bsp')
+
+        sun_above_horizon = almanac.risings_and_settings(eph, eph['Sun'], config.site_location)
+
+        # Search for sunset/sunrise between midday on 'night' and midday the following day
+        night_date = datetime.datetime.strptime(night, '%Y-%m-%d')
+        night_search_start = ts.utc(night_date.year, night_date.month, night_date.day, 12)
+        night_search_end = ts.tt_jd(night_search_start.tt + 1)
+        events, _ = almanac.find_discrete(night_search_start, night_search_end, sun_above_horizon)
+        night_start = events[0].utc_datetime()
+        night_end = events[1].utc_datetime()
+
+        # pylint: disable=unused-argument
+        def require_night(validator, value, instance, schema):
+            """Create a validator object that forces a tagged date to match
+               the night defined in the observing plan
+            """
+            try:
+                date = datetime.datetime.strptime(instance, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc)
+            except Exception:
+                yield jsonschema.ValidationError('{} is not a valid datetime'.format(instance))
+                return
+
+            if value and (date < night_start or date > night_end):
+                start_str = night_start.strftime('%Y-%m-%dT%H:%M:%SZ')
+                end_str = night_end.strftime('%Y-%m-%dT%H:%M:%SZ')
+                yield jsonschema.ValidationError("{} is not between {} and {}".format(
+                    instance, start_str, end_str))
+
+        # pylint: enable=unused-argument
+
         schema = {
             'type': 'object',
             'additionalProperties': False,
@@ -106,16 +89,19 @@ def __validate_dome(validator, block):
             }
         }
 
-        errors = __validate_schema(validator, schema, block)
-    except Exception as e:
-        print(e)
+        errors = __format_errors(validation.validation_errors(block, schema, {
+            'require-night': require_night
+        }))
+
+    except Exception:
         errors = ['exception while validating']
+        traceback.print_exc(file=sys.stdout)
 
     # Prefix each message with the action index and type
     return ['dome: ' + e for e in errors]
 
 
-def __validate_action(validator, index, block, action_types):
+def __validate_action(index, block, action_types):
     """Validates an action block and returns a list of any schema violations"""
     if 'type' not in block:
         return ['action ' + str(index) + ": missing key 'type'"]
@@ -124,20 +110,16 @@ def __validate_action(validator, index, block, action_types):
         return ['action ' + str(index) + ": unknown action type '" + block['type'] + "'"]
 
     try:
-        schema = action_types[block['type']].validation_schema()
-        if schema is not None:
-            errors = __validate_schema(validator, schema, block)
-        else:
-            errors = ['validation not implemented']
+        errors = __format_errors(action_types[block['type']].validate_config(block))
     except Exception:
-        traceback.print_exc(file=sys.stdout)
         errors = ['exception while validating']
+        traceback.print_exc(file=sys.stdout)
 
     # Prefix each message with the action index and type
     return ['action ' + str(index) + ' (' + block['type'] + '): ' + e for e in errors]
 
 
-def validate_schedule(json, config):
+def validate_schedule(json, config, require_tonight):
     """
     Tests whether a json object defines a valid opsd schedule
     Returns a tuple of (valid, messages) where:
@@ -145,35 +127,53 @@ def validate_schedule(json, config):
        messages is a list of strings describing errors in the schedule
     """
 
+    errors = []
+
     # Schedule requires a night to be defined
     if 'night' not in json:
-        return False, ['syntax error: missing key \'night\'']
+        errors.append('missing key \'night\'')
+    else:
+        try:
+            schedule_night = Time.strptime(json['night'], '%Y-%m-%d') + 12 * u.hour
+        except ValueError:
+            errors.append('night: {} is not a valid date'.format(json['night']))
 
-    # TODO: Require schedule to be for tonight!
+    # Errors with 'night' are fatal
+    if errors:
+        return True, errors
 
-    validator = __create_validator(config, json['night'])
+    current_night = Time.now()
+    if current_night.to_datetime().hour < 12:
+        current_night -= 1 * u.day
+    current_night = Time.strptime(current_night.strftime('%Y-%m-%d'), '%Y-%m-%d') + 12 * u.hour
 
     if 'dome' in json:
-        errors = __validate_dome(validator, json['dome'])
-    else:
-        errors = []
+        errors.extend(__validate_dome(json['dome'], config, json['night']))
 
     if 'actions' in json:
         if isinstance(json['actions'], list):
             for i, action in enumerate(json['actions']):
-                errors.extend(__validate_action(validator, i, action, config.actions))
+                errors.extend(__validate_action(i, action, config.actions))
         else:
-            errors.append('syntax: error \'actions\' must be a list')
+            errors.append('actions: must be a list')
     else:
-        errors.append('syntax error: missing key \'actions\'')
+        errors.append('missing key \'actions\'')
 
-    return not errors, errors
+    # A night mismatch is the only non-fatal warning, so handle it here
+    # and insert the warning message at the start of the list
+    is_valid = len(errors) == 0
 
-
-def schedule_is_tonight(json):
-    """Returns true if a given schedule is valid to execute tonight"""
-    # TODO: Implement me!
-    pass
+    if current_night != schedule_night:
+        if require_tonight:
+            is_valid = False
+            errors.insert(0, 'night: {} is not tonight ({})'.format(
+                schedule_night.strftime('%Y-%m-%d'),
+                current_night.strftime('%Y-%m-%d')))
+        else:
+            errors.insert(0, 'info: night {} is not tonight ({})'.format(
+                schedule_night.strftime('%Y-%m-%d'),
+                current_night.strftime('%Y-%m-%d')))
+    return is_valid, errors
 
 
 def parse_schedule_actions(json, action_types):

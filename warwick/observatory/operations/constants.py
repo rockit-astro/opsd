@@ -33,6 +33,8 @@ class CommandStatus:
     TelescopeSlewFailed = 13
 
     InvalidSchedule = 21
+    DomeNotAutomatic = 22
+    TelescopeNotAutomatic = 23
 
     _messages = {
         # General error codes
@@ -46,6 +48,8 @@ class CommandStatus:
         13: 'error: telescope slew failed',
 
         21: 'error: invalid schedule definition',
+        22: 'error: dome is not in automatic mode',
+        23: 'error: telescope is not in automatic mode',
 
         -100: 'error: terminated by user',
         -101: 'error: unable to communicate with operations daemon'

@@ -16,6 +16,8 @@
 
 """Class managing automatic dome control for the operations daemon"""
 
+# pylint: disable=too-many-branches
+
 import datetime
 import threading
 
