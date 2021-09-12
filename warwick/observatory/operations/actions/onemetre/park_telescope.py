@@ -16,9 +16,8 @@
 
 """Telescope action to park the telescope"""
 
-from warwick.observatory.operations import (
-    TelescopeAction,
-    TelescopeActionStatus)
+from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
+from warwick.observatory.operations.actions.onemetre.telescope_helpers import tel_stop, tel_park
 
 
 class ParkTelescope(TelescopeAction):
@@ -28,5 +27,12 @@ class ParkTelescope(TelescopeAction):
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
-        # TODO: Implement park logic
+        if not tel_stop(self.log_name):
+            self.status = TelescopeActionStatus.Error
+            return
+
+        if not tel_park(self.log_name):
+            self.status = TelescopeActionStatus.Error
+            return
+
         self.status = TelescopeActionStatus.Complete

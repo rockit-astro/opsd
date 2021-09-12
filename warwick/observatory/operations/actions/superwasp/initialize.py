@@ -23,8 +23,8 @@ from warwick.observatory.operations import TelescopeAction, TelescopeActionStatu
 from warwick.observatory.common import log
 
 from warwick.observatory.camera.atik import CommandStatus as CamCommandStatus
-from warwick.observatory.operations.actions.superwasp.telescope_helpers import tel_status, tel_park
-from warwick.observatory.operations.actions.superwasp.camera_helpers import cameras, cam_status
+from .telescope_helpers import tel_status, tel_park
+from .camera_helpers import cameras, cam_status
 
 CAM_INIT_TIMEOUT = 30
 

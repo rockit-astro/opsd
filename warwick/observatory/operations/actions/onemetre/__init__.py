@@ -18,3 +18,7 @@
 
 from .initialize import Initialize
 from .park_telescope import ParkTelescope
+from .slew_telescope import SlewTelescope
+from .slew_telescope_altaz import SlewTelescopeAltAz
+from .wait import Wait
+from .wait_until import WaitUntil
