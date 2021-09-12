@@ -111,12 +111,12 @@
       ]
     },
     {
-      "label": "Sec. Sys.",
+      "label": "Roof Battery",
       "sensors": [
         {
-          "label": "W1m",
-          "sensor": "w1m_roomalert",
-          "parameter": "security_system_safe"
+          "label": "SuperWASP",
+          "sensor": "superwasp_power",
+          "parameter": "roofbattery"
         }
       ]
     },
