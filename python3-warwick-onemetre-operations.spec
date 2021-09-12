@@ -1,11 +1,12 @@
 Name:           python3-warwick-onemetre-operations
-Version:        20210713
+Version:        20210912
 Release:        0
 License:        GPL3
 Summary:        W1m specific operations code
 Url:            https://github.com/warwick-one-metre/opsd
 BuildArch:      noarch
-Requires:       python3-warwick-observatory-operations, python3-warwick-observatory-dome
+Requires:	python3-warwick-observatory-operations, python3-warwick-observatory-dome, python3-astropy
+Requires:       python3-warwick-observatory-talon, python3-warwick-observatory-pipeline, python3-warwick-observatory-camera-andor
 
 %description
 
