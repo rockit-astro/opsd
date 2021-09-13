@@ -17,6 +17,7 @@
 """opsd common code"""
 
 from .initialize import Initialize
+from .focussweep import FocusSweep
 from .park_telescope import ParkTelescope
 from .skyflats import SkyFlats
 from .slew_telescope import SlewTelescope

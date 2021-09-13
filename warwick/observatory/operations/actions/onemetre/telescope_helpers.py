@@ -165,3 +165,19 @@ def tel_stop(log_name):
 def tel_park(log_name):
     """Park the telescope pointing at zenith"""
     return tel_slew_altaz(log_name, PARK_ALTAZ[0], PARK_ALTAZ[1], False, PARK_TIMEOUT)
+
+def tel_set_focus(log_name, position, timeout):
+    """Set the given focuser channel to the given position"""
+    try:
+        with daemons.onemetre_telescope.connect(timeout=timeout) as teld:
+            if teld.telescope_focus(position) != TelCommandStatus.Succeeded:
+                log.error(log_name, 'Failed to set focuser position')
+                return False
+            return True
+    except Pyro4.errors.CommunicationError:
+        log.error(log_name, 'Failed to communicate with telescope daemon')
+        return False
+    except Exception:
+        log.error(log_name, 'Unknown error while stopping telescope')
+        traceback.print_exc(file=sys.stdout)
+        return False
