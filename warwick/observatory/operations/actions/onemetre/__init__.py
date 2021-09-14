@@ -19,6 +19,7 @@
 from .autofocus import AutoFocus
 from .initialize import Initialize
 from .focussweep import FocusSweep
+from .observe_field import ObserveField
 from .park_telescope import ParkTelescope
 from .skyflats import SkyFlats
 from .slew_telescope import SlewTelescope
