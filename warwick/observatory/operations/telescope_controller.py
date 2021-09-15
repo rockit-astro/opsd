@@ -61,7 +61,9 @@ class TelescopeController:
 
     def __run(self):
         while True:
-            dome_is_open = self._dome_controller.status()['status'] == DomeStatus.Open
+            # Assume the dome is correctly set if it is in manual mode
+            dome_status = self._dome_controller.status()
+            dome_is_open = dome_status['status'] == DomeStatus.Open or dome_status['mode'] == OperationsMode.Manual
 
             with self._action_lock:
                 auto_failure = self._mode == OperationsMode.Error and \
