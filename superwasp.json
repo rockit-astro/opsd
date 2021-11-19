@@ -9,9 +9,13 @@
   "site_longitude": "17.87928 W",
   "site_elevation": 2350,
   "dome": {
-    "module": "warwick.observatory.operations.dome.simulated",
-    "open_delay": 60,
-    "close_delay": 120
+    "module": "warwick.observatory.operations.dome.superwasp",
+    "daemon": "superwasp_telescope",
+    "open_timeout": 60,
+    "close_timeout": 120,
+    "heartbeat_timeout": 60,
+    "heartbeat_open_timeout": 60,
+    "heartbeat_close_timeout": 120
   },
   "environment_daemon": "observatory_environment",
   "environment_conditions": [
@@ -76,16 +80,6 @@
       ]
     },
     {
-      "label": "Int. Humidity",
-      "sensors": [
-        {
-          "label": "W1m",
-          "sensor": "w1m_roomalert",
-          "parameter": "internal_humidity"
-        }
-      ]
-    },
-    {
       "label": "Dew Point",
       "sensors": [
         {
@@ -107,16 +101,6 @@
           "label": "W1m",
           "sensor": "rain",
           "parameter": "unsafe_boards"
-        }
-      ]
-    },
-    {
-      "label": "Roof Battery",
-      "sensors": [
-        {
-          "label": "SuperWASP",
-          "sensor": "superwasp_power",
-          "parameter": "roofbattery"
         }
       ]
     },
@@ -162,21 +146,6 @@
           "label": "Battery",
           "sensor": "superwasp_power",
           "parameter": "ups2_battery_remaining"
-        }
-      ]
-    },
-    {
-      "label": "UPS 3",
-      "sensors": [
-        {
-          "label": "Status",
-          "sensor": "superwasp_power",
-          "parameter": "ups3_status"
-        },
-        {
-          "label": "Battery",
-          "sensor": "superwasp_power",
-          "parameter": "ups3_battery_remaining"
         }
       ]
     },
