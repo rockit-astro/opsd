@@ -74,9 +74,11 @@ The automated packaging scripts will push 5 RPM packages to the observatory pack
 | observatory-operations-server | Contains the `opsd` server and systemd service file. |
 | observatory-operations-client | Contains the `ops` commandline utility for controlling the operations server. |
 | python3-warwick-observatory-operations | Contains the python module with shared code for all telescopes. |
+| python3-warwick-clasp-operations | Contains the python module with CLASP specific code and configuration. |
 | python3-warwick-onemetre-operations | Contains the python module with W1m specific code and configuration. |
 | python3-warwick-superwasp-operations | Contains the python module with SuperWASP specific code and configuration. |
 
+`observatory-operations-server` and `observatory-operations-client` and `python3-warwick-clasp-operations` should be installed on the `clasp-tcs` machine.
 `observatory-operations-server` and `observatory-operations-client` and `python3-warwick-onemetre-operations` should be installed on the `onemetre-dome` machine.
 `observatory-operations-server` and `observatory-operations-client` and `python3-warwick-superwasp-operations` should be installed on the `wasp-tcs` machine.
 

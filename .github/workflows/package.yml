@@ -34,6 +34,7 @@ jobs:
           centos-packages/set-spec-release.sh python3-warwick-observatory-operations.spec
           centos-packages/set-spec-release.sh python3-warwick-onemetre-operations.spec
           centos-packages/set-spec-release.sh python3-warwick-superwasp-operations.spec
+          centos-packages/set-spec-release.sh python3-warwick-clasp-operations.spec
 
       - name: Package RPMs
         run:
