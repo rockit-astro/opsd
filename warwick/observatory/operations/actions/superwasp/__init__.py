@@ -19,6 +19,7 @@
 from .initialize import Initialize
 from .park_telescope import ParkTelescope
 from .observegeofield import ObserveGEOField
+from .skyflats import SkyFlats
 from .slew_telescope import SlewTelescope
 from .slew_telescope_altaz import SlewTelescopeAltAz
 from .wait import Wait
