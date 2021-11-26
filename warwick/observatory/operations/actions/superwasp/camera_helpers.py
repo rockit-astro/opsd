@@ -26,10 +26,10 @@ from warwick.observatory.common import daemons, log
 from warwick.observatory.camera.atik import CameraStatus, CommandStatus as CamCommandStatus
 
 cameras = {
-    '1': daemons.superwasp_cam1,
+#    '1': daemons.superwasp_cam1,
     '2': daemons.superwasp_cam2,
     '3': daemons.superwasp_cam3,
-    '4': daemons.superwasp_cam4
+#    '4': daemons.superwasp_cam4
 }
 
 
