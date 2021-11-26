@@ -1,6 +1,6 @@
 Name:           python3-warwick-superwasp-operations
 Version:        20220218
-Release:        0
+Release:        1
 License:        GPL3
 Summary:        SuperWASP specific operations code
 Url:            https://github.com/warwick-one-metre/opsd
