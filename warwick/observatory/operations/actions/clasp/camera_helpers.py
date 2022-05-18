@@ -31,6 +31,29 @@ cameras = {
 }
 
 
+def cam_configure(log_name, camera_id, config=None, quiet=False):
+    """Set camera configuration
+       config is assumed to contain a dictionary of camera
+       configuration that has been validated by the camera schema.
+    """
+    try:
+        with cameras[camera_id].connect() as cam:
+            if config:
+                status = cam.configure(config, quiet=quiet)
+
+            if status != CamCommandStatus.Succeeded:
+                log.error(log_name, 'Failed to configure camera ' + camera_id)
+                return False
+            return True
+    except Pyro4.errors.CommunicationError:
+        log.error(log_name, 'Failed to communicate with camera ' + camera_id)
+        return False
+    except Exception:
+        log.error(log_name, 'Unknown error with camera ' + camera_id)
+        traceback.print_exc(file=sys.stdout)
+        return False
+
+
 def cam_take_images(log_name, camera_id, count=1, config=None, quiet=False):
     """Start an exposure sequence with count images
 

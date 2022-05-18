@@ -2,7 +2,7 @@
   "daemon": "clasp_operations",
   "log_name": "opsd@clasp",
   "control_machines": ["CLASPTCS"],
-  "pipeline_machines": ["CLASPDAS1"],
+  "pipeline_machines": ["CLASPDAS1", "CLASPDAS2"],
   "actions_module": "warwick.observatory.operations.actions.clasp",
   "loop_delay": 10,
   "site_latitude": "28.76022 N",
@@ -130,8 +130,13 @@
       "label": "Disk Space",
       "sensors": [
         {
-          "label": "Bytes",
-          "sensor": "clasp_diskspace",
+          "label": "DAS1",
+          "sensor": "clasp_diskspace_1",
+          "parameter": "data_fs_available_bytes"
+        },
+        {
+          "label": "DAS2",
+          "sensor": "clasp_diskspace_2",
           "parameter": "data_fs_available_bytes"
         }
       ]

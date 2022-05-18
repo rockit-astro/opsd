@@ -86,7 +86,6 @@ class FocusSweep(TelescopeAction):
 
         # TODO: Support focusing both cameras in parallel
         self._camera_id = config['camera']
-        self._focuser_channel = 1 if self._camera_id == 'cam1' else 2
         self._header_keyword = 'TEL' + str(1 if self._camera_id == 'cam1' else 2) + 'FOC'
 
     @classmethod
@@ -132,7 +131,7 @@ class FocusSweep(TelescopeAction):
         # Move focuser to the start of the focus range
         current_focus = self.config['min']
 
-        if not focus_set(self.log_name, self._focuser_channel, current_focus, FOCUS_TIMEOUT):
+        if not focus_set(self.log_name, self._camera_id, current_focus, FOCUS_TIMEOUT):
             self.status = TelescopeActionStatus.Error
             return
 
@@ -163,7 +162,7 @@ class FocusSweep(TelescopeAction):
                 if current_focus > self.config['max']:
                     break
 
-                if not focus_set(self.log_name, self._focuser_channel, current_focus, FOCUS_TIMEOUT):
+                if not focus_set(self.log_name, self._camera_id, current_focus, FOCUS_TIMEOUT):
                     self.status = TelescopeActionStatus.Error
                     return
 

@@ -29,7 +29,7 @@ from warwick.observatory.pipeline import configure_standard_validation_schema as
 from warwick.observatory.camera.qhy import configure_validation_schema as qhy_camera_schema
 from .mount_helpers import mount_slew_radec, mount_stop
 from .focus_helpers import focus_set, focus_get
-from .camera_helpers import cameras, cam_take_images, cam_stop
+from .camera_helpers import cameras, cam_configure, cam_take_images
 from .pipeline_helpers import configure_pipeline
 
 SLEW_TIMEOUT = 120
@@ -48,7 +48,7 @@ CONFIG = {
     'minimum_hfd': 3.2,
 
     # Number of objects that are required to consider MEDHFD valid
-    'minimum_object_count': 75,
+    'minimum_object_count': 50,
 
     # Aim to reach this HFD on the inside edge of the v-curve
     # before offsetting to the final focus
@@ -68,12 +68,11 @@ CONFIG = {
     'max_processing_time': 20
 }
 
-
 # Note: pipeline and camera schemas are inserted in the validate_config method
 CONFIG_SCHEMA = {
     'type': 'object',
     'additionalProperties': False,
-    'required': ['ra', 'dec', 'camera'],
+    'required': ['ra', 'dec'],
     'properties': {
         'type': {'type': 'string'},
         'ra': {
@@ -85,13 +84,198 @@ CONFIG_SCHEMA = {
             'type': 'number',
             'minimum': -90,
             'maximum': 90
-        },
-        'camera': {
-            'type': 'string',
-            'enum': ['cam1', 'cam2']
         }
     }
 }
+
+
+class AutoFocusState:
+    """Possible states of the AutoFlat routine"""
+    MeasureInitial, FindPositionOnVCurve, FindTargetHFD, MeasureTargetHFD, \
+        MeasureFinalHFD, Aborting, Complete, Failed, Skipped = range(9)
+
+    Codes = ['I', 'V', 'T', 'M', 'N', 'A', 'C', 'F', 'X']
+
+
+class CameraWrapper:
+    """Holds camera-specific focus state"""
+    def __init__(self, camera_id, config, camera_config, log_name):
+        self.camera_id = camera_id
+        if camera_config:
+            self.state = AutoFocusState.MeasureInitial
+        else:
+            self.state = AutoFocusState.Skipped
+        self._log_name = log_name
+        self._config = config
+        self._camera_config = camera_config
+        self._start_time = None
+        self._expected_complete = None
+        self._initial_focus = None
+        self._current_focus = None
+        self._measurements = []
+        self._failed_measurements = 0
+        self._best_hfd = None
+
+    def start(self):
+        """Starts the autofocus sequence for this camera"""
+        if self.state == AutoFocusState.Skipped:
+            return
+
+        self._start_time = datetime.datetime.utcnow()
+
+        # Record the initial focus so we can return on error
+        self._initial_focus = self._current_focus = focus_get(self._log_name, self.camera_id)
+        if self._initial_focus is None:
+            self.state = AutoFocusState.Failed
+            return
+
+        # Set the camera config once at the start to avoid duplicate changes
+        cam_config = {}
+        cam_config.update(self._camera_config)
+
+        if not cam_configure(self._log_name, self.camera_id, cam_config):
+            self.state = AutoFocusState.Failed
+            return
+
+        # Take the first image to start the process.
+        # The main state machine runs inside received_frame.
+        self._take_image()
+
+    def _set_failed(self):
+        """Restores the original focus position and marks state as failed"""
+        if not focus_set(self._log_name, self.camera_id, self._initial_focus, FOCUS_TIMEOUT):
+            log.error(self._log_name, 'AutoFocus: camera ' + self.camera_id + ' failed to restore initial focus')
+        self.state = AutoFocusState.Failed
+
+    def _take_image(self):
+        """Tells the camera to take an exposure."""
+        # The current QHY firmware adds an extra exposure time's delay before returning the first frame.
+        # Using single frame mode adds even more delay (due to processing time not being overlapped with
+        # the next exposure), so add an extra frame's latency here
+        self._expected_complete = datetime.datetime.utcnow() \
+            + datetime.timedelta(seconds=2*self._camera_config['exposure'] + self._config['max_processing_time'])
+
+        if not cam_take_images(self._log_name, self.camera_id, quiet=True):
+            self._set_failed()
+
+    def check_timeout(self):
+        """Sets error state if an expected frame is more than 30 seconds late"""
+        if self.state > AutoFocusState.Aborting:
+            return
+
+        if self._expected_complete and datetime.datetime.utcnow() > self._expected_complete:
+            log.error(self._log_name, 'AutoFocus: camera ' + self.camera_id + ' exposure timed out')
+            self._set_failed()
+
+    def received_frame(self, headers):
+        """Callback to process an acquired frame. headers is a dictionary of header keys"""
+        if self.state >= AutoFocusState.Complete:
+            return
+
+        if self.state == AutoFocusState.Aborting:
+            self._set_failed()
+            return
+
+        if 'MEDHFD' not in headers or 'HFDCNT' not in headers:
+            log.warning(self._log_name, 'AutoFocus: camera ' + self.camera_id +
+                        ' discarding frame without HFD headers')
+            self._failed_measurements += 1
+            if self._failed_measurements == 5:
+                log.error(self._log_name, 'AutoFocus: camera ' + self.camera_id +
+                          ' aborting because 5 HFD samples failed')
+                self._set_failed()
+                return
+        else:
+            hfd = headers['MEDHFD']
+            count = headers['HFDCNT']
+            if count > self._config['minimum_object_count'] and hfd > self._config['minimum_hfd']:
+                self._measurements.append(hfd)
+            else:
+                log.warning(self._log_name, 'AutoFocus: camera ' + self.camera_id +
+                            ' discarding frame with {} samples ({} HFD)'.format(count, hfd))
+                self._failed_measurements += 1
+                if self._failed_measurements == 5:
+                    log.error(self._log_name, 'AutoFocus: camera ' + self.camera_id +
+                              ' aborting because 5 HFD samples failed')
+                    self._set_failed()
+                    return
+
+        requested = self._config['coarse_measure_repeats']
+        if self.state in [AutoFocusState.MeasureTargetHFD, AutoFocusState.MeasureFinalHFD]:
+            requested = self._config['fine_measure_repeats']
+
+        if len(self._measurements) == requested:
+            print(self.camera_id, ' hfd values:', self._measurements)
+            current_hfd = float(np.min(self._measurements))
+            log.info(self._log_name, 'AutoFocus: camera ' + self.camera_id +
+                     ' HFD at {} steps is {:.1f}" ({} samples)'.format(self._current_focus, hfd, requested))
+
+            self._measurements.clear()
+            self._failed_measurements = 0
+
+            if self.state == AutoFocusState.MeasureInitial:
+                self.state = AutoFocusState.FindPositionOnVCurve
+
+            if self.state == AutoFocusState.FindPositionOnVCurve:
+                # Step inwards until we are well defocused on the inside edge of the v curve
+                if self._best_hfd is not None and current_hfd > 2 * self._best_hfd and \
+                        current_hfd > self._config['target_hfd']:
+                    log.info(self._log_name, 'AutoFocus: camera ' + self.camera_id + ' found position on v-curve')
+                    self.state = AutoFocusState.FindTargetHFD
+                else:
+                    self._current_focus -= self._config['focus_step_size']
+                    if not focus_set(self._log_name, self.camera_id, self._current_focus, FOCUS_TIMEOUT):
+                        self._set_failed()
+                        return
+
+            # Note: not an elif to allow the FindPositionOnVCurve case above to enter this branch too
+            if self.state == AutoFocusState.FindTargetHFD:
+                # We may have stepped to far inwards in the previous step
+                # Step outwards if needed until the current HFD is closer to the target
+                if current_hfd > 2 * self._config['target_hfd']:
+                    log.info(self._log_name, 'AutoFocus: camera ' + self.camera_id +
+                             ' stepping towards HFD {}'.format(self._config['target_hfd']))
+
+                    self._current_focus -= int(current_hfd / (2 * self._config['inside_focus_slope']))
+                else:
+                    # Do a final move to (approximately) the target HFD
+                    self._current_focus += int((self._config['target_hfd'] - current_hfd) /
+                                               self._config['inside_focus_slope'])
+                    self.state = AutoFocusState.MeasureTargetHFD
+
+                if not focus_set(self._log_name, self.camera_id, self._current_focus, FOCUS_TIMEOUT):
+                    self._set_failed()
+                    return
+
+            elif self.state == AutoFocusState.MeasureTargetHFD:
+                # Jump to target focus using calibrated parameters
+                self._current_focus += int((self._config['crossing_hfd'] - current_hfd) /
+                                           self._config['inside_focus_slope'])
+                self.state = AutoFocusState.MeasureFinalHFD
+
+                if not focus_set(self._log_name, self.camera_id, self._current_focus, FOCUS_TIMEOUT):
+                    self._set_failed()
+                    return
+            elif self.state == AutoFocusState.MeasureFinalHFD:
+                runtime = (datetime.datetime.utcnow() - self._start_time).total_seconds()
+                log.info(self._log_name, 'AutoFocus: camera ' + self.camera_id +
+                         ' achieved HFD of {:.1f}" in {:.0f} seconds'.format(current_hfd, runtime))
+
+                self.state = AutoFocusState.Complete
+
+            if self._best_hfd is None:
+                self._best_hfd = current_hfd
+            else:
+                self._best_hfd = np.fmin(self._best_hfd, current_hfd)
+
+        self._take_image()
+
+    def abort(self):
+        """Aborts any active exposures and sets the state to complete"""
+        # Assume that focus images are always short and we can just wait for it to finish.
+        # The recieved handler will handle restoring the original focus position
+        if self.state < AutoFocusState.Complete:
+            self.state = AutoFocusState.Aborting
 
 
 class AutoFocus(TelescopeAction):
@@ -99,12 +283,9 @@ class AutoFocus(TelescopeAction):
     def __init__(self, log_name, config):
         super().__init__('Auto Focus', log_name, config)
         self._wait_condition = threading.Condition()
-
-        # TODO: Support focusing both cameras in parallel
-        self._camera_id = config['camera']
-        self._config = CONFIG
-        self._focuser_channel = 1 if self._camera_id == 'cam1' else 2
-        self._focus_measurement = None
+        self._cameras = {}
+        for camera_id in cameras:
+            self._cameras[camera_id] = CameraWrapper(camera_id, CONFIG, self.config.get(camera_id, None), self.log_name)
 
     @classmethod
     def validate_config(cls, config_json):
@@ -112,7 +293,6 @@ class AutoFocus(TelescopeAction):
         schema = {}
         schema.update(CONFIG_SCHEMA)
 
-        # TODO: Support focusing both cameras in parallel
         for camera_id in cameras:
             schema['properties'][camera_id] = qhy_camera_schema(camera_id)
         schema['properties']['pipeline'] = pipeline_schema()
@@ -128,14 +308,16 @@ class AutoFocus(TelescopeAction):
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
+
+        # TODO: Add options for start time and expires time
+
         self.set_task('Slewing to field')
 
         if not mount_slew_radec(self.log_name, self.config['ra'], self.config['dec'], True, SLEW_TIMEOUT):
             self.__set_failed_status()
             return
 
-        self.set_task('Preparing camera')
-        start_time = datetime.datetime.utcnow()
+        self.set_task('Preparing cameras')
 
         pipeline_config = {}
         pipeline_config.update(self.config.get('pipeline', {}))
@@ -149,165 +331,51 @@ class AutoFocus(TelescopeAction):
             self.__set_failed_status()
             return
 
-        self.set_task('Sampling initial HFD')
-        first_hfd = min_hfd = self.measure_current_hfd(self._config['coarse_measure_repeats'])
-        if first_hfd < 0:
-            self.__set_failed_status()
-            return
+        # This starts the autofocus logic, which is run
+        # in the received_frame callbacks
+        for camera in self._cameras.values():
+            camera.start()
 
-        current_focus = focus_get(self.log_name, self._focuser_channel)
-        if current_focus is None:
-            self.__set_failed_status()
-            return
-
-        log.info(self.log_name, 'AutoFocus: HFD at {} steps is {:.1f}" ({} samples)'.format(
-            current_focus, first_hfd, self._config['coarse_measure_repeats']))
-
-        self.set_task('Searching v-curve position')
-
-        # Step inwards until we are well defocused on the inside edge of the v curve
+        # Wait until complete
         while True:
-            log.info(self.log_name, 'AutoFocus: Searching for position on v-curve')
-            current_focus -= self._config['focus_step_size']
-            if not focus_set(self.log_name, self._focuser_channel, current_focus, FOCUS_TIMEOUT):
-                self.__set_failed_status()
-                return
+            with self._wait_condition:
+                self._wait_condition.wait(5)
 
-            current_hfd = self.measure_current_hfd(self._config['coarse_measure_repeats'])
-            if current_hfd < 0:
-                self.__set_failed_status()
-                return
+            codes = ''
+            for camera in self._cameras.values():
+                camera.check_timeout()
+                codes += AutoFocusState.Codes[camera.state]
 
-            log.info(self.log_name, 'AutoFocus: HFD at {} steps is {:.1f}" ({} samples)'.format(
-                current_focus, current_hfd, self._config['coarse_measure_repeats']))
-
-            min_hfd = min(min_hfd, current_hfd)
-            if current_hfd > self._config['target_hfd'] and current_hfd > min_hfd:
-                log.info(self.log_name, 'AutoFocus: Found position on v-curve')
+            self.set_task('Focusing (' + ''.join(codes) + ')')
+            if self.aborted:
                 break
 
-        # We may have stepped to far inwards in the previous step
-        # Step outwards if needed until the current HFD is closer to the target
-        self.set_task('Searching for HFD {}'.format(self._config['target_hfd']))
-        while current_hfd > 2 * self._config['target_hfd']:
-            log.info(self.log_name, 'AutoFocus: Stepping towards HFD {}'.format(self._config['target_hfd']))
+            if not self.dome_is_open:
+                for camera in self._cameras.values():
+                    camera.abort()
 
-            current_focus -= int(current_hfd / (2 * self._config['inside_focus_slope']))
-            if not focus_set(self.log_name, self._focuser_channel, current_focus, FOCUS_TIMEOUT):
-                self.__set_failed_status()
-                return
+                print('AutoFocus: Dome has closed')
+                log.error(self.log_name, 'AutoFocus: Dome has closed')
+                break
 
-            current_hfd = self.measure_current_hfd(self._config['coarse_measure_repeats'])
-            if current_hfd < 0:
-                self.__set_failed_status()
-                return
+            # We are done once all cameras are either complete or have errored
+            if all([camera.state >= AutoFocusState.Complete for camera in self._cameras.values()]):
+                break
 
-            log.info(self.log_name, 'AutoFocus: HFD at {} steps is {:.1f}" ({} samples)'.format(
-                current_focus, current_hfd, self._config['coarse_measure_repeats']))
+        success = self.dome_is_open and all([camera.state == AutoFocusState.Complete
+                                             for camera in self._cameras.values()])
 
-        # Do a final move to (approximately) the target HFD
-        current_focus += int((self._config['target_hfd'] - current_hfd) / self._config['inside_focus_slope'])
-        if not focus_set(self.log_name, self._focuser_channel, current_focus, FOCUS_TIMEOUT):
-            self.__set_failed_status()
-            return
-
-        # Take more frames to get an improved HFD estimate at the current position
-        self.set_task('Sampling HFD for final move')
-        current_hfd = self.measure_current_hfd(self._config['fine_measure_repeats'])
-        if current_hfd < 0:
-            self.__set_failed_status()
-            return
-
-        log.info(self.log_name, 'AutoFocus: HFD at {} steps is {:.1f}" ({} samples)'.format(
-            current_focus, current_hfd, self._config['fine_measure_repeats']))
-
-        # Jump to target focus using calibrated parameters
-        current_focus += int((self._config['crossing_hfd'] - current_hfd) / self._config['inside_focus_slope'])
-
-        self.set_task('Moving to focus')
-        if not focus_set(self.log_name, self._focuser_channel, current_focus, FOCUS_TIMEOUT):
-            self.__set_failed_status()
-            return
-
-        self.set_task('Sampling final HFD')
-        current_hfd = self.measure_current_hfd(self._config['fine_measure_repeats'])
-        runtime = (datetime.datetime.utcnow() - start_time).total_seconds()
-
-        log.info(self.log_name, 'AutoFocus: Achieved HFD of {:.1f}" in {:.0f} seconds'.format(
-            current_hfd, runtime))
-
-        self.status = TelescopeActionStatus.Complete
-
-    def measure_current_hfd(self, exposures=1):
-        """ Takes a set of exposures and returns the smallest MEDHFD value
-            Returns -1 on error
-        """
-        log.info(self.log_name, 'AutoFocus: Sampling HFD')
-
-        requested = exposures
-        failed = 0
-
-        cam_config = {}
-        cam_config.update(self.config.get(self._camera_id, {}))
-
-        # The current QHY firmware adds an extra exposure time's delay
-        # before returning the first frame. Use the single frame mode instead!
-        cam_config['stream'] = False
-
-        # Handle exposures individually
-        # This adds a few seconds of overhead when we want to take
-        # multiple samples, but this is the simpler/safer option for now
-        samples = []
-        while True:
-            if len(samples) == requested:
-                print('hfd values:', samples)
-                return np.min(samples)
-
-            if failed > 5:
-                log.error(self.log_name, 'AutoFocus: Aborting because 5 HFD samples failed')
-                return -1
-
-            if not cam_take_images(self.log_name, self._camera_id, 1, cam_config, quiet=True):
-                return -1
-
-            delay = self.config[self._camera_id]['exposure'] + self._config['max_processing_time']
-            expected_complete = datetime.datetime.utcnow() + datetime.timedelta(seconds=delay)
-
-            while True:
-                if not self.dome_is_open:
-                    log.error(self.log_name, 'AutoFocus: Aborting because dome is not open')
-                    return -1
-
-                if self.aborted:
-                    log.error(self.log_name, 'AutoFocus: Aborted by user')
-                    return -1
-
-                measurement = self._focus_measurement
-                if measurement:
-                    self._focus_measurement = None
-                    if measurement[1] > self._config['minimum_object_count'] and measurement[0] > self._config['minimum_hfd']:
-                        samples.append(measurement[0])
-                    else:
-                        warning = 'AutoFocus: Discarding frame with {} samples ({} HFD)'.format(
-                            measurement[1], measurement[0])
-                        log.warning(self.log_name, warning)
-                        failed += 1
-                    break
-
-                if datetime.datetime.utcnow() > expected_complete:
-                    log.warning(self.log_name, 'AutoFocus: Exposure timed out - retrying')
-                    failed += 1
-                    break
-
-                with self._wait_condition:
-                    self._wait_condition.wait(10)
+        if self.aborted or success:
+            self.status = TelescopeActionStatus.Complete
+        else:
+            self.status = TelescopeActionStatus.Error
 
     def abort(self):
         """Notification called when the telescope is stopped by the user"""
         super().abort()
-
         mount_stop(self.log_name)
-        cam_stop(self.log_name, self._camera_id)
+        for camera in self._cameras.values():
+            camera.abort()
 
         with self._wait_condition:
             self._wait_condition.notify_all()
@@ -321,14 +389,8 @@ class AutoFocus(TelescopeAction):
 
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
-        if headers.get('CAMID', '').lower() != self._camera_id:
-            return
-
-        with self._wait_condition:
-            if 'MEDHFD' in headers and 'HFDCNT' in headers:
-                self._focus_measurement = (headers['MEDHFD'], headers['HFDCNT'])
-            else:
-                print('Headers are missing MEDHFD or HFDCNT')
-                print(headers)
-                self._focus_measurement = (0, 0)
-            self._wait_condition.notify_all()
+        camera_id = headers.get('CAMID', '').lower()
+        if camera_id in self._cameras:
+            self._cameras[camera_id].received_frame(headers)
+        else:
+            print('AutoFocus: Ignoring unknown frame')

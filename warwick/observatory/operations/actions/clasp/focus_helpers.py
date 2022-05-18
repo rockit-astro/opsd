@@ -22,13 +22,19 @@ import Pyro4
 from warwick.observatory.common import daemons, log
 from warwick.observatory.focuslynx import FocuserStatus, CommandStatus as FocCommandStatus
 
+channels = {
+    'cam1': 1,
+    'cam2': 2,
+}
 
-def focus_get(log_name, channel):
+
+def focus_get(log_name, camera_id):
     """Returns the requested focuser position or None on error
        Requires focuser to be idle
     """
     try:
         with daemons.clasp_focus.connect() as focusd:
+            channel = channels[camera_id]
             status = focusd.report_status()
             if status['status_' + str(channel)] != FocuserStatus.Idle:
                 print('Focuser status is not idle')
@@ -46,10 +52,11 @@ def focus_get(log_name, channel):
         return None
 
 
-def focus_set(log_name, channel, position, timeout):
+def focus_set(log_name, camera_id, position, timeout):
     """Set the given focuser channel to the given position"""
     try:
         with daemons.clasp_focus.connect(timeout=timeout) as focusd:
+            channel = channels[camera_id]
             print('moving focus {} to {}'.format(channel, position))
             status = focusd.set_focus(channel, position)
             if status != FocCommandStatus.Succeeded:
@@ -68,11 +75,11 @@ def focus_set(log_name, channel, position, timeout):
         return False
 
 
-def focus_stop(log_name, channel):
+def focus_stop(log_name, camera_id):
     """Stop the focuser movement"""
     try:
         with daemons.clasp_focus.connect() as focusd:
-            focusd.stop_channel(channel)
+            focusd.stop_channel(channels[camera_id])
         return True
     except Pyro4.errors.CommunicationError:
         print('Failed to communicate with focuser daemon')
