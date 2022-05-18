@@ -94,7 +94,7 @@ class DomeInterface:
     def disable_heartbeat(self):
         print('dome: disabling heartbeat')
         with self._daemon.connect() as dome:
-            ret = dome.set_heartbeat_timer(self._heartbeat_timeout)
+            ret = dome.set_heartbeat_timer(0)
             return ret == DomeCommandStatus.Succeeded
 
     def close(self):
