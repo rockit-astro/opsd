@@ -32,7 +32,6 @@ from astropy import units as u
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import log, validation
 from warwick.observatory.pipeline import configure_flats_validation_schema as pipeline_schema
-from warwick.observatory.camera.fli import configure_validation_schema as fli_camera_schema
 from warwick.observatory.camera.qhy import configure_validation_schema as qhy_camera_schema
 from .mount_helpers import mount_status, mount_slew_altaz
 from .camera_helpers import cameras, cam_stop
@@ -56,16 +55,12 @@ CONFIG_SCHEMA = {
 
 class AutoFlatState:
     """Possible states of the AutoFlat routine"""
-    Bias, Waiting, Saving, Complete, Error = range(5)
-    Names = ['Bias', 'Waiting', 'Saving', 'Complete', 'Error']
-    Codes = ['B', 'W', 'S', 'C', 'E']
+    Waiting, Saving, Complete, Error = range(4)
+    Names = ['Waiting', 'Saving', 'Complete', 'Error']
+    Codes = ['W', 'S', 'C', 'E']
 
 
 CONFIG = {
-    # We can't take a bias without a shutter, so subtract an approximate level from all pixels
-    # TODO: Have qhy_camd store the mean/median overscan bias in header key instead
-    'qhy_bias_signal': 447,
-
     # Range of sun angles where we can acquire useful data
     'max_sun_altitude': -6,
     'min_sun_altitude': -10,
@@ -94,15 +89,6 @@ CONFIG = {
 
     # Target flat counts to aim for
     'target_counts': 30000,
-
-    # Delays to apply between evening flats to save shutter cycles
-    # These delays are cumulative, so if the next exposure is calculated to be 1.2
-    # 0.9 seconds the routine will wait 60 + 30 = 90 seconds before starting it
-    # NOTE: These only work for the FLI, not QHY camera.
-    'evening_exposure_delays': {
-        1: 60,
-        2.5: 30
-    }
 }
 
 
@@ -123,13 +109,7 @@ class CameraWrapper:
         self._camera_config = camera_config
         self._expected_complete = datetime.datetime.utcnow()
         self._is_evening = is_evening
-        self._is_fli = camera_id in ['fli1']
-        if self._is_fli:
-            self.state = AutoFlatState.Bias
-            self._bias_signal = 0
-        else:
-            self.state = AutoFlatState.Waiting
-            self._bias_signal = CONFIG['qhy_bias_signal']
+        self.state = AutoFlatState.Waiting
 
         self._scale = CONFIG['evening_scale'] if is_evening else CONFIG['dawn_scale']
         self._start_exposure = CONFIG['min_exposure'] if is_evening else CONFIG['min_save_exposure']
@@ -138,13 +118,17 @@ class CameraWrapper:
 
     def start(self):
         """Starts the flat sequence for this camera"""
-        if self._is_fli:
-            self.__take_image(0, 0)
-        else:
-            with self._daemon.connect() as cam:
-                cam.configure(self._camera_config, quiet=True)
+        with self._daemon.connect() as cam:
+            config = {}
+            config.update(self._camera_config)
 
-            self.__take_image(self._start_exposure, 0)
+            # The current QHY firmware adds an extra exposure time's delay
+            # before returning the first frame. Use the single frame mode instead!
+            config['stream'] = False
+
+            cam.configure(config, quiet=True)
+
+        self.__take_image(self._start_exposure)
         self._start_time = datetime.datetime.utcnow()
 
     def check_timeout(self):
@@ -157,37 +141,16 @@ class CameraWrapper:
             log.error(self._log_name, 'AutoFlat: camera ' + self.camera_id + ' exposure timed out')
             self.state = AutoFlatState.Error
 
-    def __take_image(self, exposure, delay):
-        """Tells the camera to take an exposure.
-           if exposure is 0 then it will reset the camera
-           configuration and take a bias with the shutter closed
-        """
+    def __take_image(self, exposure):
+        """Tells the camera to take an exposure."""
         self._expected_complete = datetime.datetime.utcnow() \
-            + datetime.timedelta(seconds=exposure + delay + CONFIG['max_processing_time'])
-
-        # For some unknown reason QHY frames over USB delayed by an extra frame period
-        if not self._is_fli:
-            self._expected_complete += datetime.timedelta(seconds=exposure)
+            + datetime.timedelta(seconds=exposure + CONFIG['max_processing_time'])
 
         try:
             # Need to communicate directly with camera daemon
-            # to allow set_exposure_delay and set_exposure
+            # to adjust exposure without resetting other config
             with self._daemon.connect() as cam:
-                if exposure == 0:
-                    # .configure will reset all other parameters to their default values
-                    cam_config = {}
-                    cam_config.update(self._camera_config)
-                    cam_config.update({
-                        'shutter': False,
-                        'exposure': 0
-                    })
-                    cam.configure(cam_config, quiet=True)
-                else:
-                    cam.set_exposure(exposure, quiet=True)
-                    if self._is_fli:
-                        cam.set_exposure_delay(delay, quiet=True)
-                        cam.set_shutter(True, quiet=True)
-
+                cam.set_exposure(exposure, quiet=True)
                 cam.start_sequence(1, quiet=True)
         except Pyro4.errors.CommunicationError:
             log.error(self._log_name, 'Failed to communicate with camera ' + self.camera_id)
@@ -200,22 +163,13 @@ class CameraWrapper:
     def received_frame(self, headers):
         """Callback to process an acquired frame. headers is a dictionary of header keys"""
         last_state = self.state
-        delay_exposure = 0
 
-        if self.state == AutoFlatState.Bias:
-            self._bias_signal = headers['MEDCNTS']
-            log.info(self._log_name, 'AutoFlat: {} bias is {:.0f} ADU'.format(self.camera_id, self._bias_signal))
-
-            # Take the first flat image
-            self.state = AutoFlatState.Waiting
-            self.__take_image(self._start_exposure, delay_exposure)
-
-        elif self.state == AutoFlatState.Waiting or self.state == AutoFlatState.Saving:
+        if self.state == AutoFlatState.Waiting or self.state == AutoFlatState.Saving:
             if self.state == AutoFlatState.Saving:
                 self._exposure_count += 1
 
+            counts = headers['MEDCNTS'] - headers['MEDBIAS']
             exposure = headers['EXPTIME']
-            counts = headers['MEDCNTS'] - self._bias_signal
 
             # If the count rate is too low then we scale the exposure by the maximum amount
             if counts > 0:
@@ -232,14 +186,6 @@ class CameraWrapper:
                   .format(self.camera_id, exposure, counts, clamped_exposure, clamped_desc))
 
             if self._is_evening:
-                # Sky is decreasing in brightness
-                for min_exposure in CONFIG['evening_exposure_delays']:
-                    if new_exposure < min_exposure and counts > CONFIG['min_save_counts']:
-                        delay_exposure += CONFIG['evening_exposure_delays'][min_exposure]
-
-                if delay_exposure > 0:
-                    print('AutoFlat: camera ' + self.camera_id + ' waiting ' + str(delay_exposure) +
-                          's for it to get darker')
 
                 if clamped_exposure == CONFIG['max_exposure'] \
                         and counts < CONFIG['min_save_counts']:
@@ -272,7 +218,7 @@ class CameraWrapper:
                     log.info(self._log_name, message)
 
             if self.state != AutoFlatState.Complete:
-                self.__take_image(clamped_exposure, delay_exposure)
+                self.__take_image(clamped_exposure)
 
     def abort(self):
         """Aborts any active exposures and sets the state to complete"""
@@ -297,8 +243,8 @@ class SkyFlats(TelescopeAction):
         """Returns an iterator of schema violations for the given json configuration"""
         schema = {}
         schema.update(CONFIG_SCHEMA)
-        schema['properties']['fli1'] = fli_camera_schema('fli1')
-        schema['properties']['cam2'] = qhy_camera_schema('cam2')
+        for camera_id in cameras:
+            schema['properties'][camera_id] = qhy_camera_schema(camera_id)
 
         schema['properties']['pipeline'] = pipeline_schema()
 
@@ -397,7 +343,6 @@ class SkyFlats(TelescopeAction):
             self.status = TelescopeActionStatus.Complete
             return
 
-        # Take an initial bias frame for calibration
         # This starts the autoflat logic, which is run
         # in the received_frame callbacks
         for camera in self._cameras.values():

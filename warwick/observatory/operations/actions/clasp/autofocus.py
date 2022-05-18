@@ -26,82 +26,46 @@ import numpy as np
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import log, validation
 from warwick.observatory.pipeline import configure_standard_validation_schema as pipeline_schema
-from warwick.observatory.camera.fli import configure_validation_schema as fli_camera_schema
 from warwick.observatory.camera.qhy import configure_validation_schema as qhy_camera_schema
 from .mount_helpers import mount_slew_radec, mount_stop
 from .focus_helpers import focus_set, focus_get
-from .camera_helpers import cam_take_images, cam_stop
+from .camera_helpers import cameras, cam_take_images, cam_stop
 from .pipeline_helpers import configure_pipeline
 
 SLEW_TIMEOUT = 120
 FOCUS_TIMEOUT = 300
 
 CONFIG = {
-    'fli1': {
-        # The slope (in hfd / step) on the inside edge of the v-curve
-        'inside_focus_slope': -0.0028806,
+    # The slope (in hfd / step) on the inside edge of the v-curve
+    'inside_focus_slope': -0.0030321,
 
-        # The HFD value where the two v-curve edges cross
-        # This is a more convenient way of representing the position intercept difference
-        'crossing_hfd': 2.9,
+    # The HFD value where the two v-curve edges cross
+    # This is a more convenient way of representing the position intercept difference
+    'crossing_hfd': 3.2,
 
-        # Threshold HFD that is used to filter junk
-        # Real stars should never be smaller than this
-        'minimum_hfd': 3.2,
+    # Threshold HFD that is used to filter junk
+    # Real stars should never be smaller than this
+    'minimum_hfd': 3.2,
 
-        # Number of objects that are required to consider MEDHFD valid
-        'minimum_object_count': 75,
+    # Number of objects that are required to consider MEDHFD valid
+    'minimum_object_count': 75,
 
-        # Aim to reach this HFD on the inside edge of the v-curve
-        # before offsetting to the final focus
-        'target_hfd': 6,
+    # Aim to reach this HFD on the inside edge of the v-curve
+    # before offsetting to the final focus
+    'target_hfd': 6,
 
-        # Number of measurements to take when moving in to find the target HFD
-        'coarse_measure_repeats': 3,
+    # Number of measurements to take when moving in to find the target HFD
+    'coarse_measure_repeats': 3,
 
-        # Number of measurements to take when sampling the target and final HFDs
-        'fine_measure_repeats': 7,
+    # Number of measurements to take when sampling the target and final HFDs
+    'fine_measure_repeats': 7,
 
-        # Number of focuser steps to move when searching for the target HFD
-        'focus_step_size': 1000,
+    # Number of focuser steps to move when searching for the target HFD
+    'focus_step_size': 1000,
 
-        # Number of seconds to add to the exposure time to account for readout + object detection
-        # Consider the frame lost if this is exceeded
-        'max_processing_time': 20
-    },
-
-    'cam2': {
-        # The slope (in hfd / step) on the inside edge of the v-curve
-        'inside_focus_slope': -0.0030321,
-
-        # The HFD value where the two v-curve edges cross
-        # This is a more convenient way of representing the position intercept difference
-        'crossing_hfd': 3.2,
-
-        # Threshold HFD that is used to filter junk
-        # Real stars should never be smaller than this
-        'minimum_hfd': 3.2,
-
-        # Number of objects that are required to consider MEDHFD valid
-        'minimum_object_count': 75,
-
-        # Aim to reach this HFD on the inside edge of the v-curve
-        # before offsetting to the final focus
-        'target_hfd': 6,
-
-        # Number of measurements to take when moving in to find the target HFD
-        'coarse_measure_repeats': 3,
-
-        # Number of measurements to take when sampling the target and final HFDs
-        'fine_measure_repeats': 7,
-
-        # Number of focuser steps to move when searching for the target HFD
-        'focus_step_size': 1000,
-
-        # Number of seconds to add to the exposure time to account for readout + object detection
-        # Consider the frame lost if this is exceeded
-        'max_processing_time': 20
-    }
+    # Number of seconds to add to the exposure time to account for readout + object detection
+    # Consider the frame lost if this is exceeded
+    'max_processing_time': 20
 }
 
 
@@ -124,7 +88,7 @@ CONFIG_SCHEMA = {
         },
         'camera': {
             'type': 'string',
-            'enum': ['fli1', 'cam2']
+            'enum': ['cam1', 'cam2']
         }
     }
 }
@@ -138,8 +102,8 @@ class AutoFocus(TelescopeAction):
 
         # TODO: Support focusing both cameras in parallel
         self._camera_id = config['camera']
-        self._config = CONFIG[self._camera_id]
-        self._focuser_channel = 1 if self._camera_id == 'fli1' else 2
+        self._config = CONFIG
+        self._focuser_channel = 1 if self._camera_id == 'cam1' else 2
         self._focus_measurement = None
 
     @classmethod
@@ -149,8 +113,8 @@ class AutoFocus(TelescopeAction):
         schema.update(CONFIG_SCHEMA)
 
         # TODO: Support focusing both cameras in parallel
-        schema['properties']['fli1'] = fli_camera_schema('fli1')
-        schema['properties']['cam2'] = qhy_camera_schema('cam2')
+        for camera_id in cameras:
+            schema['properties'][camera_id] = qhy_camera_schema(camera_id)
         schema['properties']['pipeline'] = pipeline_schema()
 
         return validation.validation_errors(config_json, schema)
@@ -285,12 +249,14 @@ class AutoFocus(TelescopeAction):
 
         cam_config = {}
         cam_config.update(self.config.get(self._camera_id, {}))
-        if self._camera_id == 'fli1':
-            cam_config['shutter'] = True
+
+        # The current QHY firmware adds an extra exposure time's delay
+        # before returning the first frame. Use the single frame mode instead!
+        cam_config['stream'] = False
 
         # Handle exposures individually
         # This adds a few seconds of overhead when we want to take
-        # multiple samples, but this is the simpler/safer option for nows
+        # multiple samples, but this is the simpler/safer option for now
         samples = []
         while True:
             if len(samples) == requested:

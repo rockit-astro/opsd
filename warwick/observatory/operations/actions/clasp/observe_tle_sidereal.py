@@ -34,10 +34,9 @@ from skyfield.api import Loader, Topos
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import validation
 from warwick.observatory.pipeline import configure_standard_validation_schema as pipeline_schema
-from warwick.observatory.camera.fli import configure_validation_schema as fli_camera_schema
 from warwick.observatory.camera.qhy import configure_validation_schema as qhy_camera_schema
 from .mount_helpers import mount_slew_radec, mount_offset_radec, mount_stop
-from .camera_helpers import cam_take_images, cam_stop
+from .camera_helpers import cameras, cam_take_images, cam_stop
 from .pipeline_helpers import configure_pipeline
 
 SLEW_TIMEOUT = 120
@@ -101,19 +100,21 @@ class ObserveTLESidereal(TelescopeAction):
     def __init__(self, log_name, config):
         super().__init__('Observe TLE', log_name, config)
         self._wait_condition = threading.Condition()
-        self._camera = 'fli1'
+
+        # TODO: Support both cameras
+        self._camera = 'cam1'
 
         # TODO: Validate that end > start
         self._start_date = Time(config['start'])
         self._end_date = Time(config['end'])
 
-        # Calculate effective field size for calculating pointing offsets and times
-        # Ignore a ~300px border around the edges of the field to account for TLE uncertainty
-        window = config.get('fli1', {}).get('window', [1, 8176, 1, 6132])
-        self._field_width = max(window[1] - window[0] - 600, 100) * 1.57 * u.arcsecond
-        self._field_height = max(window[3] - window[2] - 600, 100) * 1.57 * u.arcsecond
+        # TODO: Update for final footprint!
+        self._field_width = 2.5 * u.deg
+        self._field_height = 1.6 * u.deg
 
         self._target = EarthSatellite(config['tle'][1], config['tle'][2], name=config['tle'][0])
+
+        # TODO: Don't hardcode this here!
         self._observer = Topos('28.7603135N', '17.8796168 W', elevation_m=2387)
         self._timescale = Loader('/var/tmp').timescale()
 
@@ -126,8 +127,8 @@ class ObserveTLESidereal(TelescopeAction):
         schema = {}
         schema.update(CONFIG_SCHEMA)
         schema['properties']['pipeline'] = pipeline_schema()
-        schema['properties']['fli1'] = fli_camera_schema('fli1')
-        schema['properties']['cam2'] = qhy_camera_schema('cam2')
+        for camera_id in cameras:
+            schema['properties'][camera_id] = qhy_camera_schema(camera_id)
         return validation.validation_errors(config_json, schema)
 
     def __set_failed_status(self):
@@ -177,7 +178,7 @@ class ObserveTLESidereal(TelescopeAction):
             end_coord = test_coord
 
         # Point in the middle of the start and end
-        points = SkyCoord([start_coord, end_coord], unit=u.degree)
+        points = SkyCoord([start_coord, end_coord], unit=u.deg)
         midpoint = SkyCoord(points.data.mean(), frame=points)
         return midpoint, end_time
 
@@ -247,8 +248,7 @@ class ObserveTLESidereal(TelescopeAction):
             cam_config.update(self.config.get(self._camera, {}))
             cam_config.update({
                 'exposure': WCS_EXPOSURE_TIME.to(u.second).value,
-                'shutter': True,
-                'window': [3065, 5112, 2043, 4090]
+                'stream': False
             })
 
             # Converge on requested position
@@ -301,7 +301,8 @@ class ObserveTLESidereal(TelescopeAction):
                     continue
 
                 # Calculate frame center and offset from expected pointing
-                actual_ra, actual_dec = self._wcs.all_pix2world(1024, 1024, 0, ra_dec_order=True)
+                # TODO: Don't hardcode frame size here!
+                actual_ra, actual_dec = self._wcs.all_pix2world(9600 // 2, 6422 // 2, 0, ra_dec_order=True)
                 actual_coord = SkyCoord(actual_ra, actual_dec, unit=u.degree)
                 offset_ra, offset_dec = actual_coord.spherical_offsets_to(target_coord)
 
@@ -352,10 +353,10 @@ class ObserveTLESidereal(TelescopeAction):
                 self.__set_failed_status()
                 return
 
-            exposure = self.config.get('fli1', {}).get('exposure', -1)
+            exposure = self.config.get(self._camera, {}).get('exposure', -1)
             cam_stop(self.log_name, self._camera, timeout=exposure + 1)
 
-        exposure = self.config.get('fli1', {}).get('exposure', -1)
+        exposure = self.config.get(self._camera, {}).get('exposure', -1)
         cam_stop(self.log_name, self._camera, timeout=exposure + 1)
         mount_stop(self.log_name)
 

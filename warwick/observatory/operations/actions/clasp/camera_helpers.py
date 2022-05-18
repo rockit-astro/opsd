@@ -26,8 +26,7 @@ from warwick.observatory.common import daemons, log
 from warwick.observatory.camera.qhy import CameraStatus, CommandStatus as CamCommandStatus
 
 cameras = {
-    #'cam1': daemons.clasp_camera_1,
-    'fli1': daemons.clasp_camera_1,
+    'cam1': daemons.clasp_camera_1,
     'cam2': daemons.clasp_camera_2,
 }
 

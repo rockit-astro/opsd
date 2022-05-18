@@ -24,8 +24,8 @@ import threading
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import validation
 from warwick.observatory.pipeline import configure_standard_validation_schema as pipeline_schema
-from warwick.observatory.camera.fli import configure_validation_schema as fli_camera_schema
 from warwick.observatory.camera.qhy import configure_validation_schema as qhy_camera_schema
+from .camera_helpers import cameras
 from .focus_helpers import focus_set
 from .mount_helpers import mount_slew_radec, mount_stop
 from .camera_helpers import cam_take_images, cam_stop
@@ -71,7 +71,7 @@ CONFIG_SCHEMA = {
         },
         'camera': {
             'type': 'string',
-            'enum': ['fli1', 'cam2']
+            'enum': ['cam1', 'cam2']
         }
     }
 }
@@ -86,8 +86,8 @@ class FocusSweep(TelescopeAction):
 
         # TODO: Support focusing both cameras in parallel
         self._camera_id = config['camera']
-        self._focuser_channel = 1 if self._camera_id == 'fli1' else 2
-        self._header_keyword = 'TEL' + str(1 if self._camera_id == 'fli1' else 2) + 'FOC'
+        self._focuser_channel = 1 if self._camera_id == 'cam1' else 2
+        self._header_keyword = 'TEL' + str(1 if self._camera_id == 'cam1' else 2) + 'FOC'
 
     @classmethod
     def validate_config(cls, config_json):
@@ -96,8 +96,8 @@ class FocusSweep(TelescopeAction):
         schema.update(CONFIG_SCHEMA)
 
         # TODO: Support focusing both cameras in parallel
-        schema['properties']['fli1'] = fli_camera_schema('fli1')
-        schema['properties']['cam2'] = qhy_camera_schema('cam2')
+        for camera_id in cameras:
+            schema['properties'][camera_id] = qhy_camera_schema(camera_id)
         schema['properties']['pipeline'] = pipeline_schema()
 
         return validation.validation_errors(config_json, schema)

@@ -22,9 +22,8 @@ import astropy.units as u
 from warwick.observatory.common import log, validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.pipeline import configure_standard_validation_schema as pipeline_schema
-from warwick.observatory.camera.fli import configure_validation_schema as fli_camera_schema
 from warwick.observatory.camera.qhy import configure_validation_schema as qhy_camera_schema
-from .camera_helpers import cam_take_images, cam_stop
+from .camera_helpers import cameras, cam_take_images, cam_stop
 from .pipeline_helpers import configure_pipeline
 from .mount_helpers import mount_slew_altaz
 
@@ -57,7 +56,7 @@ CONFIG_SCHEMA = {
         'onsky': {'type': 'boolean'},  # optional
         'camera': {
             'type': 'string',
-            'enum': ['fli1', 'cam2']
+            'enum': ['cam1', 'cam2']
         }
     }
 }
@@ -79,8 +78,8 @@ class ObserveAltAzField(TelescopeAction):
         schema = {}
         schema.update(CONFIG_SCHEMA)
         schema['properties']['pipeline'] = pipeline_schema()
-        schema['properties']['fli1'] = fli_camera_schema('fli1')
-        schema['properties']['cam2'] = qhy_camera_schema('cam2')
+        for camera_id in cameras:
+            schema['properties'][camera_id] = qhy_camera_schema(camera_id)
         return validation.validation_errors(config_json, schema)
 
     def __set_failed_status(self):
