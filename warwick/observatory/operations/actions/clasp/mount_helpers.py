@@ -22,7 +22,7 @@ import Pyro4
 from warwick.observatory.common import daemons, log
 from warwick.observatory.lmount import CommandStatus as TelCommandStatus
 
-PARK_ALTAZ = (35, 180)
+PARK_POSITION = 'stow'
 PARK_TIMEOUT = 30
 HOME_TIMEOUT = 60
 
@@ -180,5 +180,18 @@ def mount_add_pointing_model_point(log_name, ra_j2000_deg, dec_j2000_deg):
 
 
 def mount_park(log_name):
-    """Park the telescope pointing at zenith"""
-    return mount_slew_altaz(log_name, PARK_ALTAZ[0], PARK_ALTAZ[1], False, PARK_TIMEOUT)
+    """Park the telescope in the stow position"""
+    try:
+        with daemons.clasp_telescope.connect(timeout=PARK_TIMEOUT) as lmountd:
+            status = lmountd.park(PARK_POSITION)
+            if status != TelCommandStatus.Succeeded:
+                log.error(log_name, 'Failed to park mount')
+                return False
+            return True
+    except Pyro4.errors.CommunicationError:
+        log.error(log_name, 'Failed to communicate with mount daemon')
+        return False
+    except Exception:
+        log.error(log_name, 'Unknown error while parking mount')
+        traceback.print_exc(file=sys.stdout)
+        return False
