@@ -25,7 +25,7 @@ import astropy.wcs as wcs
 
 from warwick.observatory.common import validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
-from .camera_helpers import cam_take_images
+from .camera_helpers import cameras, cam_take_images
 from .mount_helpers import mount_slew_radec, mount_stop, mount_status, mount_add_pointing_model_point
 from .pipeline_helpers import configure_pipeline
 
@@ -53,7 +53,7 @@ CONFIG_SCHEMA = {
         },
         'camera': {
             'type': 'string',
-            'enum': ['cam1', 'cam2']
+            'enum': cameras.keys()
         },
         'exposure': {
             'type': 'number',
@@ -90,7 +90,6 @@ class PointingModelPointing(TelescopeAction):
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
-
         status = mount_status(self.log_name)
         location = EarthLocation(
             lat=status['site_latitude'],
@@ -119,7 +118,8 @@ class PointingModelPointing(TelescopeAction):
             return
 
         cam_config = {
-            'exposure': self.config['exposure']
+            'exposure': self.config['exposure'],
+            'stream': False
         }
 
         attempt = 1

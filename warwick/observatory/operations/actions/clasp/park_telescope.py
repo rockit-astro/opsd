@@ -27,6 +27,7 @@ class ParkTelescope(TelescopeAction):
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
+        self.set_task('Parking')
         if not mount_stop(self.log_name):
             self.status = TelescopeActionStatus.Error
             return

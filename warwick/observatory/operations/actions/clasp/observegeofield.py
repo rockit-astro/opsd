@@ -22,8 +22,8 @@ import astropy.units as u
 from warwick.observatory.common import log, validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.pipeline import configure_standard_validation_schema as pipeline_schema
-from warwick.observatory.camera.qhy import configure_validation_schema as camera_schema
-from .camera_helpers import cam_take_images, cam_stop
+from warwick.observatory.camera.qhy import configure_validation_schema as qhy_camera_schema
+from .camera_helpers import cameras, cam_take_images, cam_stop
 from .pipeline_helpers import configure_pipeline
 from .mount_helpers import mount_slew_hadec
 
@@ -32,7 +32,7 @@ SLEW_TIMEOUT = 120
 CONFIG_SCHEMA = {
     'type': 'object',
     'additionalProperties': False,
-    'required': ['start', 'end', 'ha', 'dec', 'cameras', 'exposure'],
+    'required': ['start', 'end', 'ha', 'dec'],
     'properties': {
         'type': {'type': 'string'},
         'start': {
@@ -54,17 +54,6 @@ CONFIG_SCHEMA = {
             'maximum': 85
         },
         'onsky': {'type': 'boolean'},  # optional
-        'cameras': {
-            'type': 'array',
-            'items': {
-                'type': 'string',
-                'enum': ['cam1']
-            }
-        },
-        'exposure': {
-            'type': 'number',
-            'minimum': 0
-        }
     }
 }
 
@@ -75,7 +64,6 @@ class ObserveGEOField(TelescopeAction):
         super().__init__('Observe GEO field', log_name, config)
         self._start_date = Time(config['start'])
         self._end_date = Time(config['end'])
-        self._cam_last_image = {}
         self._wait_condition = threading.Condition()
 
     @classmethod
@@ -84,6 +72,8 @@ class ObserveGEOField(TelescopeAction):
         schema = {}
         schema.update(CONFIG_SCHEMA)
         schema['properties']['pipeline'] = pipeline_schema()
+        for camera_id in cameras:
+            schema['properties'][camera_id] = qhy_camera_schema(camera_id)
         return validation.validation_errors(config_json, schema)
 
     def __set_failed_status(self):
@@ -120,14 +110,14 @@ class ObserveGEOField(TelescopeAction):
         self.set_task('Waiting for observation start')
         self.__wait_until_or_aborted(self._start_date)
 
-        if self.config.get('onsky', True) and not self.dome_is_open:
-            log.error(self.log_name, 'Aborting: dome is not open')
-            self.status = TelescopeActionStatus.Error
-            return
-
         acquire_start = Time.now()
         if acquire_start > self._end_date:
             self.status = TelescopeActionStatus.Complete
+            return
+
+        if self.config.get('onsky', True) and not self.dome_is_open:
+            log.error(self.log_name, 'Aborting: dome is not open')
+            self.status = TelescopeActionStatus.Error
             return
 
         self.set_task('Slewing to field')
@@ -138,17 +128,12 @@ class ObserveGEOField(TelescopeAction):
 
         self.set_task('Ends {}'.format(self._end_date.strftime('%H:%M:%S')))
 
-        cam_config = {
-            'exposure': self.config['exposure']
-        }
+        for camera_id in cameras:
+            if camera_id in self.config:
+                cam_take_images(self.log_name, camera_id, 0, self.config[camera_id])
 
-        for c in self.config['cameras']:
-            if not cam_take_images(self.log_name, c, 0, cam_config):
-                self.status = TelescopeActionStatus.Error
-
-        # Attempt to recover stalled cameras after 1 minute dead time
+        # Keep track of things while we observe
         while True:
-            # Keep track of things while we observe
             with self._wait_condition:
                 self._wait_condition.wait(10)
 
@@ -164,8 +149,9 @@ class ObserveGEOField(TelescopeAction):
             if self.status != TelescopeActionStatus.Incomplete:
                 break
 
-        for c in self.config['cameras']:
-            cam_stop(self.log_name, c)
+        for camera_id in cameras:
+            if camera_id in self.config:
+                cam_stop(self.log_name, camera_id)
 
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
