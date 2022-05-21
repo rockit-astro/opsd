@@ -202,7 +202,7 @@ class CameraWrapper:
 
             if self.state != last_state:
                 archive = self.state == AutoFlatState.Saving
-                if not pipeline_enable_archiving(self._log_name, self.camera_id.upper(), archive):
+                if not pipeline_enable_archiving(self._log_name, self.camera_id, archive):
                     self.state = AutoFlatState.Error
                     return
 
