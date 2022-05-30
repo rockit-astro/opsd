@@ -15,7 +15,7 @@ jobs:
         run: |
           # CentOS 7's git version is too old for the checkout action so fetch from ius instead
           yum -y install https://repo.ius.io/ius-release-el7.rpm https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm
-          yum -y install git224 rpm-build rpm-sign rsync make python3-rpm-macros python36-devel
+          yum -y install git236 rpm-build rpm-sign rsync make python3-rpm-macros python3-devel
       - name: Clone Repository
         uses: actions/checkout@v2
 
