@@ -54,6 +54,10 @@ CONFIG_SCHEMA = {
             'maximum': 360
         },
         'onsky': {'type': 'boolean'},  # optional
+        'stagger': {  # optional
+            'type': 'number',
+            'minimum': 0
+        },
     }
 }
 
@@ -65,6 +69,7 @@ class ObserveAltAzField(TelescopeAction):
         self._start_date = Time(config['start'])
         self._end_date = Time(config['end'])
         self._wait_condition = threading.Condition()
+        self._camera_stagger = config.get('stagger', 0)
 
     @classmethod
     def validate_config(cls, config_json):
@@ -128,9 +133,14 @@ class ObserveAltAzField(TelescopeAction):
 
         self.set_task('Ends {}'.format(self._end_date.strftime('%H:%M:%S')))
 
+        first = True
         for camera_id in cameras:
             if camera_id in self.config:
+                if not first and self._camera_stagger > 0:
+                    with self._wait_condition:
+                        self._wait_condition.wait(self._camera_stagger)
                 cam_take_images(self.log_name, camera_id, 0, self.config[camera_id])
+                first = False
 
         # Keep track of things while we observe
         while True:
