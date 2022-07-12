@@ -22,16 +22,11 @@ import Pyro4
 from warwick.observatory.common import daemons, log
 from warwick.observatory.pipeline import CommandStatus as PipelineCommandStatus
 
-pipelines = {
-    'cam1': daemons.clasp_pipeline_1,
-    'cam2': daemons.clasp_pipeline_2,
-}
-
 
 def pipeline_enable_archiving(log_name, camera_id, enabled):
     """Toggle archiving on or off for a given arm name"""
     try:
-        with pipelines[camera_id].connect() as pipeline:
+        with daemons.clasp_pipeline.connect() as pipeline:
             return pipeline.set_archive(camera_id.upper(), enabled) == PipelineCommandStatus.Succeeded
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with pipeline daemon')
@@ -46,10 +41,8 @@ def configure_pipeline(log_name, config, quiet=False):
     """Update pipeline configuration"""
     try:
         success = True
-        for daemon in pipelines.values():
-            with daemon.connect() as pipeline:
-                success = pipeline.configure(config, quiet=quiet) == PipelineCommandStatus.Succeeded and success
-        return success
+        with daemons.clasp_pipeline.connect() as pipeline:
+            return pipeline.configure(config, quiet=quiet) == PipelineCommandStatus.Succeeded
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with pipeline daemon')
         return False
