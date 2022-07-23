@@ -132,6 +132,7 @@ class CameraWrapper:
         # Set the camera config once at the start to avoid duplicate changes
         cam_config = {}
         cam_config.update(self._camera_config)
+        cam_config['stream'] = False
 
         if not cam_configure(self._log_name, self.camera_id, cam_config):
             self.state = AutoFocusState.Failed
@@ -149,11 +150,8 @@ class CameraWrapper:
 
     def _take_image(self):
         """Tells the camera to take an exposure."""
-        # The current QHY firmware adds an extra exposure time's delay before returning the first frame.
-        # Using single frame mode adds even more delay (due to processing time not being overlapped with
-        # the next exposure), so add an extra frame's latency here
         self._expected_complete = datetime.datetime.utcnow() \
-            + datetime.timedelta(seconds=2*self._camera_config['exposure'] + self._config['max_processing_time'])
+            + datetime.timedelta(seconds=self._camera_config['exposure'] + self._config['max_processing_time'])
 
         if not cam_take_images(self._log_name, self.camera_id, quiet=True):
             self._set_failed()
