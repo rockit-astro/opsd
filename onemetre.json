@@ -137,17 +137,32 @@
       ]
     },
     {
-      "label": "UPS",
+      "label": "UPS Status",
       "sensors": [
         {
-          "label": "Status",
+          "label": "UPS1",
           "sensor": "w1m_power",
-          "parameter": "main_ups_status"
+          "parameter": "ups1_status"
         },
         {
-          "label": "Battery",
+          "label": "UPS2",
           "sensor": "w1m_power",
-          "parameter": "main_ups_battery_remaining"
+          "parameter": "ups2_status"
+        }
+      ]
+    },
+    {
+      "label": "UPS Battery",
+      "sensors": [
+        {
+          "label": "UPS1",
+          "sensor": "w1m_power",
+          "parameter": "ups1_battery_remaining"
+        },
+        {
+          "label": "UPS2",
+          "sensor": "w1m_power",
+          "parameter": "ups2_battery_remaining"
         }
       ]
     },
