@@ -25,4 +25,6 @@ from .skyflats import SkyFlats
 from .slew_telescope import SlewTelescope
 from .slew_telescope_altaz import SlewTelescopeAltAz
 from .wait import Wait
+from .wait_for_dome import WaitForDome
 from .wait_until import WaitUntil
+

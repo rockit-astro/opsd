@@ -1,5 +1,5 @@
 Name:           python3-warwick-onemetre-operations
-Version:        20210916
+Version:        20220807
 Release:        0
 License:        GPL3
 Summary:        W1m specific operations code
