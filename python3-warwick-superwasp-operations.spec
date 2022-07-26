@@ -5,8 +5,8 @@ License:        GPL3
 Summary:        SuperWASP specific operations code
 Url:            https://github.com/warwick-one-metre/opsd
 BuildArch:      noarch
-Requires:       python3-warwick-observatory-operations, python3-astropy, python3-warwick-observatory-talon
-Requires:       python3-warwick-observatory-camera-atik, python3-warwick-observatory-pipeline
+Requires:       python3-warwick-observatory-operations python3-astropy python3-warwick-observatory-talon
+Requires:       python3-warwick-observatory-camera-atik python3-warwick-observatory-pipeline
 
 %description
 

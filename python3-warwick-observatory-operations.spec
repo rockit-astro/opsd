@@ -5,7 +5,7 @@ License:        GPL3
 Summary:        Common backend code for the operations daemon
 Url:            https://github.com/warwick-one-metre/opsd
 BuildArch:      noarch
-Requires:       python3-jsonschema, python3-skyfield
+Requires:       python3-astropy python3-jsonschema python3-skyfield
 
 %description
 
