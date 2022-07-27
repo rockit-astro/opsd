@@ -133,11 +133,36 @@
           "label": "DAS1",
           "sensor": "clasp_diskspace_1",
           "parameter": "data_fs_available_bytes"
+        }
+      ]
+    },
+    {
+      "label": "UPS Status",
+      "sensors": [
+        {
+          "label": "UPS1",
+          "sensor": "w1m_power",
+          "parameter": "ups1_status"
         },
         {
-          "label": "DAS2",
-          "sensor": "clasp_diskspace_2",
-          "parameter": "data_fs_available_bytes"
+          "label": "UPS2",
+          "sensor": "w1m_power",
+          "parameter": "ups2_status"
+        }
+      ]
+    },
+    {
+      "label": "UPS Battery",
+      "sensors": [
+        {
+          "label": "UPS1",
+          "sensor": "clasp_power",
+          "parameter": "ups1_battery_remaining"
+        },
+        {
+          "label": "UPS2",
+          "sensor": "clasp_power",
+          "parameter": "ups2_battery_remaining"
         }
       ]
     },
