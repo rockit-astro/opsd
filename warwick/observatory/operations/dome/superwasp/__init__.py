@@ -16,10 +16,6 @@
 
 """Interface to allow the dome controller to operate SuperWASP's roof"""
 
-from warwick.observatory.talon import (
-    CommandStatus as TelCommandStatus,
-    RoofState,
-    RoofHeartbeatState)
 from warwick.observatory.operations.constants import DomeStatus
 from warwick.observatory.common import daemons, validation
 
@@ -83,48 +79,19 @@ class DomeInterface:
         self._heartbeat_close_timeout = dome_config_json['heartbeat_close_timeout']
 
     def query_status(self):
-        with self._daemon.connect() as dome:
-            status = dome.report_status()
-
-        if status['roof_heartbeat_state'] == RoofHeartbeatState.Tripped:
-            return DomeStatus.Timeout
-
-        if status['roof_state'] in [RoofState.Opening, RoofState.Closing]:
-            return DomeStatus.Moving
-
-        if status['roof_state'] == RoofState.Closed:
-            return DomeStatus.Closed
-
         return DomeStatus.Open
 
     def ping_heartbeat(self):
         print('roof: sending heartbeat ping')
-        with self._daemon.connect() as teld:
-            ret = teld.set_heartbeat_timer(self._heartbeat_timeout)
-            return ret == TelCommandStatus.Succeeded
+        return True
 
     def disable_heartbeat(self):
         print('roof: disabling heartbeat')
-        with self._daemon.connect() as teld:
-            ret = teld.set_heartbeat_timer(0)
-            return ret == TelCommandStatus.Succeeded
+        return True
 
     def close(self):
         print('roof: sending heartbeat ping before closing')
-        with self._daemon.connect() as teld:
-            teld.set_heartbeat_timer(self._heartbeat_close_timeout)
-
-        print('roof: closing')
-        with self._daemon.connect(timeout=self._close_timeout) as teld:
-            ret = teld.close_roof()
-        return ret == TelCommandStatus.Succeeded
+        return True
 
     def open(self):
-        print('roof: sending heartbeat ping before opening')
-        with self._daemon.connect() as teld:
-            teld.set_heartbeat_timer(self._heartbeat_open_timeout)
-
-        print('dome: opening')
-        with self._daemon.connect(timeout=self._open_timeout) as teld:
-            ret = teld.open_roof()
-        return ret == TelCommandStatus.Succeeded
+        return True
