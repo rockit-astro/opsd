@@ -23,14 +23,37 @@ from astropy.time import Time
 import astropy.units as u
 import Pyro4
 from warwick.observatory.common import daemons, log
-from warwick.observatory.camera.atik import CameraStatus, CommandStatus as CamCommandStatus
+from warwick.observatory.camera.qhy import CameraStatus, CommandStatus as CamCommandStatus
 
 cameras = {
-#    '1': daemons.superwasp_cam1,
-    '2': daemons.superwasp_cam2,
-    '3': daemons.superwasp_cam3,
-#    '4': daemons.superwasp_cam4
+    'cam1': daemons.superwasp_cam1,
+    'cam2': daemons.superwasp_cam2,
+    'cam3': daemons.superwasp_cam3,
+    'cam4': daemons.superwasp_cam4,
 }
+
+
+def cam_configure(log_name, camera_id, config=None, quiet=False):
+    """Set camera configuration
+       config is assumed to contain a dictionary of camera
+       configuration that has been validated by the camera schema.
+    """
+    try:
+        with cameras[camera_id].connect() as cam:
+            if config:
+                status = cam.configure(config, quiet=quiet)
+
+            if status != CamCommandStatus.Succeeded:
+                log.error(log_name, 'Failed to configure camera ' + camera_id)
+                return False
+            return True
+    except Pyro4.errors.CommunicationError:
+        log.error(log_name, 'Failed to communicate with camera ' + camera_id)
+        return False
+    except Exception:
+        log.error(log_name, 'Unknown error with camera ' + camera_id)
+        traceback.print_exc(file=sys.stdout)
+        return False
 
 
 def cam_take_images(log_name, camera_id, count=1, config=None, quiet=False):

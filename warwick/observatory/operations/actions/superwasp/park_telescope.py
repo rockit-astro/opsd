@@ -17,7 +17,7 @@
 """Telescope action to park the telescope"""
 
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
-from warwick.observatory.operations.actions.superwasp.telescope_helpers import tel_stop, tel_park
+from .telescope_helpers import tel_stop, tel_park
 
 
 class ParkTelescope(TelescopeAction):

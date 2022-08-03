@@ -22,7 +22,6 @@ import astropy.units as u
 from warwick.observatory.common import log, validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.pipeline import configure_standard_validation_schema as pipeline_schema
-from warwick.observatory.camera.atik import configure_validation_schema as camera_schema
 from .camera_helpers import cam_take_images, cam_stop
 from .pipeline_helpers import configure_pipeline
 from .telescope_helpers import tel_slew_hadec

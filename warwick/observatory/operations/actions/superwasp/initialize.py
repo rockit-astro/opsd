@@ -22,7 +22,7 @@ import Pyro4
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import log
 
-from warwick.observatory.camera.atik import CommandStatus as CamCommandStatus
+from warwick.observatory.camera.qhy import CommandStatus as CamCommandStatus
 from .telescope_helpers import tel_status, tel_park
 from .camera_helpers import cameras, cam_status
 
@@ -57,7 +57,7 @@ class Initialize(TelescopeAction):
         except Pyro4.errors.CommunicationError:
             log.error(self.log_name, 'Failed to communicate with camera ' + camera_id)
             return False
-        except Exception as e:
+        except Exception:
             log.error(self.log_name, 'Unknown error with camera ' + camera_id)
             traceback.print_exc(file=sys.stdout)
             return False
@@ -80,7 +80,7 @@ class Initialize(TelescopeAction):
 
                 locked[camera_id] = status['temperature_locked']
 
-            if all([locked[k] for k in locked]):
+            if all(locked[k] for k in locked):
                 break
 
             with self._cooling_condition:
