@@ -27,7 +27,7 @@ def pipeline_enable_archiving(log_name, camera_id, enabled):
     """Toggle archiving on or off for a given arm name"""
     try:
         with daemons.superwasp_pipeline.connect() as pipeline:
-            return pipeline.set_archive(camera_id, enabled) == PipelineCommandStatus.Succeeded
+            return pipeline.set_archive(camera_id.upper(), enabled) == PipelineCommandStatus.Succeeded
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with pipeline daemon')
         return False
