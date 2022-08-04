@@ -10,7 +10,7 @@
   "site_elevation": 2350,
   "dome": {
     "module": "warwick.observatory.operations.dome.superwasp",
-    "daemon": "superwasp_telescope",
+    "daemon": "superwasp_roof",
     "open_timeout": 60,
     "close_timeout": 120,
     "heartbeat_timeout": 60,

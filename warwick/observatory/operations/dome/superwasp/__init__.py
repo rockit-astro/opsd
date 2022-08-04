@@ -18,6 +18,7 @@
 
 from warwick.observatory.operations.constants import DomeStatus
 from warwick.observatory.common import daemons, validation
+from warwick.observatory.roof import RoofStatus, HeartbeatStatus, CommandStatus as RoofCommandStatus
 
 CONFIG_SCHEMA = {
     'type': 'object',
@@ -79,19 +80,49 @@ class DomeInterface:
         self._heartbeat_close_timeout = dome_config_json['heartbeat_close_timeout']
 
     def query_status(self):
+        with self._daemon.connect() as roof:
+            status = roof.status()
+
+        if status['heartbeat_status'] == HeartbeatStatus.TimedOut:
+            return DomeStatus.Timeout
+
+        if status['status'] == RoofStatus.Closed:
+            return DomeStatus.Closed
+
+        if status['status'] in [RoofStatus.Opening, RoofStatus.Closing]:
+            return DomeStatus.Moving
+
         return DomeStatus.Open
 
     def ping_heartbeat(self):
         print('roof: sending heartbeat ping')
-        return True
+        with self._daemon.connect() as roof:
+            ret = roof.set_heartbeat_timer(self._heartbeat_timeout)
+            return ret == RoofCommandStatus.Succeeded
 
     def disable_heartbeat(self):
         print('roof: disabling heartbeat')
-        return True
+        with self._daemon.connect() as roof:
+            ret = roof.set_heartbeat_timer(0)
+            return ret == RoofCommandStatus.Succeeded
 
     def close(self):
         print('roof: sending heartbeat ping before closing')
-        return True
+        with self._daemon.connect() as roof:
+            roof.set_heartbeat_timer(self._heartbeat_close_timeout)
+
+        print('roof: closing')
+        with self._daemon.connect(timeout=self._close_timeout) as roof:
+            ret = roof.close()
+        return ret == RoofCommandStatus.Succeeded
 
     def open(self):
-        return True
+        print('roof: sending heartbeat ping before opening')
+        with self._daemon.connect() as roof:
+            roof.set_heartbeat_timer(self._heartbeat_open_timeout)
+
+        print('roof: opening')
+        with self._daemon.connect(timeout=self._open_timeout) as roof:
+            ret = roof.open()
+
+        return ret == RoofCommandStatus.Succeeded
