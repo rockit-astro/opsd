@@ -153,8 +153,23 @@
       "label": "Disk Space",
       "sensors": [
         {
-          "label": "Bytes",
-          "sensor": "superwasp_diskspace",
+          "label": "DAS1",
+          "sensor": "superwasp_diskspace_cam1",
+          "parameter": "data_fs_available_bytes"
+        },
+        {
+          "label": "DAS2",
+          "sensor": "superwasp_diskspace_cam2",
+          "parameter": "data_fs_available_bytes"
+        },
+        {
+          "label": "DAS3",
+          "sensor": "superwasp_diskspace_cam3",
+          "parameter": "data_fs_available_bytes"
+        },
+        {
+          "label": "DAS4",
+          "sensor": "superwasp_diskspace_cam4",
           "parameter": "data_fs_available_bytes"
         }
       ]
