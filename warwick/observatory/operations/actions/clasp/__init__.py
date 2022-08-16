@@ -23,6 +23,7 @@ from .focussweep import FocusSweep
 from .observealtazfield import ObserveAltAzField
 from .observegeofield import ObserveGEOField
 from .observe_tle_sidereal import ObserveTLESidereal
+from .observe_tle_tracking import ObserveTLETracking
 from .pointing_model_pointing import PointingModelPointing
 from .skyflats import SkyFlats
 from .slew_telescope import SlewTelescope
