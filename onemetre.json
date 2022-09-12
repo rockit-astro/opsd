@@ -81,7 +81,7 @@
       "sensors": [
         {
           "label": "W1m",
-          "sensor": "w1m_roomalert",
+          "sensor": "w1m_domealert",
           "parameter": "internal_humidity"
         }
       ]
@@ -116,7 +116,7 @@
       "sensors": [
         {
           "label": "W1m",
-          "sensor": "w1m_roomalert",
+          "sensor": "w1m_domealert",
           "parameter": "security_system_safe"
         }
       ]

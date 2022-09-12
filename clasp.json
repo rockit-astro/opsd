@@ -81,7 +81,7 @@
       "sensors": [
         {
           "label": "CLASP",
-          "sensor": "clasp_roomalert",
+          "sensor": "clasp_domealert",
           "parameter": "internal_humidity"
         }
       ]
