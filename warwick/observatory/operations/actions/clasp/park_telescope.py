@@ -17,7 +17,8 @@
 """Telescope action to park the telescope"""
 
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
-from .mount_helpers import mount_stop, mount_park
+from warwick.observatory.lmount import MountState
+from .mount_helpers import mount_status, mount_stop, mount_park
 
 
 class ParkTelescope(TelescopeAction):
@@ -27,13 +28,15 @@ class ParkTelescope(TelescopeAction):
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
-        self.set_task('Parking')
-        if not mount_stop(self.log_name):
-            self.status = TelescopeActionStatus.Error
-            return
+        status = mount_status(self.log_name)
+        if status and 'state' in status and status['state'] != MountState.Disabled:
+            self.set_task('Parking')
+            if not mount_stop(self.log_name):
+                self.status = TelescopeActionStatus.Error
+                return
 
-        if not mount_park(self.log_name):
-            self.status = TelescopeActionStatus.Error
-            return
+            if not mount_park(self.log_name):
+                self.status = TelescopeActionStatus.Error
+                return
 
         self.status = TelescopeActionStatus.Complete
