@@ -137,11 +137,6 @@ class Config:
                     yield jsonschema.ValidationError('{} is not a valid python module'.format(instance))
 
                 module = import_module(instance)
-                init_action = getattr(module, 'Initialize', None)
-                if not isclass(init_action) or not issubclass(init_action, TelescopeAction):
-                    yield jsonschema.ValidationError(
-                        '{} does not define the required Initalize action'.format(instance))
-
                 park_action = getattr(module, 'ParkTelescope', None)
                 if not isclass(park_action) or not issubclass(park_action, TelescopeAction):
                     yield jsonschema.ValidationError(

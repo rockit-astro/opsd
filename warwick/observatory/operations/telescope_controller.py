@@ -33,14 +33,12 @@ class TelescopeController:
     def __init__(self, config, dome_controller):
         self._config = config
         self._wait_condition = threading.Condition()
-
-        self._initialize_action = config.actions['Initialize']
         self._park_action = config.actions['ParkTelescope']
 
         self._action_lock = threading.Lock()
         self._action_queue = collections.deque()
         self._active_action = None
-        self._initialized = False
+        self._idle = True
 
         self._status_updated = datetime.datetime.utcnow()
 
@@ -101,15 +99,12 @@ class TelescopeController:
                     # out of actions (and should shutdown the telescope), or are idling
                     # waiting for new actions to appear (and should do nothing)
                     if self._active_action is None:
-                        # We have something to do, but may need to initialize the telescope
                         if self._action_queue:
-                            if not self._initialized:
-                                self._active_action = self._initialize_action(self._config.log_name)
-                            else:
-                                self._active_action = self._action_queue.pop()
-                                self._current_action_number += 1
+                            self._idle = False
+                            self._active_action = self._action_queue.pop()
+                            self._current_action_number += 1
                         # We have nothing left to do, so stow the telescope until next time
-                        elif not self._action_queue and self._initialized and \
+                        elif not self._action_queue and not self._idle and \
                                 self._requested_mode != OperationsMode.Manual:
                             self._active_action = self._park_action(self._config.log_name)
                             self._action_count = self._current_action_number = 0
@@ -133,10 +128,8 @@ class TelescopeController:
                             if dome_is_open != self._dome_was_open:
                                 self._active_action.dome_status_changed(dome_is_open)
                         else:
-                            if isinstance(self._active_action, self._initialize_action):
-                                self._initialized = True
-                            elif isinstance(self._active_action, self._park_action):
-                                self._initialized = False
+                            if isinstance(self._active_action, self._park_action):
+                                self._idle = True
 
                             self._active_action = None
                             continue

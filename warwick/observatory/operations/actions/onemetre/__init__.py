@@ -17,7 +17,6 @@
 """opsd common code"""
 
 from .autofocus import AutoFocus
-from .initialize import Initialize
 from .focussweep import FocusSweep
 from .observe_field import ObserveField
 from .park_telescope import ParkTelescope
@@ -27,4 +26,3 @@ from .slew_telescope_altaz import SlewTelescopeAltAz
 from .wait import Wait
 from .wait_for_dome import WaitForDome
 from .wait_until import WaitUntil
-
