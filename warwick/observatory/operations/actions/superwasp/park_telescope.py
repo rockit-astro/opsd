@@ -17,7 +17,8 @@
 """Telescope action to park the telescope"""
 
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
-from .telescope_helpers import tel_stop, tel_park
+from warwick.observatory.talon import TelState
+from .telescope_helpers import tel_status, tel_stop, tel_park
 
 
 class ParkTelescope(TelescopeAction):
@@ -27,12 +28,16 @@ class ParkTelescope(TelescopeAction):
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
-        if not tel_stop(self.log_name):
-            self.status = TelescopeActionStatus.Error
-            return
 
-        if not tel_park(self.log_name):
-            self.status = TelescopeActionStatus.Error
-            return
+        status = tel_status(self.log_name)
+        if status and 'state' in status and status['state'] != TelState.Absent:
+            self.set_task('Parking telescope')
+            if not tel_stop(self.log_name):
+                self.status = TelescopeActionStatus.Error
+                return
+
+            if not tel_park(self.log_name):
+                self.status = TelescopeActionStatus.Error
+                return
 
         self.status = TelescopeActionStatus.Complete

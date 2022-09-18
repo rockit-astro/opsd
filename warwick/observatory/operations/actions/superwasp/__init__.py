@@ -16,10 +16,11 @@
 
 """opsd common code"""
 
-from .initialize import Initialize
 from .park_telescope import ParkTelescope
+from .initialize_cameras import InitializeCameras
 from .observegeofield import ObserveGEOField
 from .skyflats import SkyFlats
+from .shutdown_cameras import ShutdownCameras
 from .slew_telescope import SlewTelescope
 from .slew_telescope_altaz import SlewTelescopeAltAz
 from .wait import Wait
