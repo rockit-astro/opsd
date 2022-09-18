@@ -19,19 +19,22 @@
 import threading
 from astropy.time import Time
 import astropy.units as u
-from warwick.observatory.common import log, validation
+from warwick.observatory.common import validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
+from warwick.observatory.camera.qhy import CameraStatus, configure_validation_schema as qhy_camera_schema
 from warwick.observatory.pipeline import configure_standard_validation_schema as pipeline_schema
-from .camera_helpers import cam_take_images, cam_stop
+from .camera_helpers import cameras, cam_status, cam_stop, cam_take_images
 from .pipeline_helpers import configure_pipeline
 from .telescope_helpers import tel_slew_hadec
 
 SLEW_TIMEOUT = 120
+CAM_STOP_TIMEOUT = 10
+LOOP_INTERVAL = 30
 
 CONFIG_SCHEMA = {
     'type': 'object',
     'additionalProperties': False,
-    'required': ['start', 'end', 'ha', 'dec', 'cameras', 'exposure'],
+    'required': ['start', 'end', 'ha', 'dec'],
     'properties': {
         'type': {'type': 'string'},
         'start': {
@@ -52,18 +55,9 @@ CONFIG_SCHEMA = {
             'minimum': -30,
             'maximum': 85
         },
-        'onsky': {'type': 'boolean'},  # optional
-        'cameras': {
-            'type': 'array',
-            'items': {
-                'type': 'string',
-                'enum': ['1', '2', '3', '4']
-            }
-        },
-        'exposure': {
-            'type': 'number',
-            'minimum': 0
-        }
+        'onsky': {'type': 'boolean'}  # optional
+
+        # NOTE: cameras, pipeline added in validate_config method
     }
 }
 
@@ -76,6 +70,7 @@ class ObserveGEOField(TelescopeAction):
         self._end_date = Time(config['end'])
         self._cam_last_image = {}
         self._wait_condition = threading.Condition()
+        self._camera_ids = [c for c in cameras if c in self.config]
 
     @classmethod
     def validate_config(cls, config_json):
@@ -83,6 +78,8 @@ class ObserveGEOField(TelescopeAction):
         schema = {}
         schema.update(CONFIG_SCHEMA)
         schema['properties']['pipeline'] = pipeline_schema()
+        for camera_id in cameras:
+            schema['properties'][camera_id] = qhy_camera_schema(camera_id)
         return validation.validation_errors(config_json, schema)
 
     def __set_failed_status(self):
@@ -98,16 +95,15 @@ class ObserveGEOField(TelescopeAction):
         :param target: Astropy time to wait for
         :return: True if the time has been reached, false if aborted
         """
-        onsky = self.config.get('onsky', True)
         while True:
             remaining = target_time - Time.now()
-            if remaining < 0 or self.aborted or (onsky and not self.dome_is_open):
+            if remaining < 0 or self.aborted:
                 break
 
             with self._wait_condition:
                 self._wait_condition.wait(min(10, remaining.to(u.second).value))
 
-        return not self.aborted and self.dome_is_open
+        return not self.aborted
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
@@ -116,59 +112,43 @@ class ObserveGEOField(TelescopeAction):
             self.__set_failed_status()
             return
 
-        self.set_task('Waiting for observation start')
-        self.__wait_until_or_aborted(self._start_date)
+        if Time.now() < self._start_date:
+            self.set_task(f'Waiting until {self._start_date.strftime("%H:%M:%S")}')
+            self.__wait_until_or_aborted(self._start_date)
 
-        if self.config.get('onsky', True) and not self.dome_is_open:
-            log.error(self.log_name, 'Aborting: dome is not open')
-            self.status = TelescopeActionStatus.Error
-            return
+        if Time.now() < self._end_date:
+            self.set_task('Slewing to field')
+            if not tel_slew_hadec(self.log_name, self.config['ha'], self.config['dec'], SLEW_TIMEOUT):
+                print('failed to slew to target')
+                self.__set_failed_status()
+                return
 
-        acquire_start = Time.now()
-        if acquire_start > self._end_date:
-            self.status = TelescopeActionStatus.Complete
-            return
+        while Time.now() < self._end_date and not self.aborted:
+            # Monitor cameras and roof status
+            # TODO: Monitor for camera timeouts?
+            active = not self.dome_is_open or not self.config.get('onsky', True)
 
-        self.set_task('Slewing to field')
-        if not tel_slew_hadec(self.log_name, self.config['ha'], self.config['dec'], SLEW_TIMEOUT):
-            print('failed to slew to target')
-            self.__set_failed_status()
-            return
+            if active:
+                self.set_task(f'Observing until {self._end_date.strftime("%H:%M:%S")}')
+            else:
+                self.set_task(f'Waiting until {self._end_date.strftime("%H:%M:%S")}')
 
-        self.set_task('Ends {}'.format(self._end_date.strftime('%H:%M:%S')))
+            for camera_id in self._camera_ids:
+                status = cam_status(self.log_name, camera_id)
+                if status['state'] in [CameraStatus.Acquiring, CameraStatus.Reading] and not active:
+                    cam_stop(self.log_name, camera_id, CAM_STOP_TIMEOUT)
+                elif status['state'] == CameraStatus.Idle and active:
+                    cam_take_images(self.log_name, camera_id, 0, self.config[camera_id])
 
-        cam_config = {
-            'exposure': self.config['exposure']
-        }
-
-        for c in self.config['cameras']:
-            if not cam_take_images(self.log_name, c, 0, cam_config):
-                self.status = TelescopeActionStatus.Error
-
-        # Attempt to recover stalled cameras after 1 minute dead time
-        while True:
-            # Keep track of things while we observe
             with self._wait_condition:
-                self._wait_condition.wait(10)
+                self._wait_condition.wait(LOOP_INTERVAL)
 
-            if self.aborted or Time.now() > self._end_date:
-                self.status = TelescopeActionStatus.Complete
-
-            if self.config.get('onsky', True) and not self.dome_is_open:
-                log.error(self.log_name, 'Dome is not open')
-                self.status = TelescopeActionStatus.Error
-
-            # TODO: Monitor for camera errors
-
-            if self.status != TelescopeActionStatus.Incomplete:
-                break
-
-        for c in self.config['cameras']:
-            cam_stop(self.log_name, c)
+        for camera_id in self._camera_ids:
+            cam_stop(self.log_name, camera_id)
 
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
-        print('got frame from camera ' + headers.get('CAMID', '-1'))
+        print('got frame from ' + headers.get('CAMID', 'UNKNOWN'))
 
     def abort(self):
         """Notification called when the telescope is stopped by the user"""
