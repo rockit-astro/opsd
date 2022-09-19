@@ -19,6 +19,8 @@
 import sys
 import threading
 import traceback
+from astropy.time import Time
+import astropy.units as u
 from warwick.observatory.common import log
 
 
@@ -80,6 +82,24 @@ class TelescopeAction:
             traceback.print_exc(file=sys.stdout)
             log.error(self.log_name, 'Exception in action run thread')
             self.status = TelescopeActionStatus.Error
+
+    def wait_until_time_or_aborted(self, target_time, wait_condition, aborted_check_interval=10):
+        """
+        Wait until a specified time or the action has been aborted
+        :param target: Astropy time to wait for
+        :param wait_condition: Thread.Condition to use for waiting
+        :param aborted_check_interval number of seconds between aborted checks (if not triggered by condition)
+        :return: True if the time has been reached, false if aborted
+        """
+        while True:
+            remaining = target_time - Time.now()
+            if remaining < 0 or self.aborted:
+                break
+
+            with wait_condition:
+                wait_condition.wait(min(aborted_check_interval, remaining.to(u.second).value))
+
+        return not self.aborted
 
     def run_thread(self):
         """

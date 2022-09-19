@@ -26,8 +26,8 @@ PARK_ALTAZ = (89.9, 0)
 PARK_TIMEOUT = 30
 
 
-def tel_status(log_name):
-    """Returns the telescope status dict or None on error"""
+def mount_status(log_name):
+    """Returns the mount status dict or None on error"""
     try:
         with daemons.superwasp_telescope.connect() as teld:
             return teld.report_status()
@@ -40,8 +40,8 @@ def tel_status(log_name):
         return None
 
 
-def tel_slew_radec(log_name, ra, dec, tracking, timeout):
-    """Slew the telescope to a given RA, Dec"""
+def mount_slew_radec(log_name, ra, dec, tracking, timeout=60):
+    """Slew the mount to a given RA, Dec"""
     try:
         with daemons.superwasp_telescope.connect(timeout=timeout) as teld:
             if tracking:
@@ -62,8 +62,8 @@ def tel_slew_radec(log_name, ra, dec, tracking, timeout):
         return False
 
 
-def tel_offset_radec(log_name, ra, dec, timeout):
-    """Offset the telescope by a given RA, Dec"""
+def mount_offset_radec(log_name, ra, dec, timeout=60):
+    """Offset the mount by a given RA, Dec"""
     try:
         with daemons.superwasp_telescope.connect(timeout=timeout) as teld:
             status = teld.offset_radec(ra, dec)
@@ -80,8 +80,8 @@ def tel_offset_radec(log_name, ra, dec, timeout):
         return False
 
 
-def tel_slew_altaz(log_name, alt, az, tracking, timeout):
-    """Slew the telescope to a given Alt, Az"""
+def mount_slew_altaz(log_name, alt, az, tracking, timeout=60):
+    """Slew the mount to a given Alt, Az"""
     try:
         with daemons.superwasp_telescope.connect(timeout=timeout) as teld:
             if tracking:
@@ -102,8 +102,8 @@ def tel_slew_altaz(log_name, alt, az, tracking, timeout):
         return False
 
 
-def tel_slew_hadec(log_name, ha, dec, timeout):
-    """Slew the telescope to a given HA, Dec"""
+def mount_slew_hadec(log_name, ha, dec, timeout=60):
+    """Slew the mount to a given HA, Dec"""
     try:
         with daemons.superwasp_telescope.connect(timeout=timeout) as teld:
             status = teld.slew_hadec(ha, dec)
@@ -120,8 +120,8 @@ def tel_slew_hadec(log_name, ha, dec, timeout):
         return False
 
 
-def tel_stop(log_name):
-    """Stop the telescope tracking or movement"""
+def mount_stop(log_name):
+    """Stop the mount tracking or movement"""
     try:
         with daemons.superwasp_telescope.connect() as teld:
             teld.stop()
@@ -135,6 +135,6 @@ def tel_stop(log_name):
         return False
 
 
-def tel_park(log_name):
-    """Park the telescope pointing at zenith"""
-    return tel_slew_altaz(log_name, PARK_ALTAZ[0], PARK_ALTAZ[1], False, PARK_TIMEOUT)
+def mount_park(log_name):
+    """Park the mount pointing at zenith"""
+    return mount_slew_altaz(log_name, PARK_ALTAZ[0], PARK_ALTAZ[1], False, PARK_TIMEOUT)
