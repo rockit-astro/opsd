@@ -14,83 +14,60 @@
 # You should have received a copy of the GNU General Public License
 # along with opsd.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Telescope action to slew the telescope to a given alt az and add a pointing model point"""
+"""Telescope action to measure a pointing model point at a given alt az"""
+
+# pylint: disable=too-many-branches
 
 import threading
-
+from astropy import wcs
 from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.time import Time
 import astropy.units as u
-import astropy.wcs as wcs
-
 from warwick.observatory.common import validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cameras, cam_take_images
 from .mount_helpers import mount_slew_radec, mount_stop, mount_status, mount_add_pointing_model_point
 from .pipeline_helpers import configure_pipeline
-
-SLEW_TIMEOUT = 120
+from .schema_helpers import camera_science_schema
 
 # Amount of time to allow for readout + object detection + wcs solution
 # Consider the frame lost if this is exceeded
 MAX_PROCESSING_TIME = 45 * u.s
 
-CONFIG_SCHEMA = {
-    'type': 'object',
-    'additionalProperties': False,
-    'required': ['alt', 'az', 'camera', 'exposure', 'refx', 'refy'],
-    'properties': {
-        'type': {'type': 'string'},
-        'az': {
-            'type': 'number',
-            'minimum': 0,
-            'maximum': 360
-        },
-        'alt': {
-            'type': 'number',
-            'minimum': 0,
-            'maximum': 90
-        },
-        'camera': {
-            'type': 'string',
-            'enum': cameras.keys()
-        },
-        'exposure': {
-            'type': 'number',
-            'minimum': 0
-        },
-        'refx': {
-            'type': 'number',
-            'minimum': 0
-        },
-        'refy': {
-            'type': 'number',
-            'minimum': 0
-        }
-    }
-}
-
-
-class WCSStatus:
-    Inactive, WaitingForWCS, WCSFailed, WCSComplete = range(4)
-
 
 class PointingModelPointing(TelescopeAction):
-    """Telescope action to slew the telescope to a given alt az and add a pointing model point"""
+    """
+    Telescope action to measure a pointing model point at a given alt az
+
+    Example block:
+    {
+        "type": "PointingModelPointing",
+        "alt": 50,
+        "az": 180,
+        "refx": 4800,
+        "refy": 3211,
+        "camera": "cam1",
+        "cam1": { # Must match "camera"
+            "exposure": 1,
+            "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
+            # Also supports optional temperature, gain, offset, stream (advanced options)
+        }
+    }
+    """
     def __init__(self, log_name, config):
         super().__init__('Pointing Model', log_name, config)
         self._wait_condition = threading.Condition()
         self._wcs_status = WCSStatus.Inactive
         self._wcs = None
-
-    @classmethod
-    def validate_config(cls, config_json):
-        """Returns an iterator of schema violations for the given json configuration"""
-        return validation.validation_errors(config_json, CONFIG_SCHEMA)
+        self._camera_id = config['camera']
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
         status = mount_status(self.log_name)
+        if status is None:
+            self.status = TelescopeActionStatus.Error
+            return
+
         location = EarthLocation(
             lat=status['site_latitude'],
             lon=status['site_longitude'],
@@ -101,8 +78,11 @@ class PointingModelPointing(TelescopeAction):
                           location=location, obstime=Time.now())
 
         self.set_task('Slewing')
-        if not mount_slew_radec(self.log_name, coords.icrs.ra.to_value(u.deg), coords.icrs.dec.to_value(u.deg),
-                                True, SLEW_TIMEOUT):
+        if not mount_slew_radec(self.log_name, coords.icrs.ra.to_value(u.deg), coords.icrs.dec.to_value(u.deg), True):
+            self.status = TelescopeActionStatus.Complete
+            return
+
+        if not self.dome_is_open:
             self.status = TelescopeActionStatus.Complete
             return
 
@@ -117,15 +97,13 @@ class PointingModelPointing(TelescopeAction):
             self.status = TelescopeActionStatus.Error
             return
 
-        cam_config = {
-            'exposure': self.config['exposure'],
-            'stream': False
-        }
+        cam_config = self.config[self._camera_id].copy()
+        cam_config['stream'] = False
 
         attempt = 1
         while not self.aborted and self.dome_is_open:
             if attempt > 1:
-                self.set_task('Measuring position (attempt {})'.format(attempt))
+                self.set_task(f'Measuring position (attempt {attempt})')
             else:
                 self.set_task('Measuring position')
 
@@ -138,7 +116,7 @@ class PointingModelPointing(TelescopeAction):
                 return
 
             # Wait for new frame
-            expected_complete = Time.now() + self.config['exposure'] + MAX_PROCESSING_TIME
+            expected_complete = Time.now() + cam_config['exposure'] * u.s + MAX_PROCESSING_TIME
 
             while True:
                 with self._wait_condition:
@@ -165,7 +143,7 @@ class PointingModelPointing(TelescopeAction):
                 continue
 
             actual_ra, actual_dec = self._wcs.all_pix2world(self.config['refx'], self.config['refy'],
-                                                            0, ra_dec_order=True)
+                                                            1, ra_dec_order=True)
 
             mount_add_pointing_model_point(self.log_name, actual_ra.item(), actual_dec.item())
             self.status = TelescopeActionStatus.Complete
@@ -200,3 +178,58 @@ class PointingModelPointing(TelescopeAction):
                     self._wcs_status = WCSStatus.WCSFailed
 
                 self._wait_condition.notify_all()
+
+    @classmethod
+    def validate_config(cls, config_json):
+        """Returns an iterator of schema violations for the given json configuration"""
+        schema = {
+            'type': 'object',
+            'additionalProperties': False,
+            'required': ['alt', 'az', 'refx', 'refy', 'camera'],
+            'properties': {
+                'type': {'type': 'string'},
+                'alt': {
+                    'type': 'number',
+                    'minimum': 0,
+                    'maximum': 90
+                },
+                'az': {
+                    'type': 'number',
+                    'minimum': 0,
+                    'maximum': 360
+                },
+                'refx': {
+                    'type': 'number',
+                    'minimum': 1,
+                    'maximum': 9600
+                },
+                'refy': {
+                    'type': 'number',
+                    'minimum': 1,
+                    'maximum': 6422
+                },
+                'camera': {
+                    'type': 'string',
+                    'enum': cameras.keys()
+                }
+            },
+            'anyOf': []
+        }
+
+        for camera_id in cameras:
+            schema['properties'][camera_id] = camera_science_schema()
+            schema['anyOf'].append({
+                'properties': {
+                    'camera': {
+                        'enum': [camera_id]
+                    },
+                    camera_id: camera_science_schema()
+                },
+                'required': [camera_id]
+            })
+
+        return validation.validation_errors(config_json, schema)
+
+
+class WCSStatus:
+    Inactive, WaitingForWCS, WCSFailed, WCSComplete = range(4)

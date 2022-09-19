@@ -22,6 +22,8 @@ import Pyro4
 from warwick.observatory.common import daemons, log
 from warwick.observatory.focuslynx import FocuserStatus, CommandStatus as FocCommandStatus
 
+FOCUS_TIMEOUT=300
+
 channels = {
     'cam1': 1,
     'cam2': 2,
@@ -37,41 +39,35 @@ def focus_get(log_name, camera_id):
             channel = channels[camera_id]
             status = focusd.report_status()
             if status['status_' + str(channel)] != FocuserStatus.Idle:
-                print('Focuser status is not idle')
                 log.error(log_name, 'Focuser status is not idle')
                 return None
             return status['current_steps_' + str(channel)]
     except Pyro4.errors.CommunicationError:
-        print('Failed to communicate with focuser daemon')
         log.error(log_name, 'Failed to communicate with focuser daemon')
         return None
     except Exception:
-        print('Unknown error while querying focuser position')
         traceback.print_exc(file=sys.stdout)
         log.error(log_name, 'Unknown error while querying focuser position')
         return None
 
 
-def focus_set(log_name, camera_id, position, timeout):
+def focus_set(log_name, camera_id, position, timeout=FOCUS_TIMEOUT):
     """Set the given focuser channel to the given position"""
     try:
         with daemons.clasp_focus.connect(timeout=timeout) as focusd:
             channel = channels[camera_id]
-            print('moving focus {} to {}'.format(channel, position))
+            print(f'moving focus {channel} to {position}')
             status = focusd.set_focus(channel, position)
             if status != FocCommandStatus.Succeeded:
-                print('Failed to set focuser position')
                 log.error(log_name, 'Failed to set focuser position')
                 return False
             return True
     except Pyro4.errors.CommunicationError:
-        print('Failed to communicate with focuser daemon')
         log.error(log_name, 'Failed to communicate with focuser daemon')
         return False
     except Exception:
-        print('Unknown error while configuring focuser')
-        traceback.print_exc(file=sys.stdout)
         log.error(log_name, 'Unknown error while configuring focuser')
+        traceback.print_exc(file=sys.stdout)
         return False
 
 
@@ -82,11 +78,9 @@ def focus_stop(log_name, camera_id):
             focusd.stop_channel(channels[camera_id])
         return True
     except Pyro4.errors.CommunicationError:
-        print('Failed to communicate with focuser daemon')
         log.error(log_name, 'Failed to communicate with focuser daemon')
         return False
     except Exception:
-        print('Unknown error while stopping focuser')
-        traceback.print_exc(file=sys.stdout)
         log.error(log_name, 'Unknown error while stopping focuser')
+        traceback.print_exc(file=sys.stdout)
         return False

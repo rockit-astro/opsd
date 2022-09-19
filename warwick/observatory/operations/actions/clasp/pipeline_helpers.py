@@ -40,7 +40,6 @@ def pipeline_enable_archiving(log_name, camera_id, enabled):
 def configure_pipeline(log_name, config, quiet=False):
     """Update pipeline configuration"""
     try:
-        success = True
         with daemons.clasp_pipeline.connect() as pipeline:
             return pipeline.configure(config, quiet=quiet) == PipelineCommandStatus.Succeeded
     except Pyro4.errors.CommunicationError:

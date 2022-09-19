@@ -25,6 +25,7 @@ from warwick.observatory.lmount import CommandStatus as TelCommandStatus
 PARK_POSITION = 'stow'
 PARK_TIMEOUT = 30
 HOME_TIMEOUT = 60
+SLEW_TIMEOUT = 60
 
 
 def mount_init(log_name):
@@ -69,7 +70,7 @@ def mount_status(log_name):
         return None
 
 
-def mount_slew_radec(log_name, ra, dec, tracking, timeout):
+def mount_slew_radec(log_name, ra, dec, tracking, timeout=SLEW_TIMEOUT):
     """Slew the mount to a given RA, Dec"""
     try:
         with daemons.clasp_telescope.connect(timeout=timeout) as lmountd:
@@ -91,7 +92,7 @@ def mount_slew_radec(log_name, ra, dec, tracking, timeout):
         return False
 
 
-def mount_offset_radec(log_name, ra, dec, timeout):
+def mount_offset_radec(log_name, ra, dec, timeout=SLEW_TIMEOUT):
     """Offset the mount by a given RA, Dec"""
     try:
         with daemons.clasp_telescope.connect(timeout=timeout) as lmountd:
@@ -109,7 +110,7 @@ def mount_offset_radec(log_name, ra, dec, timeout):
         return False
 
 
-def mount_slew_altaz(log_name, alt, az, tracking, timeout):
+def mount_slew_altaz(log_name, alt, az, tracking, timeout=SLEW_TIMEOUT):
     """Slew the mount to a given Alt, Az"""
     try:
         with daemons.clasp_telescope.connect(timeout=timeout) as lmountd:
@@ -131,7 +132,7 @@ def mount_slew_altaz(log_name, alt, az, tracking, timeout):
         return False
 
 
-def mount_slew_hadec(log_name, ha, dec, timeout):
+def mount_slew_hadec(log_name, ha, dec, timeout=SLEW_TIMEOUT):
     """Slew the mount to a given HA, Dec"""
     try:
         with daemons.clasp_telescope.connect(timeout=timeout) as lmountd:
@@ -149,7 +150,7 @@ def mount_slew_hadec(log_name, ha, dec, timeout):
         return False
 
 
-def mount_track_tle(log_name, tle, timeout):
+def mount_track_tle(log_name, tle, timeout=SLEW_TIMEOUT):
     """Slew the mount to track a given TLE"""
     try:
         with daemons.clasp_telescope.connect(timeout=timeout) as lmountd:

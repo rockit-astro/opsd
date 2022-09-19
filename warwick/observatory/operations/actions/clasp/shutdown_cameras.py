@@ -24,14 +24,13 @@ import threading
 import traceback
 import Pyro4
 from astropy.time import Time
-import astropy.units as u
 from warwick.observatory.common import daemons, validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import log
 from warwick.observatory.camera.qhy import CameraStatus, CoolerMode
 from warwick.observatory.lmount import MountState
 from .camera_helpers import cameras, cam_configure, cam_status, cam_stop
-from .mount_helpers import mount_park, mount_status, mount_stop
+from .mount_helpers import mount_status, mount_park
 
 CAMERA_SHUTDOWN_TIMEOUT = 10
 CAMERA_STOP_TIMEOUT = 30
@@ -39,33 +38,18 @@ CAMERA_STOP_TIMEOUT = 30
 # Interval (in seconds) to poll the camera for temperature lock
 CAMERA_CHECK_INTERVAL = 10
 
-CONFIG_SCHEMA = {
-    'type': 'object',
-    'additionalProperties': False,
-    'required': [],
-    'properties': {
-        'type': {'type': 'string'},
-
-        # Optional
-        'cameras': {
-            'type': 'array',
-            'items': {
-                'type': 'string',
-                'enum': cameras.keys()
-            }
-        },
-
-        # Optional
-        'start': {
-            'type': 'string',
-            'format': 'date-time',
-        }
-    }
-}
-
 
 class ShutdownCameras(TelescopeAction):
-    """Telescope action to warm and power off the camereas"""
+    """
+    Telescope action to park the mount and warm then power off the cameras.
+
+    Example block:
+    {
+        "type": "ShutdownCameras",
+        "start": "2022-09-18T22:20:00", # Optional: defaults to immediately
+        "cameras": ["cam1"] # Optional: defaults to all cameras
+    }
+    """
     def __init__(self, log_name, config):
         super().__init__('Shutdown Cameras', log_name, config)
         if 'start' in config:
@@ -79,27 +63,6 @@ class ShutdownCameras(TelescopeAction):
             self._camera_ids = cameras.keys()
 
         self._wait_condition = threading.Condition()
-
-    @classmethod
-    def validate_config(cls, config_json):
-        """Returns an iterator of schema violations for the given json configuration"""
-        return validation.validation_errors(config_json, CONFIG_SCHEMA)
-
-    def __wait_until_or_aborted(self, target_time):
-        """
-        Wait until a specified time or the action has been aborted
-        :param target: Astropy time to wait for
-        :return: True if the time has been reached, false if aborted
-        """
-        while True:
-            remaining = target_time - Time.now()
-            if remaining < 0 or self.aborted:
-                break
-
-            with self._wait_condition:
-                self._wait_condition.wait(min(10, remaining.to(u.second).value))
-
-        return not self.aborted
 
     def __shutdown_camera(self, camera_id):
         """Disables a given camera"""
@@ -119,12 +82,11 @@ class ShutdownCameras(TelescopeAction):
         """Thread that runs the hardware actions"""
         if self._start_date is not None and Time.now() < self._start_date:
             self.set_task(f'Waiting until {self._start_date.strftime("%H:%M:%S")}')
-            self.__wait_until_or_aborted(self._start_date)
+            self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
 
         status = mount_status(self.log_name)
         if status and 'state' in status and status['state'] != MountState.Disabled:
             self.set_task('Parking mount')
-            mount_stop(self.log_name)
             mount_park(self.log_name)
 
         # Warm cameras
@@ -179,3 +141,30 @@ class ShutdownCameras(TelescopeAction):
         super().abort()
         with self._wait_condition:
             self._wait_condition.notify_all()
+
+    @classmethod
+    def validate_config(cls, config_json):
+        """Returns an iterator of schema violations for the given json configuration"""
+        return validation.validation_errors(config_json, {
+            'type': 'object',
+            'additionalProperties': False,
+            'required': [],
+            'properties': {
+                'type': {'type': 'string'},
+
+                # Optional
+                'cameras': {
+                    'type': 'array',
+                    'items': {
+                        'type': 'string',
+                        'enum': cameras.keys()
+                    }
+                },
+
+                # Optional
+                'start': {
+                    'type': 'string',
+                    'format': 'date-time',
+                }
+            }
+        })

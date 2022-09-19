@@ -19,77 +19,57 @@
 # pylint: disable=too-many-branches
 
 import threading
-
 from astropy.time import Time
 import astropy.units as u
 from skyfield.sgp4lib import EarthSatellite
 from skyfield.api import Loader, Topos
-
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import validation
-from warwick.observatory.pipeline import configure_standard_validation_schema as pipeline_schema
-from warwick.observatory.camera.qhy import configure_validation_schema as qhy_camera_schema
 from .mount_helpers import mount_track_tle, mount_stop, mount_status
 from .camera_helpers import cameras, cam_take_images, cam_stop
 from .pipeline_helpers import configure_pipeline
+from .schema_helpers import pipeline_science_schema, camera_science_schema
 
-TLE_ACQUIRE_TIMEOUT = 60
-
-# Note: pipeline and camera schemas are inserted in the validate_config method
-CONFIG_SCHEMA = {
-    'type': 'object',
-    'additionalProperties': False,
-    'required': ['tle', 'start', 'end'],
-    'properties': {
-        'type': {'type': 'string'},
-        'tle': {
-            'type': 'array',
-            'maxItems': 3,
-            'minItems': 3,
-            'items': [
-                {
-                    'type': 'string',
-                },
-                {
-                    'type': 'string',
-                },
-                {
-                    'type': 'string',
-                }
-            ]
-        },
-        'start': {
-            'type': 'string',
-            'format': 'date-time',
-        },
-        'end': {
-            'type': 'string',
-            'format': 'date-time',
-        },
-        'onsky': {'type': 'boolean'}  # optional
-    }
-}
+LOOP_INTERVAL = 5
+MIN_ALTITUDE = 10
 
 
 class ObserveTLETracking(TelescopeAction):
-    """Telescope action to observe a satellite tracking its TLE"""
+    """
+    Telescope action to observe a satellite tracking its TLE
+
+    Example block:
+    {
+        "type": "ObserveTLETracking",
+        "start": "2022-09-18T22:20:00",
+        "end": "2022-09-18T22:30:00",
+        "onsky": true, # Optional: defaults to true
+        "tle": [
+            "0 EGS (AJISAI)",
+            "1 16908U 86061A   22263.84101197 -.00000106  00000-0 -62449-4 0  9999",
+            "2 16908  50.0120  25.7334 0011166 305.3244 183.4486 12.44497094310376"
+        ],
+        "cam<1..2>": { # Optional: cameras that aren't listed won't be used
+            "exposure": 1,
+            "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
+            # Also supports optional temperature, gain, offset, stream (advanced options)
+        },
+        "pipeline": {
+           "prefix": "16908",
+           "object": "EGS (AJISAI)", # Optional: defaults to the TLE name without leading "0 "
+           "archive": ["CAM1"] # Optional: defaults to the cameras defined in the action
+           # Also supports optional subdirectory (advanced option)
+       }
+    }
+    """
     def __init__(self, log_name, config):
         super().__init__('Observe TLE', log_name, config)
         self._wait_condition = threading.Condition()
 
-        # TODO: Validate that end > start
         self._start_date = Time(config['start'])
         self._end_date = Time(config['end'])
 
-    @classmethod
-    def validate_config(cls, config_json):
-        """Returns an iterator of schema violations for the given json configuration"""
-        schema = {}
-        schema.update(CONFIG_SCHEMA)
-        schema['properties']['pipeline'] = pipeline_schema()
-        for camera_id in cameras:
-            schema['properties'][camera_id] = qhy_camera_schema(camera_id)
-        return validation.validation_errors(config_json, schema)
+        self._camera_ids = [c for c in cameras if c in self.config]
 
     def __set_failed_status(self):
         """Sets self.status to Complete if aborted otherwise Error"""
@@ -98,37 +78,36 @@ class ObserveTLETracking(TelescopeAction):
         else:
             self.status = TelescopeActionStatus.Error
 
-    def __wait_until_or_aborted(self, target_time):
-        """
-        Wait until a specified time or the action has been aborted
-        :param target: Astropy time to wait for
-        :return: True if the time has been reached, false if aborted
-        """
-        while True:
-            remaining = target_time - Time.now()
-            if remaining < 0 or self.aborted or not self.dome_is_open:
-                break
-
-            with self._wait_condition:
-                self._wait_condition.wait(min(10, remaining.to(u.second).value))
-
-        return not self.aborted and self.dome_is_open
-
     def run_thread(self):
         """Thread that runs the hardware actions"""
         # Configure pipeline immediately so the dashboard can show target name etc
-        if not configure_pipeline(self.log_name, self.config.get('pipeline', {}), quiet=True):
+        pipeline_science_config = self.config['pipeline'].copy()
+        pipeline_science_config['type'] = 'SCIENCE'
+        if 'object' not in pipeline_science_config:
+            name = self.config['tle'][0]
+            if name.startswith('0 '):
+                name = name[2:]
+            pipeline_science_config['object'] = name
+
+        if 'archive' not in pipeline_science_config:
+            pipeline_science_config['archive'] = [camera_id.upper() for camera_id in self._camera_ids]
+
+        if not configure_pipeline(self.log_name, pipeline_science_config, quiet=True):
             self.__set_failed_status()
             return
 
         self.set_task('Waiting for observation start')
-        self.__wait_until_or_aborted(self._start_date)
+        self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
         if self.aborted or Time.now() > self._end_date:
             self.status = TelescopeActionStatus.Complete
             return
 
         # Make sure the target is above the horizon
         status = mount_status(self.log_name)
+        if status is None:
+            self.status = TelescopeActionStatus.Error
+            return
+
         observer = Topos(
             f'{status["site_latitude"]} N',
             f'{status["site_longitude"]} E',
@@ -147,20 +126,20 @@ class ObserveTLETracking(TelescopeAction):
                 break
 
             alt, *_ = (target - observer).at(timescale.from_astropy(now)).altaz()
-            if alt.to(u.deg) > 10 * u.deg:
+            if alt.to(u.deg) > MIN_ALTITUDE * u.deg:
                 break
 
             print(f'Target alt is {alt}')
             self.set_task('Waiting for target to rise')
             with self._wait_condition:
-                self._wait_condition.wait(5)
+                self._wait_condition.wait(LOOP_INTERVAL)
 
         require_onsky = self.config.get('onsky', True)
         if require_onsky and not self.dome_is_open:
             self.set_task('Waiting for dome')
             while not self.dome_is_open and Time.now() <= self._end_date and not self.aborted:
                 with self._wait_condition:
-                    self._wait_condition.wait(5)
+                    self._wait_condition.wait(LOOP_INTERVAL)
 
         if self.aborted or Time.now() > self._end_date:
             self.status = TelescopeActionStatus.Complete
@@ -170,7 +149,7 @@ class ObserveTLETracking(TelescopeAction):
         # This keeps the action simple, and we already expect the person reducing the data
         # to have to manually discard frames blocked by the dome walls, W1m dome, etc.
         self.set_task('Acquiring target')
-        if not mount_track_tle(self.log_name, self.config['tle'], TLE_ACQUIRE_TIMEOUT):
+        if not mount_track_tle(self.log_name, self.config['tle']):
             print('failed to track target')
             self.__set_failed_status()
             return
@@ -188,11 +167,11 @@ class ObserveTLETracking(TelescopeAction):
                 break
 
             status = mount_status(self.log_name)
-            if status.get('alt', 0) < 10:
+            if status.get('alt', 0) < MIN_ALTITUDE:
                 break
 
             with self._wait_condition:
-                self._wait_condition.wait(5)
+                self._wait_condition.wait(LOOP_INTERVAL)
 
         mount_stop(self.log_name)
         for camera_id in cameras:
@@ -215,3 +194,52 @@ class ObserveTLETracking(TelescopeAction):
 
         with self._wait_condition:
             self._wait_condition.notify_all()
+
+    @classmethod
+    def validate_config(cls, config_json):
+        """Returns an iterator of schema violations for the given json configuration"""
+        schema = {
+            'type': 'object',
+            'additionalProperties': False,
+            'required': ['tle', 'start', 'end', 'pipeline'],
+            'properties': {
+                'type': {'type': 'string'},
+                'tle': {
+                    'type': 'array',
+                    'maxItems': 3,
+                    'minItems': 3,
+                    'items': [
+                        {
+                            'type': 'string',
+                        },
+                        {
+                            'type': 'string',
+                            'minLength': 69,
+                            'maxLength': 69
+                        },
+                        {
+                            'type': 'string',
+                            'minLength': 69,
+                            'maxLength': 69
+                        }
+                    ]
+                },
+                'start': {
+                    'type': 'string',
+                    'format': 'date-time',
+                },
+                'end': {
+                    'type': 'string',
+                    'format': 'date-time',
+                },
+                'pipeline': pipeline_science_schema(),
+                'onsky': {'type': 'boolean'}
+            }
+        }
+
+        schema['properties']['pipeline']['required'].remove('object')
+
+        for camera_id in cameras:
+            schema['properties'][camera_id] = camera_science_schema()
+
+        return validation.validation_errors(config_json, schema)

@@ -36,32 +36,18 @@ CAMERA_CHECK_INTERVAL = 10
 # Exit with an error if temperatures haven't locked after this many seconds
 CAMERA_COOLING_TIMEOUT = 900
 
-CONFIG_SCHEMA = {
-    'type': 'object',
-    'additionalProperties': False,
-    'required': ['cameras'],
-    'properties': {
-        'type': {'type': 'string'},
-
-        'cameras': {
-            'type': 'array',
-            'items': {
-                'type': 'string',
-                'enum': cameras.keys()
-            }
-        },
-
-        # Optional
-        'start': {
-            'type': 'string',
-            'format': 'date-time',
-        }
-    }
-}
-
 
 class InitializeCameras(TelescopeAction):
-    """Telescope action to power on and cool the cameras"""
+    """
+    Telescope action to power on and cool the cameras.
+
+    Example block:
+    {
+        "type": "InitializeCameras",
+        "start": "2022-09-18T22:20:00", # Optional: defaults to immediately
+        "cameras": ["cam1", "cam2"]
+    }
+    """
     def __init__(self, log_name, config):
         super().__init__('Initializing Cameras', log_name, config)
         if 'start' in config:
@@ -70,27 +56,6 @@ class InitializeCameras(TelescopeAction):
             self._start_date = None
 
         self._wait_condition = threading.Condition()
-
-    @classmethod
-    def validate_config(cls, config_json):
-        """Returns an iterator of schema violations for the given json configuration"""
-        return validation.validation_errors(config_json, CONFIG_SCHEMA)
-
-    def __wait_until_or_aborted(self, target_time):
-        """
-        Wait until a specified time or the action has been aborted
-        :param target: Astropy time to wait for
-        :return: True if the time has been reached, false if aborted
-        """
-        while True:
-            remaining = target_time - Time.now()
-            if remaining < 0 or self.aborted:
-                break
-
-            with self._wait_condition:
-                self._wait_condition.wait(min(10, remaining.to(u.second).value))
-
-        return not self.aborted
 
     def __initialize_camera(self, camera_id):
         """Initializes a given camera and resets configuration"""
@@ -147,7 +112,7 @@ class InitializeCameras(TelescopeAction):
         """Thread that runs the hardware actions"""
         if self._start_date is not None and Time.now() < self._start_date:
             self.set_task(f'Waiting until {self._start_date.strftime("%H:%M:%S")}')
-            self.__wait_until_or_aborted(self._start_date)
+            self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
 
         # Power cameras on if needed
         switched = False
@@ -185,3 +150,29 @@ class InitializeCameras(TelescopeAction):
         super().abort()
         with self._wait_condition:
             self._wait_condition.notify_all()
+
+    @classmethod
+    def validate_config(cls, config_json):
+        """Returns an iterator of schema violations for the given json configuration"""
+        return validation.validation_errors(config_json, {
+            'type': 'object',
+            'additionalProperties': False,
+            'required': ['cameras'],
+            'properties': {
+                'type': {'type': 'string'},
+
+                'cameras': {
+                    'type': 'array',
+                    'items': {
+                        'type': 'string',
+                        'enum': cameras.keys()
+                    }
+                },
+
+                # Optional
+                'start': {
+                    'type': 'string',
+                    'format': 'date-time',
+                }
+            }
+        })

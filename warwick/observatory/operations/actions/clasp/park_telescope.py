@@ -16,13 +16,17 @@
 
 """Telescope action to park the telescope"""
 
+import jsonschema
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.lmount import MountState
 from .mount_helpers import mount_status, mount_stop, mount_park
 
 
 class ParkTelescope(TelescopeAction):
-    """Telescope action to park the telescope"""
+    """
+    Internal action to park the telescope once the actions queue is empty.
+    Should not be scheduled manually.
+    """
     def __init__(self, log_name):
         super().__init__('Park Telescope', log_name, {})
 
@@ -40,3 +44,7 @@ class ParkTelescope(TelescopeAction):
                 return
 
         self.status = TelescopeActionStatus.Complete
+
+    @classmethod
+    def validate_config(cls, config_json):
+        return [jsonschema.exceptions.SchemaError('ParkTelescope cannot be scheduled directly')]

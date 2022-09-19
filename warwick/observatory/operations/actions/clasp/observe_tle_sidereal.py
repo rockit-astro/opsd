@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with opsd.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Telescope action to observe sidereally tracked fields to follow an object defined by a Two Line Element orbit"""
+"""Telescope action to observe a GEO object with cam1 by allowing it to trail in front of tracked stars"""
 
 # pylint: disable=too-many-return-statements
 # pylint: disable=too-many-instance-attributes
@@ -22,24 +22,19 @@
 # pylint: disable=too-many-statements
 
 import threading
-
+from astropy import wcs
 from astropy.coordinates import SkyCoord
 from astropy.time import Time, TimeDelta
 import astropy.units as u
-import astropy.wcs as wcs
 import numpy as np
 from skyfield.sgp4lib import EarthSatellite
 from skyfield.api import Loader, Topos
-
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import validation
-from warwick.observatory.pipeline import configure_standard_validation_schema as pipeline_schema
-from warwick.observatory.camera.qhy import configure_validation_schema as qhy_camera_schema
-from .mount_helpers import mount_slew_radec, mount_offset_radec, mount_stop
-from .camera_helpers import cameras, cam_take_images, cam_stop
+from .mount_helpers import mount_slew_radec, mount_status, mount_offset_radec, mount_stop
+from .camera_helpers import cam_take_images, cam_stop
 from .pipeline_helpers import configure_pipeline
-
-SLEW_TIMEOUT = 120
+from .schema_helpers import pipeline_science_schema, camera_science_schema
 
 # Amount of time to allow for readout + object detection + wcs solution
 # Consider the frame lost if this is exceeded
@@ -57,79 +52,47 @@ FIELD_END_SEARCH_STEP = TimeDelta(5, format='sec')
 # Exposure time to use when taking a WCS field image
 WCS_EXPOSURE_TIME = TimeDelta(5, format='sec')
 
-# Note: pipeline and camera schemas are inserted in the validate_config method
-CONFIG_SCHEMA = {
-    'type': 'object',
-    'additionalProperties': False,
-    'required': ['tle', 'start', 'end'],
-    'properties': {
-        'type': {'type': 'string'},
-        'tle': {
-            'type': 'array',
-            'maxItems': 3,
-            'minItems': 3,
-            'items': [
-                {
-                    'type': 'string',
-                },
-                {
-                    'type': 'string',
-                },
-                {
-                    'type': 'string',
-                }
-            ]
-        },
-        'start': {
-            'type': 'string',
-            'format': 'date-time',
-        },
-        'end': {
-            'type': 'string',
-            'format': 'date-time',
-        }
-    }
-}
-
-class WCSStatus:
-    Inactive, WaitingForWCS, WCSFailed, WCSComplete = range(4)
-
 
 class ObserveTLESidereal(TelescopeAction):
-    """Telescope action to observe a GEO object by allowing it to trail in front of tracked stars"""
+    """
+    Telescope action to observe a GEO object with cam1 by allowing it to trail in front of tracked stars
+
+    Example block:
+    {
+        "type": "ObserveTLESidereal",
+        "start": "2022-09-18T22:20:00",
+        "end": "2022-09-18T22:30:00",
+        "tle": [
+            "0 THOR 6",
+            "1 36033U 09058B   22263.78760138 -.00000015  00000-0  00000-0 0  9999",
+            "2 36033   0.0158 227.3607 0002400 347.4358  67.5439  1.00272445 47312"
+        ],
+        "cam1": {
+            "exposure": 1,
+            "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
+            # Also supports optional temperature, gain, offset, stream (advanced options)
+        },
+        "pipeline": {
+           "prefix": "36033",
+           "object": "THOR 6", # Optional: defaults to the TLE name without leading "0 "
+           "archive": ["CAM1"] # Optional: defaults to the cameras defined in the action
+           # Also supports optional subdirectory (advanced option)
+       }
+    }
+    """
     def __init__(self, log_name, config):
         super().__init__('Observe TLE', log_name, config)
         self._wait_condition = threading.Condition()
-
-        # TODO: Support both cameras
         self._camera = 'cam1'
 
-        # TODO: Validate that end > start
         self._start_date = Time(config['start'])
         self._end_date = Time(config['end'])
 
-        # TODO: Update for final footprint!
-        self._field_width = 2.5 * u.deg
-        self._field_height = 1.6 * u.deg
-
-        self._target = EarthSatellite(config['tle'][1], config['tle'][2], name=config['tle'][0])
-
-        # TODO: Don't hardcode this here!
-        self._observer = Topos('28.7603135N', '17.8796168 W', elevation_m=2387)
-        self._timescale = Loader('/var/tmp').timescale()
+        self._field_width = 2.6 * u.deg
+        self._field_height = 1.69 * u.deg
 
         self._wcs_status = WCSStatus.Inactive
-        self._wcs = None
-
-    @classmethod
-    def validate_config(cls, config_json):
-        """Returns an iterator of schema violations for the given json configuration"""
-        schema = {}
-        schema.update(CONFIG_SCHEMA)
-        schema['properties']['pipeline'] = pipeline_schema()
-        for camera_id in cameras:
-            schema['properties'][camera_id] = qhy_camera_schema(camera_id)
-        return validation.validation_errors(config_json, schema)
+        self._wcs_center = None
 
     def __set_failed_status(self):
         """Sets self.status to Complete if aborted otherwise Error"""
@@ -138,17 +101,7 @@ class ObserveTLESidereal(TelescopeAction):
         else:
             self.status = TelescopeActionStatus.Error
 
-    def __target_coord(self, target_time):
-        """
-        Calculate the target RA and Dec at a given time
-        :param time: Astropy time to evaluate
-        :returns: SkyCoord with the target RA and Dec
-        """
-        t = self._timescale.from_astropy(target_time)
-        ra, dec, _ = (self._target - self._observer).at(t).radec()
-        return SkyCoord(ra.to(u.deg), dec.to(u.deg))
-
-    def __field_coord(self, start_time):
+    def __field_coord(self, start_time, observer, target, timescale):
         """
         Calculate the RA, Dec that places the target in the corner of the CCD
         at a given time. Returns the Astropy Time that the target leaves the opposite
@@ -159,7 +112,8 @@ class ObserveTLESidereal(TelescopeAction):
             SkyCoord defining field center
             Time defining field end
         """
-        start_coord = self.__target_coord(start_time)
+
+        start_coord = calculate_target_coord(start_time, observer, target, timescale)
         end_time = start_time
         end_coord = start_coord
 
@@ -169,7 +123,7 @@ class ObserveTLESidereal(TelescopeAction):
             if end_time > self._end_date:
                 break
 
-            test_coord = self.__target_coord(test_time)
+            test_coord = calculate_target_coord(test_time, observer, target, timescale)
             delta_ra, delta_dec = start_coord.spherical_offsets_to(test_coord)
             if np.abs(delta_ra) > self._field_width / np.cos(test_coord.dec) or np.abs(delta_dec) > self._field_height:
                 break
@@ -182,37 +136,48 @@ class ObserveTLESidereal(TelescopeAction):
         midpoint = SkyCoord(points.data.mean(), frame=points)
         return midpoint, end_time
 
-    def __wait_until_or_aborted(self, target_time):
-        """
-        Wait until a specified time or the action has been aborted
-        :param target: Astropy time to wait for
-        :return: True if the time has been reached, false if aborted
-        """
-        while True:
-            remaining = target_time - Time.now()
-            if remaining < 0 or self.aborted or not self.dome_is_open:
-                break
-
-            with self._wait_condition:
-                self._wait_condition.wait(min(10, remaining.to(u.second).value))
-
-        return not self.aborted and self.dome_is_open
-
     def run_thread(self):
         """Thread that runs the hardware actions"""
-
         # Configure pipeline immediately so the dashboard can show target name etc
-        if not configure_pipeline(self.log_name, self.config.get('pipeline', {}), quiet=True):
-            self.__set_failed_status()
+        pipeline_science_config = self.config['pipeline'].copy()
+        pipeline_science_config['type'] = 'SCIENCE'
+        if 'object' not in pipeline_science_config:
+            name = self.config['tle'][0]
+            if name.startswith('0 '):
+                name = name[2:]
+            pipeline_science_config['object'] = name
+
+        if 'archive' not in pipeline_science_config:
+            pipeline_science_config['archive'] = [self._camera.upper()]
+
+        if not configure_pipeline(self.log_name, pipeline_science_config, quiet=True):
+            self.status = TelescopeActionStatus.Error
             return
 
         self.set_task('Waiting for observation start')
-        self.__wait_until_or_aborted(self._start_date)
+        self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
 
         # Remember coordinate offset between pointings
         last_offset_ra = 0
         last_offset_dec = 0
         first_field = True
+
+        status = mount_status(self.log_name)
+        if status is None:
+            self.status = TelescopeActionStatus.Error
+            return
+
+        observer = Topos(
+            f'{status["site_latitude"]} N',
+            f'{status["site_longitude"]} E',
+            elevation_m=status['site_elevation'])
+
+        target = EarthSatellite(
+            self.config['tle'][1],
+            self.config['tle'][2],
+            name=self.config['tle'][0])
+
+        timescale = Loader('/var/tmp').timescale()
 
         while not self.aborted and self.dome_is_open:
             acquire_start = Time.now()
@@ -221,26 +186,26 @@ class ObserveTLESidereal(TelescopeAction):
 
             self.set_task('Acquiring field')
             field_start = acquire_start + SETUP_DELAY
-            target_coord, field_end = self.__field_coord(field_start)
+            target_coord, field_end = self.__field_coord(field_start, observer, target, timescale)
 
             if not mount_slew_radec(self.log_name,
                                     (target_coord.ra + last_offset_ra).to_value(u.deg),
                                     (target_coord.dec + last_offset_dec).to_value(u.deg),
-                                    True, SLEW_TIMEOUT):
+                                    True):
                 print('failed to slew to target')
                 self.__set_failed_status()
                 return
 
             # Take a frame to solve field center
-            pipeline_config = {}
-            pipeline_config.update(self.config.get('pipeline', {}))
-            pipeline_config.update({
+            pipeline_junk_config = self.config.get('pipeline', {}).copy()
+            pipeline_junk_config.update({
                 'wcs': True,
                 'type': 'JUNK',
                 'object': 'WCS',
+                'archive': []
             })
 
-            if not configure_pipeline(self.log_name, pipeline_config, quiet=True):
+            if not configure_pipeline(self.log_name, pipeline_junk_config, quiet=True):
                 self.__set_failed_status()
                 return
 
@@ -255,14 +220,14 @@ class ObserveTLESidereal(TelescopeAction):
             attempt = 1
             while not self.aborted and self.dome_is_open:
                 if attempt > 1:
-                    self.set_task('Measuring position (attempt {})'.format(attempt))
+                    self.set_task(f'Measuring position (attempt {attempt})')
                 else:
                     self.set_task('Measuring position')
 
                 if not cam_take_images(self.log_name, self._camera, 1, cam_config, quiet=True):
                     # Try stopping the camera, waiting a bit, then try again
                     cam_stop(self.log_name, self._camera)
-                    self.__wait_until_or_aborted(Time.now() + CAM_ERROR_RETRY_DELAY)
+                    self.wait_until_time_or_aborted(Time.now() + CAM_ERROR_RETRY_DELAY, self._wait_condition)
                     attempt += 1
                     if attempt == 6:
                         self.__set_failed_status()
@@ -272,8 +237,8 @@ class ObserveTLESidereal(TelescopeAction):
                 expected_complete = Time.now() + WCS_EXPOSURE_TIME + MAX_PROCESSING_TIME
 
                 # TODO: Locking?
-                self._wcs = None
                 self._wcs_status = WCSStatus.WaitingForWCS
+                self._wcs_center = None
 
                 while True:
                     with self._wait_condition:
@@ -297,32 +262,23 @@ class ObserveTLESidereal(TelescopeAction):
                     if attempt == 6:
                         self.__set_failed_status()
                         return
-
                     continue
 
-                # Calculate frame center and offset from expected pointing
-                # TODO: Don't hardcode frame size here!
-                actual_ra, actual_dec = self._wcs.all_pix2world(9600 // 2, 6422 // 2, 0, ra_dec_order=True)
-                actual_coord = SkyCoord(actual_ra, actual_dec, unit=u.degree)
-                offset_ra, offset_dec = actual_coord.spherical_offsets_to(target_coord)
-
                 # Store accumulated offset for the next frame
+                offset_ra, offset_dec = self._wcs_center.spherical_offsets_to(target_coord)
                 last_offset_ra += offset_ra
                 last_offset_dec += offset_dec
 
                 # Close enough!
-                if offset_ra < 1 * u.arcminute and offset_dec < 1 * u.arcminute:
-                    print('offset is {:.1f}, {:.1f} arcsec'.format(
-                        offset_ra.to_value(u.arcsecond),
-                        offset_dec.to_value(u.arcsecond)))
+                if abs(offset_ra) < 1 * u.arcminute and abs(offset_dec) < 1 * u.arcminute:
+                    print(f'offset is {offset_ra.to_value(u.arcsecond):.1f}, {offset_dec.to_value(u.arcsecond):.1f}')
                     break
 
                 # Offset telescope
                 self.set_task('Refining pointing')
                 if not mount_offset_radec(self.log_name,
                                           offset_ra.to_value(u.deg),
-                                          offset_dec.to_value(u.deg),
-                                          SLEW_TIMEOUT):
+                                          offset_dec.to_value(u.deg)):
                     print('failed to offset')
                     self.__set_failed_status()
                     return
@@ -331,15 +287,15 @@ class ObserveTLESidereal(TelescopeAction):
                 break
 
             acquire_delay = (Time.now() - acquire_start).to(u.second).value
-            print('Acquired field in {:.1f} seconds'.format(acquire_delay))
-            print('Leaves field at {}'.format(field_end))
+            print(f'Acquired field in {acquire_delay:.1f} seconds')
+            print(f'Leaves field at {field_end}')
 
             # Start science observations
-            if not configure_pipeline(self.log_name, self.config.get('pipeline', {}), quiet=not first_field):
+            if not configure_pipeline(self.log_name, pipeline_science_config, quiet=not first_field):
                 self.__set_failed_status()
                 return
 
-            self.set_task('Ends {} / {}'.format(field_end.strftime('%H:%M:%S'), self._end_date.strftime('%H:%M:%S')))
+            self.set_task(f'Ends {field_end.strftime("%H:%M:%S")} / {self._end_date.strftime("%H:%M:%S")}')
             if not cam_take_images(self.log_name, self._camera, 0, self.config.get(self._camera, {})):
                 print('Failed to take_images - will retry for next field')
 
@@ -347,7 +303,7 @@ class ObserveTLESidereal(TelescopeAction):
             # Wait until the target reaches the edge of the field of view then repeat
             # Don't bother checking for the camera timeout - this is rare
             # and we will catch it on the next field observation if it does happen
-            if not self.__wait_until_or_aborted(field_end):
+            if not self.wait_until_time_or_aborted(field_end, self._wait_condition):
                 cam_stop(self.log_name, self._camera)
                 print('Failed to wait until end of exposure sequence')
                 self.__set_failed_status()
@@ -367,7 +323,9 @@ class ObserveTLESidereal(TelescopeAction):
         with self._wait_condition:
             if self._wcs_status == WCSStatus.WaitingForWCS:
                 if 'CRVAL1' in headers:
-                    self._wcs = wcs.WCS(headers)
+                    center_ra, center_dec = wcs.WCS(headers).all_pix2world(
+                        headers['NAXIS1'] // 2, headers['NAXIS2'] // 2, 0)
+                    self._wcs_center = SkyCoord(ra=center_ra, dec=center_dec, unit=u.degree, frame='icrs')
                     self._wcs_status = WCSStatus.WCSComplete
                 else:
                     self._wcs_status = WCSStatus.WCSFailed
@@ -390,3 +348,64 @@ class ObserveTLESidereal(TelescopeAction):
 
         with self._wait_condition:
             self._wait_condition.notify_all()
+
+    @classmethod
+    def validate_config(cls, config_json):
+        """Returns an iterator of schema violations for the given json configuration"""
+        schema = {
+            'type': 'object',
+            'additionalProperties': False,
+            'required': ['tle', 'start', 'end', 'pipeline', 'cam1'],
+            'properties': {
+                'type': {'type': 'string'},
+                'tle': {
+                    'type': 'array',
+                    'maxItems': 3,
+                    'minItems': 3,
+                    'items': [
+                        {
+                            'type': 'string',
+                        },
+                        {
+                            'type': 'string',
+                            'minLength': 69,
+                            'maxLength': 69
+                        },
+                        {
+                            'type': 'string',
+                            'minLength': 69,
+                            'maxLength': 69
+                        }
+                    ]
+                },
+                'start': {
+                    'type': 'string',
+                    'format': 'date-time',
+                },
+                'end': {
+                    'type': 'string',
+                    'format': 'date-time',
+                },
+                'pipeline': pipeline_science_schema(),
+                'cam1': camera_science_schema()
+            }
+        }
+
+        schema['properties']['pipeline']['required'].remove('object')
+
+        return validation.validation_errors(config_json, schema)
+
+
+class WCSStatus:
+    Inactive, WaitingForWCS, WCSFailed, WCSComplete = range(4)
+
+
+def calculate_target_coord(target_time, observer, target, timescale):
+    """
+    Calculate the target RA and Dec at a given time
+    :param time: Astropy time to evaluate
+    :returns: SkyCoord with the target RA and Dec
+    """
+    t = timescale.from_astropy(target_time)
+    ra, dec, _ = (target - observer).at(t).radec()
+    return SkyCoord(ra.to(u.deg), dec.to(u.deg))

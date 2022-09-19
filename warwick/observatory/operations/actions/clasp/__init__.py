@@ -14,21 +14,17 @@
 # You should have received a copy of the GNU General Public License
 # along with opsd.  If not, see <http://www.gnu.org/licenses/>.
 
-"""opsd common code"""
+"""Actions that can be scheduled for automated observation"""
 
 from .park_telescope import ParkTelescope
 from .autofocus import AutoFocus
-from .focussweep import FocusSweep
+from .focus_sweep import FocusSweep
 from .initialize_cameras import InitializeCameras
-from .observealtazfield import ObserveAltAzField
-from .observegeofield import ObserveGEOField
+from .observe_field import ObserveField
+from .observe_altaz_field import ObserveAltAzField
+from .observe_hadec_field import ObserveHADecField
 from .observe_tle_sidereal import ObserveTLESidereal
 from .observe_tle_tracking import ObserveTLETracking
 from .pointing_model_pointing import PointingModelPointing
 from .skyflats import SkyFlats
 from .shutdown_cameras import ShutdownCameras
-from .slew_telescope import SlewTelescope
-from .slew_telescope_altaz import SlewTelescopeAltAz
-from .wait import Wait
-from .wait_for_dome import WaitForDome
-from .wait_until import WaitUntil
