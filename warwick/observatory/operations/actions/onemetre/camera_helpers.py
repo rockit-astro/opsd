@@ -27,7 +27,7 @@ from warwick.observatory.camera.andor import CameraStatus, CommandStatus as CamC
 
 cameras = {
     'blue': daemons.onemetre_blue_camera,
-    #'red': daemons.onemetre_red_camera
+    'red': daemons.onemetre_red_camera
 }
 
 

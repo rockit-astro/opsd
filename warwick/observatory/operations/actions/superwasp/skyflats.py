@@ -416,7 +416,7 @@ CONFIG = {
 
     # Exposure limits in seconds
     'min_exposure': 0.1,
-    'max_exposure': 30,
+    'max_exposure': 10,
 
     'min_save_exposure': 1.0,
 

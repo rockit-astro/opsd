@@ -26,8 +26,9 @@ PARK_ALTAZ = (35, 25)
 PARK_TIMEOUT = 60
 INIT_TIMEOUT = 30
 HOME_TIMEOUT = 300
+SLEW_TIMEOUT = 60
 
-def tel_status(log_name):
+def mount_status(log_name):
     """Returns the telescope status dict or None on error"""
     try:
         with daemons.onemetre_telescope.connect() as teld:
@@ -41,7 +42,7 @@ def tel_status(log_name):
         return None
 
 
-def tel_init(log_name):
+def mount_init(log_name):
     """Initialize the telescope"""
     try:
         with daemons.onemetre_telescope.connect(timeout=INIT_TIMEOUT) as teld:
@@ -67,7 +68,7 @@ def tel_home(log_name):
         traceback.print_exc(file=sys.stdout)
         return False
 
-def tel_slew_radec(log_name, ra, dec, tracking, timeout):
+def mount_slew_radec(log_name, ra, dec, tracking, timeout=SLEW_TIMEOUT):
     """Slew the telescope to a given RA, Dec"""
     try:
         with daemons.onemetre_telescope.connect(timeout=timeout) as teld:
@@ -89,7 +90,7 @@ def tel_slew_radec(log_name, ra, dec, tracking, timeout):
         return False
 
 
-def tel_offset_radec(log_name, ra, dec, timeout):
+def mount_offset_radec(log_name, ra, dec, timeout=SLEW_TIMEOUT):
     """Offset the telescope by a given RA, Dec"""
     try:
         with daemons.onemetre_telescope.connect(timeout=timeout) as teld:
@@ -107,7 +108,7 @@ def tel_offset_radec(log_name, ra, dec, timeout):
         return False
 
 
-def tel_slew_altaz(log_name, alt, az, tracking, timeout):
+def mount_slew_altaz(log_name, alt, az, tracking, timeout=SLEW_TIMEOUT):
     """Slew the telescope to a given Alt, Az"""
     try:
         with daemons.onemetre_telescope.connect(timeout=timeout) as teld:
@@ -129,7 +130,7 @@ def tel_slew_altaz(log_name, alt, az, tracking, timeout):
         return False
 
 
-def tel_slew_hadec(log_name, ha, dec, timeout):
+def mount_slew_hadec(log_name, ha, dec, timeout=SLEW_TIMEOUT):
     """Slew the telescope to a given HA, Dec"""
     try:
         with daemons.onemetre_telescope.connect(timeout=timeout) as teld:
@@ -147,7 +148,7 @@ def tel_slew_hadec(log_name, ha, dec, timeout):
         return False
 
 
-def tel_stop(log_name):
+def mount_stop(log_name):
     """Stop the telescope tracking or movement"""
     try:
         with daemons.onemetre_telescope.connect() as teld:
@@ -162,22 +163,6 @@ def tel_stop(log_name):
         return False
 
 
-def tel_park(log_name):
+def mount_park(log_name):
     """Park the telescope pointing at zenith"""
-    return tel_slew_altaz(log_name, PARK_ALTAZ[0], PARK_ALTAZ[1], False, PARK_TIMEOUT)
-
-def tel_set_focus(log_name, position, timeout):
-    """Set the given focuser channel to the given position"""
-    try:
-        with daemons.onemetre_telescope.connect(timeout=timeout) as teld:
-            if teld.telescope_focus(position) != TelCommandStatus.Succeeded:
-                log.error(log_name, 'Failed to set focuser position')
-                return False
-            return True
-    except Pyro4.errors.CommunicationError:
-        log.error(log_name, 'Failed to communicate with telescope daemon')
-        return False
-    except Exception:
-        log.error(log_name, 'Unknown error while stopping telescope')
-        traceback.print_exc(file=sys.stdout)
-        return False
+    return mount_slew_altaz(log_name, PARK_ALTAZ[0], PARK_ALTAZ[1], False, PARK_TIMEOUT)
