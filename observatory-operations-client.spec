@@ -1,5 +1,5 @@
 Name:      observatory-operations-client
-Version:   20220726
+Version:   20220922
 Release:   0
 Url:       https://github.com/warwick-one-metre/opsd
 Summary:   Operations client.

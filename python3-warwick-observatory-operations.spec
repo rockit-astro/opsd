@@ -1,5 +1,5 @@
 Name:           python3-warwick-observatory-operations
-Version:        20220918
+Version:        20220922
 Release:        0
 License:        GPL3
 Summary:        Common backend code for the operations daemon
