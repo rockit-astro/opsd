@@ -114,20 +114,24 @@ class FocusSweep(TelescopeAction):
             return
 
         # Fall back to zenith if coords not specified
-        if 'ra' not in self.config or 'dec' not in self.config:
+        ra = self.config.get('ra', None)
+        dec = self.config.get('dec', None),
+        if ra is None or dec is None:
             ms = mount_status(self.log_name)
             if ms is None or 'lst' not in ms or 'site_latitude' not in ms:
                 log.error(self.log_name, 'Failed to query mount LST or latitude')
                 self.status = TelescopeActionStatus.Error
                 return
 
+            if ra is None:
+                ra = ms['lst']
+
+            if dec is None:
+                dec = ms['site_latitude']
+
         self.set_task('Slewing to field')
-        if not mount_slew_radec(self.log_name,
-                                self.config.get('ra', ms['lst']),
-                                self.config.get('dec', ms['site_latitude']),
-                                True):
-            if not self.aborted:
-                self.status = TelescopeActionStatus.Error
+        if not mount_slew_radec(self.log_name, ra, dec, True):
+            self.status = TelescopeActionStatus.Error
             return
 
         self.set_task('Preparing camera')
