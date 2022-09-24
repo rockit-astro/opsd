@@ -71,13 +71,6 @@ class ObserveTLETracking(TelescopeAction):
 
         self._camera_ids = [c for c in cameras if c in self.config]
 
-    def __set_failed_status(self):
-        """Sets self.status to Complete if aborted otherwise Error"""
-        if self.aborted:
-            self.status = TelescopeActionStatus.Complete
-        else:
-            self.status = TelescopeActionStatus.Error
-
     def run_thread(self):
         """Thread that runs the hardware actions"""
         # Configure pipeline immediately so the dashboard can show target name etc
@@ -93,7 +86,7 @@ class ObserveTLETracking(TelescopeAction):
             pipeline_science_config['archive'] = [camera_id.upper() for camera_id in self._camera_ids]
 
         if not configure_pipeline(self.log_name, pipeline_science_config, quiet=True):
-            self.__set_failed_status()
+            self.status = TelescopeActionStatus.Error
             return
 
         self.set_task('Waiting for observation start')
@@ -153,7 +146,10 @@ class ObserveTLETracking(TelescopeAction):
         self.set_task('Acquiring target')
         if not mount_track_tle(self.log_name, self.config['tle']):
             print('failed to track target')
-            self.__set_failed_status()
+            if self.aborted:
+                self.status = TelescopeActionStatus.Complete
+            else:
+                self.status = TelescopeActionStatus.Error
             return
 
         # Start science observations
