@@ -16,6 +16,8 @@
 
 """Helper functions for actions to interact with the cameras"""
 
+# pylint: disable=too-many-return-statements
+
 import sys
 import time
 import traceback
@@ -41,10 +43,15 @@ def cam_configure(log_name, camera_id, config=None, quiet=False):
             if config:
                 status = cam.configure(config, quiet=quiet)
 
-            if status != CamCommandStatus.Succeeded:
-                log.error(log_name, 'Failed to configure camera ' + camera_id)
+            if status == CamCommandStatus.Succeeded:
+                return True
+
+            if status == CamCommandStatus.CameraNotInitialized:
+                log.error(log_name, f'Camera {camera_id} is not initialized')
                 return False
-            return True
+
+            log.error(log_name, f'Failed to configure camera {camera_id} with status {status}')
+            return False
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with camera ' + camera_id)
         return False
@@ -66,14 +73,24 @@ def cam_take_images(log_name, camera_id, count=1, config=None, quiet=False):
         with cameras[camera_id].connect() as cam:
             if config:
                 status = cam.configure(config, quiet=quiet)
+                if status == CamCommandStatus.CameraNotInitialized:
+                    log.error(log_name, f'Camera {camera_id} is not initialized')
+                    return False
 
-            if not config or status == CamCommandStatus.Succeeded:
-                status = cam.start_sequence(count, quiet=quiet)
+                if status != CamCommandStatus.Succeeded:
+                    log.error(log_name, f'Failed to configure camera {camera_id} with status {status}')
+                    return False
 
-            if status != CamCommandStatus.Succeeded:
-                log.error(log_name, 'Failed to start exposure sequence on camera ' + camera_id)
+            status = cam.start_sequence(count, quiet=quiet)
+            if status == CamCommandStatus.Succeeded:
+                return True
+
+            if status == CamCommandStatus.CameraNotInitialized:
+                log.error(log_name, f'Camera {camera_id} is not initialized')
                 return False
-            return True
+
+            log.error(log_name, f'Failed to start exposures on camera {camera_id} with status {status}')
+            return False
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with camera ' + camera_id)
         return False
