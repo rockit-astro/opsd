@@ -125,11 +125,13 @@ class ObserveTLETracking(TelescopeAction):
             if now > self._end_date:
                 break
 
-            alt, *_ = (target - observer).at(timescale.from_astropy(now)).altaz()
-            if alt.to(u.deg) > MIN_ALTITUDE * u.deg:
+            pos = (target - observer).at(timescale.from_astropy(now))
+            alt, *_ = pos.altaz()
+            _, dec, _ = pos.radec()
+            if alt.to(u.deg) > MIN_ALTITUDE * u.deg and dec.to(u.deg) > -45 * u.deg:
                 break
 
-            print(f'Target alt is {alt}')
+            print(f'Target alt is {alt}; dec is {dec}')
             self.set_task('Waiting for target to rise')
             with self._wait_condition:
                 self._wait_condition.wait(LOOP_INTERVAL)
