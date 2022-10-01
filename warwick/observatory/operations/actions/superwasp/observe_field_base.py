@@ -190,6 +190,11 @@ class ObserveFieldBase(TelescopeAction):
                 return ObservationStatus.Error
 
             if result == ObservationStatus.OnTarget:
+                # Reset the acquisition camera to streaming mode now
+                # to avoid the delay later putting it out of sync with the others
+                cam_config = self.config.get(self._acquisition_camera, {})
+                cam_configure(self.log_name, self._acquisition_camera, cam_config, quiet=True)
+
                 dt = (Time.now() - acquire_start).to(u.s).value
                 print(f'ObserveField: Acquired field in {dt:.1f} seconds')
                 return ObservationStatus.OnTarget
