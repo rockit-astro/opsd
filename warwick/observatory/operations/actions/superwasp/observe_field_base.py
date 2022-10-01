@@ -30,7 +30,7 @@ import jsonschema
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import log
 from warwick.observatory.camera.qhy import CameraStatus
-from .camera_helpers import cameras, cam_status, cam_take_images, cam_stop
+from .camera_helpers import cameras, cam_configure, cam_status, cam_take_images, cam_stop
 from .mount_helpers import mount_stop
 from .pipeline_helpers import configure_pipeline
 from .schema_helpers import camera_science_schema, pipeline_science_schema
@@ -221,6 +221,7 @@ class ObserveFieldBase(TelescopeAction):
     def __observe_field(self):
         # Start science observations
         pipeline_config = self.config['pipeline'].copy()
+        pipeline_config['type'] = 'SCIENCE'
 
         if not configure_pipeline(self.log_name, pipeline_config):
             return ObservationStatus.Error

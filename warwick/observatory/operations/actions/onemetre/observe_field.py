@@ -202,6 +202,7 @@ class ObserveField(TelescopeAction):
         # Start science observations
         pipeline_config = self.config['pipeline'].copy()
         pipeline_config['guide'] = self._guide_camera.upper()
+        pipeline_config['type'] = 'SCIENCE'
 
         if not configure_pipeline(self.log_name, pipeline_config):
             return ObservationStatus.Error
