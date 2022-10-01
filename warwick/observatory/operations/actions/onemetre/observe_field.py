@@ -19,10 +19,11 @@
 # pylint: disable=too-many-return-statements
 # pylint: disable=too-many-branches
 
+import re
 import threading
 import time
 from astropy import wcs
-from astropy.coordinates import SkyCoord
+from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.time import Time
 import astropy.units as u
 import numpy as np
@@ -64,6 +65,7 @@ class ObserveField(TelescopeAction):
 
         self._wcs_status = WCSStatus.Inactive
         self._wcs = None
+        self._wcs_field_center = None
 
         self._observation_status = ObservationStatus.PositionLost
         self._is_guiding = False
@@ -101,7 +103,7 @@ class ObserveField(TelescopeAction):
 
         # Converge on requested position
         attempt = 1
-        target = SkyCoord(self.config['ra'], self.config['dec'], unit=u.degree)
+        target = SkyCoord(self.config['ra'], self.config['dec'], unit=u.degree, frame='icrs')
         while not self.aborted and self.dome_is_open:
             # Wait for telescope position to settle before taking first image
             time.sleep(5)
@@ -118,7 +120,7 @@ class ObserveField(TelescopeAction):
             while not cam_take_images(self.log_name, self._guide_camera, 1, cam_config, quiet=True):
                 # Try stopping the camera, waiting a bit, then try again
                 cam_stop(self.log_name, self._guide_camera)
-                self.wait_until_time_or_aborted(Time.now() + CAM_ERROR_RETRY_DELAY)
+                self.wait_until_time_or_aborted(Time.now() + CAM_ERROR_RETRY_DELAY, self._wait_condition)
                 if self.aborted or not self.dome_is_open:
                     break
 
@@ -160,9 +162,7 @@ class ObserveField(TelescopeAction):
                 continue
 
             # Calculate frame center and offset from expected pointing
-            # TODO: Remove hardcoded geometry assumption
-            actual_ra, actual_dec = self._wcs.all_pix2world(1024, 1024, 0, ra_dec_order=True)
-            actual = SkyCoord(actual_ra, actual_dec, unit=u.degree)
+            actual = SkyCoord(self._wcs_field_center.ra, self._wcs_field_center.dec, frame='icrs')
             offset_ra, offset_dec = actual.spherical_offsets_to(target)
 
             print(f'ObserveField: offset is {offset_ra.to_value(u.arcsecond):.1f}, ' +
@@ -237,7 +237,7 @@ class ObserveField(TelescopeAction):
                     return_status = ObservationStatus.Error
                     break
 
-            self.wait_until_time_or_aborted(Time.now() + CAM_CHECK_STATUS_DELAY)
+            self.wait_until_time_or_aborted(Time.now() + CAM_CHECK_STATUS_DELAY, self._wait_condition)
 
         # Wait for all cameras to stop before returning to the main loop
         print('ObserveField: stopping science observations')
@@ -267,7 +267,7 @@ class ObserveField(TelescopeAction):
             return
 
         self.set_task('Waiting for observation start')
-        self.wait_until_time_or_aborted(self._start_date)
+        self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
         if Time.now() > self._end_date:
             self.status = TelescopeActionStatus.Complete
             return
@@ -318,17 +318,33 @@ class ObserveField(TelescopeAction):
 
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
+        print('Got frame from', headers.get('CAMID', '').lower())
         camera = self._cameras.get(headers.get('CAMID', '').lower(), None)
         if camera is not None:
             camera.received_frame(headers)
 
         with self._wait_condition:
             if self._wcs_status == WCSStatus.WaitingForWCS:
-                if 'CRVAL1' in headers:
+                if 'CRVAL1' in headers and 'IMAG-RGN' in headers and 'SITELAT' in headers:
+                    r = re.search(r'^\[(\d+):(\d+),(\d+):(\d+)\]$', headers['IMAG-RGN']).groups()
+                    cx = (int(r[0]) - 1 + int(r[1])) / 2
+                    cy = (int(r[2]) - 1 + int(r[3])) / 2
+                    location = EarthLocation(
+                        lat=headers['SITELAT'],
+                        lon=headers['SITELONG'],
+                        height=headers['SITEELEV'])
+                    wcs_time = Time(headers['DATE-OBS'], location=location) + 0.5 * headers['EXPTIME'] * u.s
                     self._wcs = wcs.WCS(headers)
+                    ra, dec = self._wcs.all_pix2world(cx, cy, 0)
+                    self._wcs_field_center = SkyCoord(
+                        ra=ra * u.deg,
+                        dec=dec * u.deg,
+                        frame='icrs',
+                        obstime=wcs_time)
                     self._wcs_status = WCSStatus.WCSComplete
                 else:
                     self._wcs_status = WCSStatus.WCSFailed
+                    self._wcs_field_center = None
 
                 self._wait_condition.notify_all()
 
@@ -465,9 +481,11 @@ class CameraWrapper:
             self.status = CameraWrapperStatus.Stopping
             cam_stop(self._log_name, self.camera_id)
 
+    # pylint: disable=unused-argument
     def received_frame(self, headers):
         """Callback to process an acquired frame. headers is a dictionary of header keys"""
         self._last_frame_time = Time.now()
+    # pylint: enable=unused-argument
 
     def update(self):
         """Monitor camera status"""
