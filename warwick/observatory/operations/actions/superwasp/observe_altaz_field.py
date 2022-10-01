@@ -74,4 +74,7 @@ class ObserveAltAzField(ObserveFieldBase):
             }
         })
 
+        # Not yet implemented!
+        schema['properties'].pop('acquisition')
+
         return validation.validation_errors(config_json, schema)

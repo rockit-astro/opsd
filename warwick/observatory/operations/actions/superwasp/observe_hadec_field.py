@@ -16,9 +16,13 @@
 
 """Telescope action to observe a static HA/Dec field within a defined time window"""
 
+import numpy as np
+from astropy.coordinates import SkyCoord
+from astropy.time import Time
+import astropy.units as u
 from warwick.observatory.common import validation
-from .mount_helpers import mount_slew_hadec
-from .observe_field_base import ObserveFieldBase
+from .mount_helpers import mount_slew_hadec, mount_offset_radec
+from .observe_field_base import ObserveFieldBase, ObservationStatus
 
 
 class ObserveHADecField(ObserveFieldBase):
@@ -33,6 +37,7 @@ class ObserveHADecField(ObserveFieldBase):
         "ha": 0,
         "dec": -4.5,
         "onsky": true, # Optional: defaults to true
+        "acquisition": "cam4", # Optional, defaults to no acquisition correction
         "cam<1..4>": { # Optional: cameras that aren't listed won't be used
             "exposure": 1,
             "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
@@ -55,6 +60,38 @@ class ObserveHADecField(ObserveFieldBase):
         :return: True on success, false on failure
         """
         return mount_slew_hadec(self.log_name, self.config['ha'], self.config['dec'])
+
+    def update_field_pointing(self):
+        """
+        Implemented by subclasses to update the field pointing based on self._wcs.
+        :return: ObservationStatus.OnTarget if acquired,
+                 ObservationStatus.PositionLost if another acquisition image is required,
+                 ObservationStatus.Error on failure
+        """
+
+        lst = Time(self._wcs_field_center.obstime, location=self._wcs_field_center.location).sidereal_time('apparent')
+        current = SkyCoord(
+            ra=lst - self._wcs_field_center.ra,
+            dec=self._wcs_field_center.dec,
+            frame='icrs')
+        target = SkyCoord(
+            ra=self.config['ha'] * u.deg,
+            dec=self.config['dec'] * u.deg,
+            frame='icrs')
+
+        offset_ra, offset_dec = current.spherical_offsets_to(target)
+        print(f'ObserveField: offset is {offset_ra.to_value(u.arcsecond):.1f}, ' +
+              f'{offset_dec.to_value(u.arcsecond):.1f}')
+
+        # Close enough!
+        if np.abs(offset_ra) < 5 * u.arcmin and np.abs(offset_dec) < 5 * u.arcmin:
+            return ObservationStatus.OnTarget
+
+        # Offset telescope
+        if not mount_offset_radec(self.log_name, offset_ra.to_value(u.deg), offset_dec.to_value(u.deg)):
+            return ObservationStatus.Error
+
+        return ObservationStatus.PositionLost
 
     @classmethod
     def validate_config(cls, config_json):
