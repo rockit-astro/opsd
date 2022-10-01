@@ -23,7 +23,6 @@ import threading
 import traceback
 import Pyro4
 from astropy.time import Time
-import astropy.units as u
 from warwick.observatory.common import daemons, validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import log

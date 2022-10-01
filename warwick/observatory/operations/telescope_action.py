@@ -92,12 +92,12 @@ class TelescopeAction:
         :return: True if the time has been reached, false if aborted
         """
         while True:
-            remaining = target_time - Time.now()
+            remaining = (target_time - Time.now()).to(u.second).value
             if remaining < 0 or self.aborted:
                 break
 
             with wait_condition:
-                wait_condition.wait(min(aborted_check_interval, remaining.to(u.second).value))
+                wait_condition.wait(min(aborted_check_interval, remaining))
 
         return not self.aborted
 

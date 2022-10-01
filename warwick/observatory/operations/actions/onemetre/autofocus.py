@@ -102,7 +102,7 @@ class AutoFocus(TelescopeAction):
 
         # Fall back to zenith if coords not specified
         ra = self.config.get('ra', None)
-        dec = self.config.get('dec', None),
+        dec = self.config.get('dec', None)
         if ra is None or dec is None:
             ms = mount_status(self.log_name)
             if ms is None or 'lst' not in ms or 'site_latitude' not in ms:
