@@ -1,5 +1,5 @@
 Name:           python3-warwick-clasp-operations
-Version:        20221001
+Version:        20221029
 Release:        0
 License:        GPL3
 Summary:        CLASP specific operations code

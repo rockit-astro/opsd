@@ -328,7 +328,7 @@ class CameraWrapper:
             print(self.camera_id, ' hfd values:', self._measurements)
             current_hfd = float(np.min(self._measurements))
             log.info(self._log_name,
-                     f'AutoFocus: camera {self.camera_id} HFD at {self._current_focus} steps is {hfd:.1f}" ' +
+                     f'AutoFocus: camera {self.camera_id} HFD at {self._current_focus} steps is {current_hfd:.1f}" ' +
                      f'({requested} samples)')
 
             self._measurements.clear()
