@@ -147,7 +147,7 @@ class AutoFocus(TelescopeAction):
             if all(camera.state >= AutoFocusState.Complete for camera in self._cameras.values()):
                 break
 
-        if any(camera.state == AutoFocusState.Failed for camera in self._cameras.values()):
+        if any(camera.state == AutoFocusState.Error for camera in self._cameras.values()):
             self.status = TelescopeActionStatus.Error
         else:
             self.status = TelescopeActionStatus.Complete
@@ -216,9 +216,9 @@ class AutoFocus(TelescopeAction):
 class AutoFocusState:
     """Possible states of the AutoFlat routine"""
     MeasureInitial, FindPositionOnVCurve, FindTargetHFD, MeasureTargetHFD, \
-        MeasureFinalHFD, Aborting, Complete, Failed = range(8)
+        MeasureFinalHFD, Aborting, Complete, Failed, Error = range(9)
 
-    Codes = ['I', 'V', 'T', 'M', 'N', 'A', 'C', 'F']
+    Codes = ['I', 'V', 'T', 'M', 'N', 'A', 'C', 'F', 'E']
 
 
 class CameraWrapper:
@@ -251,7 +251,7 @@ class CameraWrapper:
         # Record the initial focus so we can return on error
         self._initial_focus = self._current_focus = focus_get(self._log_name, self.camera_id)
         if self._initial_focus is None:
-            self.state = AutoFocusState.Failed
+            self.state = AutoFocusState.Error
             return
 
         # Set the camera config once at the start to avoid duplicate changes
@@ -259,7 +259,7 @@ class CameraWrapper:
         cam_config['stream'] = False
 
         if not cam_configure(self._log_name, self.camera_id, cam_config):
-            self.state = AutoFocusState.Failed
+            self.state = AutoFocusState.Error
             return
 
         # Take the first image to start the process.
@@ -270,7 +270,15 @@ class CameraWrapper:
         """Restores the original focus position and marks state as failed"""
         if not focus_set(self._log_name, self.camera_id, self._initial_focus):
             log.error(self._log_name, f'AutoFocus: camera {self.camera_id} failed to restore initial focus')
-        self.state = AutoFocusState.Failed
+            self.state = AutoFocusState.Error
+        else:
+            self.state = AutoFocusState.Failed
+
+    def _set_error(self):
+        """Restores the original focus position and marks state as error"""
+        if not focus_set(self._log_name, self.camera_id, self._initial_focus):
+            log.error(self._log_name, f'AutoFocus: camera {self.camera_id} failed to restore initial focus')
+        self.state = AutoFocusState.Error
 
     def _take_image(self):
         """Tells the camera to take an exposure."""
@@ -278,7 +286,7 @@ class CameraWrapper:
         self._expected_complete = Time.now() + timeout
 
         if not cam_take_images(self._log_name, self.camera_id, quiet=True):
-            self._set_failed()
+            self._set_error()
 
     def check_timeout(self):
         """Sets error state if an expected frame is more than 30 seconds late"""
@@ -286,8 +294,8 @@ class CameraWrapper:
             return
 
         if self._expected_complete and Time.now() > self._expected_complete:
-            log.error(self._log_name, 'AutoFocus: camera {self.camera_id} exposure timed out')
-            self._set_failed()
+            log.error(self._log_name, f'AutoFocus: camera {self.camera_id} exposure timed out')
+            self._set_error()
 
     def received_frame(self, headers):
         """Callback to process an acquired frame. headers is a dictionary of header keys"""
@@ -346,7 +354,7 @@ class CameraWrapper:
                 else:
                     self._current_focus -= self._config['focus_step_size']
                     if not focus_set(self._log_name, self.camera_id, self._current_focus):
-                        self._set_failed()
+                        self._set_error()
                         return
 
             # Note: not an elif to allow the FindPositionOnVCurve case above to enter this branch too
@@ -365,7 +373,7 @@ class CameraWrapper:
                     self.state = AutoFocusState.MeasureTargetHFD
 
                 if not focus_set(self._log_name, self.camera_id, self._current_focus):
-                    self._set_failed()
+                    self._set_error()
                     return
 
             elif self.state == AutoFocusState.MeasureTargetHFD:
@@ -375,7 +383,7 @@ class CameraWrapper:
                 self.state = AutoFocusState.MeasureFinalHFD
 
                 if not focus_set(self._log_name, self.camera_id, self._current_focus):
-                    self._set_failed()
+                    self._set_error()
                     return
             elif self.state == AutoFocusState.MeasureFinalHFD:
                 runtime = (Time.now() - self._start_time).to_value(u.s)
@@ -410,7 +418,7 @@ CONFIG = {
 
     # Threshold HFD that is used to filter junk
     # Real stars should never be smaller than this
-    'minimum_hfd': 3.2,
+    'minimum_hfd': 2.5,
 
     # Number of objects that are required to consider MEDHFD valid
     'minimum_object_count': 50,
