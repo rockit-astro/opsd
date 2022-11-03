@@ -1,5 +1,5 @@
 Name:      observatory-operations-server
-Version:   20220922
+Version:   20221103
 Release:   0
 Url:       https://github.com/warwick-one-metre/opsd
 Summary:   Operations server.

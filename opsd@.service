@@ -8,8 +8,6 @@ After=network-online.target
 Restart=on-failure
 Type=simple
 ExecStart=/usr/bin/env python3 -u /usr/bin/opsd /etc/opsd/%i.json
-StandardOutput=syslog
-StandardError=syslog
 
 [Install]
 WantedBy=multi-user.target

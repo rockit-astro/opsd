@@ -85,8 +85,7 @@ The automated packaging scripts will push 5 RPM packages to the observatory pack
 After installing packages, the systemd service should be enabled:
 
 ```
-sudo systemctl enable opsd@<config>
-sudo systemctl start opsd@<config>
+sudo systemctl enable --now opsd@<config>
 ```
 
 where `config` is the name of the json file for the appropriate telescope.
@@ -109,8 +108,7 @@ sudo yum update
 
 The daemon should then be restarted to use the newly installed code:
 ```
-sudo systemctl stop opsd@<config>
-sudo systemctl start opsd@<config>
+sudo systemctl restart opsd@<config>
 ```
 
 ### Testing Locally
