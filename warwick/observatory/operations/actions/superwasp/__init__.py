@@ -21,5 +21,6 @@ from .initialize_cameras import InitializeCameras
 from .observe_field import ObserveField
 from.observe_altaz_field import ObserveAltAzField
 from .observe_hadec_field import ObserveHADecField
+from .pointing_model_pointing import PointingModelPointing
 from .skyflats import SkyFlats
 from .shutdown_cameras import ShutdownCameras

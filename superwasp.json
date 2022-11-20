@@ -9,13 +9,10 @@
   "site_longitude": "17.87928 W",
   "site_elevation": 2350,
   "dome": {
-    "module": "warwick.observatory.operations.dome.superwasp",
-    "daemon": "superwasp_roof",
-    "open_timeout": 60,
-    "close_timeout": 120,
-    "heartbeat_timeout": 60,
-    "heartbeat_open_timeout": 60,
-    "heartbeat_close_timeout": 120
+    "module": "warwick.observatory.operations.dome.astrohaven",
+    "daemon": "superwasp_dome",
+    "movement_timeout": 60,
+    "heartbeat_timeout": 119
   },
   "environment_daemon": "observatory_environment",
   "environment_conditions": [
@@ -76,6 +73,11 @@
           "label": "GOTO",
           "sensor": "goto_vaisala",
           "parameter": "relative_humidity"
+        },
+        {
+          "label": "Dome",
+          "sensor": "clasp_domealert",
+          "parameter": "superwasp_humidity"
         }
       ]
     },
@@ -124,12 +126,12 @@
       "sensors": [
         {
           "label": "Status",
-          "sensor": "superwasp_power",
+          "sensor": "clasp_power",
           "parameter": "ups1_status"
         },
         {
           "label": "Battery",
-          "sensor": "superwasp_power",
+          "sensor": "clasp_power",
           "parameter": "ups1_battery_remaining"
         }
       ]
@@ -139,12 +141,12 @@
       "sensors": [
         {
           "label": "Status",
-          "sensor": "superwasp_power",
+          "sensor": "clasp_power",
           "parameter": "ups2_status"
         },
         {
           "label": "Battery",
-          "sensor": "superwasp_power",
+          "sensor": "clasp_power",
           "parameter": "ups2_battery_remaining"
         }
       ]

@@ -18,7 +18,7 @@ from distutils.core import setup
 
 setup(name='warwick.superwasp.operations',
       version='0',
-      packages=['warwick.observatory.operations.actions.superwasp', 'warwick.observatory.operations.dome.superwasp'],
+      packages=['warwick.observatory.operations.actions.superwasp', 'warwick.observatory.operations.dome.astrohaven'],
       author='Paul Chote',
       description='SuperWASP specific operations code',
       license='GNU GPLv3',

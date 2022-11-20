@@ -1,11 +1,11 @@
 Name:           python3-warwick-superwasp-operations
-Version:        20221001
+Version:        20221119
 Release:        0
 License:        GPL3
 Summary:        SuperWASP specific operations code
 Url:            https://github.com/warwick-one-metre/opsd
 BuildArch:      noarch
-Requires:       python3-warwick-observatory-operations python3-astropy python3-warwick-observatory-talon
+Requires:       python3-warwick-observatory-operations python3-astropy python3-warwick-observatory-lmount
 Requires:       python3-warwick-observatory-qhy-camera python3-warwick-observatory-pipeline
 
 %description
