@@ -20,7 +20,7 @@ import sys
 import traceback
 import Pyro4
 from warwick.observatory.common import daemons, log
-from warwick.observatory.focuslynx import FocuserStatus, CommandStatus as FocCommandStatus
+from warwick.observatory.multifocus import FocuserStatus, CommandStatus as FocCommandStatus
 
 FOCUS_TIMEOUT=300
 

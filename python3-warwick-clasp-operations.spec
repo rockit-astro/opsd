@@ -1,12 +1,12 @@
 Name:           python3-warwick-clasp-operations
-Version:        20221029
+Version:        20230204
 Release:        0
 License:        GPL3
 Summary:        CLASP specific operations code
 Url:            https://github.com/warwick-one-metre/opsd
 BuildArch:      noarch
 Requires:       python3-warwick-observatory-operations python3-astropy python3-warwick-observatory-lmount
-Requires:       python3-warwick-observatory-qhy-camera python3-warwick-observatory-pipeline
+Requires:       python3-warwick-observatory-multifocus python3-warwick-observatory-qhy-camera python3-warwick-observatory-pipeline
 
 %description
 
