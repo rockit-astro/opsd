@@ -71,12 +71,12 @@ class ObserveHADecField(ObserveFieldBase):
 
         lst = Time(self._wcs_field_center.obstime, location=self._wcs_field_center.location).sidereal_time('apparent')
         current = SkyCoord(
-            ra=lst - self._wcs_field_center.ra,
+            ra=self._wcs_field_center.ra,
             dec=self._wcs_field_center.dec,
             frame='icrs')
         target = SkyCoord(
-            ra=self.config['ha'] * u.deg,
-            dec=self.config['dec'] * u.deg,
+            ra=lst - self.config['ha'] * u.deg,
+            dec=self.config['dec'] * u.dehag,
             frame='icrs')
 
         offset_ra, offset_dec = current.spherical_offsets_to(target)
