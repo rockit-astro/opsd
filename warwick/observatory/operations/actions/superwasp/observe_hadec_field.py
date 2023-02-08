@@ -76,7 +76,7 @@ class ObserveHADecField(ObserveFieldBase):
             frame='icrs')
         target = SkyCoord(
             ra=lst - self.config['ha'] * u.deg,
-            dec=self.config['dec'] * u.dehag,
+            dec=self.config['dec'] * u.deg,
             frame='icrs')
 
         offset_ra, offset_dec = current.spherical_offsets_to(target)
