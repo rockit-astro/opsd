@@ -65,7 +65,11 @@ class AutoFocus(TelescopeAction):
 
         self._cameras = {}
         for camera_id in cameras:
-            self._cameras[camera_id] = CameraWrapper(camera_id, CONFIG, self.config.get(camera_id, None), self.log_name)
+            camera_config = {}
+            camera_config.update(CONFIG)
+            camera_config.update(CAMERA_CONFIG.get(camera_id, {}))
+            self._cameras[camera_id] = CameraWrapper(camera_id, camera_config, self.config.get(camera_id, None),
+                                                     self.log_name)
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
@@ -409,13 +413,6 @@ class CameraWrapper:
 
 
 CONFIG = {
-    # The slope (in hfd / step) on the inside edge of the v-curve
-    'inside_focus_slope': -0.0030321,
-
-    # The HFD value where the two v-curve edges cross
-    # This is a more convenient way of representing the position intercept difference
-    'crossing_hfd': 3.2,
-
     # Threshold HFD that is used to filter junk
     # Real stars should never be smaller than this
     'minimum_hfd': 2.5,
@@ -439,4 +436,23 @@ CONFIG = {
     # Number of seconds to add to the exposure time to account for readout + object detection
     # Consider the frame lost if this is exceeded
     'max_processing_time': 20
+}
+
+CAMERA_CONFIG = {
+    'cam1': {
+        # The slope (in hfd / step) on the inside edge of the v-curve
+        'inside_focus_slope': -0.26017,
+
+        # The HFD value where the two v-curve edges cross
+        # This is a more convenient way of representing the position intercept difference
+        'crossing_hfd': 0,
+    },
+    'cam2': {
+        # The slope (in hfd / step) on the inside edge of the v-curve
+        'inside_focus_slope': -0.21505,
+
+        # The HFD value where the two v-curve edges cross
+        # This is a more convenient way of representing the position intercept difference
+        'crossing_hfd': 0,
+    },
 }
