@@ -102,13 +102,13 @@ class SkyFlats(TelescopeAction):
                     break
 
                 if not self.dome_is_open:
-                    waiting_for.append('Roof')
+                    waiting_for.append('Dome')
 
                 if sun_altitude >= CONFIG['max_sun_altitude']:
                     waiting_for.append(f'Sun < {CONFIG["max_sun_altitude"]:.1f} deg')
 
                 print(f'AutoFlat: {sun_altitude:.1f} > {CONFIG["max_sun_altitude"]:.1f}; ' +
-                      f'roof {self.dome_is_open} - keep waiting')
+                      f'dome {self.dome_is_open} - keep waiting')
             else:
                 if sun_altitude > CONFIG['max_sun_altitude']:
                     log.info(self.log_name, 'AutoFlat: Sun already above maximum altitude')
@@ -119,13 +119,13 @@ class SkyFlats(TelescopeAction):
                     break
 
                 if not self.dome_is_open:
-                    waiting_for.append('Roof')
+                    waiting_for.append('Dome')
 
                 if sun_altitude < CONFIG['min_sun_altitude']:
                     waiting_for.append(f'Sun > {CONFIG["min_sun_altitude"]:.1f} deg')
 
                 print(f'AutoFlat: {sun_altitude:.1f} < {CONFIG["min_sun_altitude"]:.1f}; ' +
-                      f'roof {self.dome_is_open} - keep waiting')
+                      f'dome {self.dome_is_open} - keep waiting')
 
             self.set_task('Waiting for ' + ', '.join(waiting_for))
             with self._wait_condition:
@@ -175,7 +175,7 @@ class SkyFlats(TelescopeAction):
                 for camera in self._cameras.values():
                     camera.abort()
 
-                log.error(self.log_name, 'AutoFlat: Roof has closed')
+                log.error(self.log_name, 'AutoFlat: Dome has closed')
                 break
 
             # We are done once all cameras are either complete or have errored
@@ -197,7 +197,7 @@ class SkyFlats(TelescopeAction):
             self._wait_condition.notify_all()
 
     def dome_status_changed(self, dome_is_open):
-        """Notification called when the roof is fully open or fully closed"""
+        """Notification called when the dome is fully open or fully closed"""
         super().dome_status_changed(dome_is_open)
 
         with self._wait_condition:
@@ -382,7 +382,7 @@ class CameraWrapper:
                 if self.state == AutoFlatState.Saving:
                     log.info(self._log_name, f'AutoFlat: {self.camera_id} saving enabled')
                 elif self.state == AutoFlatState.Complete:
-                    runtime = (Time.now() - self._start_time).total_seconds()
+                    runtime = (Time.now() - self._start_time).to_value(u.s)
                     message = f'AutoFlat: camera {self.camera_id} acquired {self._exposure_count} flats ' + \
                               f'in {runtime:.0f} seconds'
                     log.info(self._log_name, message)

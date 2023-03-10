@@ -382,7 +382,7 @@ class CameraWrapper:
                 if self.state == AutoFlatState.Saving:
                     log.info(self._log_name, f'AutoFlat: {self.camera_id} saving enabled')
                 elif self.state == AutoFlatState.Complete:
-                    runtime = (Time.now() - self._start_time).total_seconds()
+                    runtime = (Time.now() - self._start_time).to_value(u.s)
                     message = f'AutoFlat: camera {self.camera_id} acquired {self._exposure_count} flats ' + \
                               f'in {runtime:.0f} seconds'
                     log.info(self._log_name, message)

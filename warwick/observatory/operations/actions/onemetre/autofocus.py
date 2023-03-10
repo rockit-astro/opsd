@@ -217,7 +217,7 @@ class AutoFocus(TelescopeAction):
                 if current_hfd is None:
                     continue
 
-                runtime = (Time.now() - start_time).total_seconds()
+                runtime = (Time.now() - start_time).to_value(u.s)
 
                 log.info(self.log_name, f'AutoFocus: Achieved HFD of {current_hfd:.1f}" in {runtime:.0f} seconds')
                 success = current_hfd <= initial_hfd
