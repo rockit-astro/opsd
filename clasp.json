@@ -133,6 +133,11 @@
           "label": "DAS1",
           "sensor": "clasp_diskspace_1",
           "parameter": "data_fs_available_bytes"
+        },
+        {
+          "label": "DAS2",
+          "sensor": "clasp_diskspace_2",
+          "parameter": "data_fs_available_bytes"
         }
       ]
     },
