@@ -431,7 +431,7 @@ CONFIG = {
     'fine_measure_repeats': 7,
 
     # Number of focuser steps to move when searching for the target HFD
-    'focus_step_size': 1000,
+    'focus_step_size': 50,
 
     # Number of seconds to add to the exposure time to account for readout + object detection
     # Consider the frame lost if this is exceeded
@@ -441,7 +441,7 @@ CONFIG = {
 CAMERA_CONFIG = {
     'cam1': {
         # The slope (in hfd / step) on the inside edge of the v-curve
-        'inside_focus_slope': -0.26017,
+        'inside_focus_slope': -0.06504,
 
         # The HFD value where the two v-curve edges cross
         # This is a more convenient way of representing the position intercept difference
@@ -449,7 +449,7 @@ CAMERA_CONFIG = {
     },
     'cam2': {
         # The slope (in hfd / step) on the inside edge of the v-curve
-        'inside_focus_slope': -0.21505,
+        'inside_focus_slope': -0.05376,
 
         # The HFD value where the two v-curve edges cross
         # This is a more convenient way of representing the position intercept difference
