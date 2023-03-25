@@ -27,10 +27,11 @@ from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.time import Time
 import astropy.units as u
 import jsonschema
+from warwick.observatory.camera.qhy import CameraStatus
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import log
-from warwick.observatory.camera.qhy import CameraStatus
-from .camera_helpers import cameras, cam_configure, cam_status, cam_take_images, cam_stop
+from .camera_helpers import cameras, cam_initialize, cam_status, cam_configure, cam_take_images, cam_stop, \
+    cam_cycle_power, cam_reinitialize_synchronised, cam_start_synchronised, cam_stop_synchronised
 from .mount_helpers import mount_stop
 from .pipeline_helpers import configure_pipeline
 from .schema_helpers import camera_science_schema, pipeline_science_schema
@@ -41,9 +42,6 @@ MAX_PROCESSING_TIME = 60 * u.s
 
 # Amount of time to wait before retrying if an image acquisition generates an error
 CAM_ERROR_RETRY_DELAY = 10 * u.s
-
-# Expected time to converge on target field
-SETUP_DELAY = 15 * u.s
 
 # Exposure time to use when taking a WCS field image
 WCS_EXPOSURE_TIME = 5 * u.s
@@ -63,19 +61,16 @@ class ObserveFieldBase(TelescopeAction):
 
         self._start_date = Time(config['start'])
         self._end_date = Time(config['end'])
+        self._camera_ids = [c for c in cameras if c in self.config]
         self._acquisition_camera = config.get('acquisition', None)
+
+        self._observation_status = ObservationStatus.PositionLost
+        self._last_exposure_started = {camera_id: Time.now() for camera_id in self._camera_ids}
 
         self._wcs_status = WCSStatus.Inactive
         self._wcs = None
         self._wcs_field_center = None
 
-        self._observation_status = ObservationStatus.PositionLost
-
-        self._cameras = {}
-        for camera_id in cameras:
-            self._cameras[camera_id] = CameraWrapper(camera_id, self.config.get(camera_id, None), self.log_name)
-
-    # pylint: disable=no-self-use
     def slew_to_field(self):
         """
         Implemented by subclasses to move the mount to the target
@@ -91,7 +86,6 @@ class ObserveFieldBase(TelescopeAction):
                  ObservationStatus.Error on failure
         """
         return ObservationStatus.OnTarget
-    # pylint: enable=no-self-use
 
     def __acquire_field(self):
         self.set_task('Acquiring field')
@@ -102,7 +96,7 @@ class ObserveFieldBase(TelescopeAction):
         if not self.slew_to_field():
             return ObservationStatus.Error
 
-        if self._acquisition_camera is None:
+        if self._acquisition_camera is None or not self.config.get('onsky', True):
             return ObservationStatus.OnTarget
 
         # Take a frame to solve field center
@@ -218,6 +212,48 @@ class ObserveFieldBase(TelescopeAction):
 
                 self._wait_condition.wait(10)
 
+    def __start_exposures(self):
+        success = cam_reinitialize_synchronised(self.log_name, self._camera_ids)
+        for camera_id in self._camera_ids:
+            success = success and cam_configure(self.log_name, camera_id, self.config.get(camera_id, None), quiet=True)
+
+        if not success:
+            return False
+
+        return cam_start_synchronised(self.log_name, self._camera_ids)
+
+    def __check_timeouts(self, camera_id):
+        timeout = self._last_exposure_started[camera_id] + self.config[camera_id]['exposure'] * u.s + \
+                  MAX_PROCESSING_TIME
+        if Time.now() < timeout:
+            return True
+
+        # Exposure has timed out: lets find out why
+        status = cam_status(self.log_name, camera_id).get('state', None)
+
+        # Lost communication with camera daemon, this is assumed to be unrecoverable
+        # We can return here and let the error be handled when restarting the observation
+        if status is None:
+            log.error(self.log_name, 'Lost communication with camera ' + camera_id)
+            return False
+
+        # Camera may be idle if the pipeline blocked for too long
+        if status is CameraStatus.Idle:
+            log.warning(self.log_name, f'Found idle camera {camera_id}; restarting')
+            return False
+
+        # Power cycling the camera fixes most other errors
+        log.warning(self.log_name, f'Camera has timed out in state {CameraStatus.label(status)}; power cycling')
+        cam_cycle_power(self.log_name, camera_id)
+
+        time.sleep(5)
+
+        # First initialization after power-on takes longer, so initialize here
+        # and allow __observe_field to reinitialize it afterwards
+        cam_initialize(self.log_name, camera_id)
+
+        return False
+
     def __observe_field(self):
         # Start science observations
         pipeline_config = self.config['pipeline'].copy()
@@ -226,11 +262,14 @@ class ObserveFieldBase(TelescopeAction):
         if not configure_pipeline(self.log_name, pipeline_config):
             return ObservationStatus.Error
 
-        # Mark cameras idle so they will be started by camera.update() below
-        print('ObserveField: starting science observations')
-        for camera in self._cameras.values():
-            if camera.status == CameraWrapperStatus.Stopped:
-                camera.status = CameraWrapperStatus.Idle
+        self.set_task('Preparing Cameras')
+        if not self.__start_exposures():
+            return ObservationStatus.Error
+
+        # The first exposure in a sequence is skipped, so we set the expected exposure start time
+        # in the future to avoid false-positive timeouts during the first exposure
+        for camera_id in self._camera_ids:
+            self._last_exposure_started[camera_id] = Time.now() + self.config[camera_id]['exposure'] * u.s
 
         # Monitor observation status
         self.set_task(f'Ends {self._end_date.strftime("%H:%M:%S")}')
@@ -240,35 +279,21 @@ class ObserveFieldBase(TelescopeAction):
                 break
 
             if not self.dome_is_open:
-                log.error(self.log_name, 'Aborting because roof is not open')
+                log.error(self.log_name, 'Aborting because dome is not open')
                 return_status = ObservationStatus.DomeClosed
                 break
 
-            for camera in self._cameras.values():
-                camera.update()
-                if camera.status == CameraWrapperStatus.Error:
-                    return_status = ObservationStatus.Error
-                    break
+            if not all(self.__check_timeouts(camera_id) for camera_id in self._camera_ids):
+                # Try to recover the observation
+                return_status = ObservationStatus.OnTarget
+                break
 
             self.wait_until_time_or_aborted(Time.now() + CAM_CHECK_STATUS_DELAY, self._wait_condition)
 
         # Wait for all cameras to stop before returning to the main loop
         print('ObserveField: stopping science observations')
-        for camera in self._cameras.values():
-            camera.stop()
+        cam_stop_synchronised(self.log_name, self._camera_ids)
 
-        while True:
-            if all(c.status in [CameraWrapperStatus.Error, CameraWrapperStatus.Stopped]
-                    for c in self._cameras.values()):
-                break
-
-            for camera in self._cameras.values():
-                camera.update()
-
-            with self._wait_condition:
-                self._wait_condition.wait(CAM_CHECK_STATUS_DELAY.to_value(u.s))
-
-        print('ObserveField: cameras have stopped')
         return return_status
 
     def run_thread(self):
@@ -330,10 +355,9 @@ class ObserveFieldBase(TelescopeAction):
 
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
-        print('Got frame from', headers.get('CAMID', '').lower())
-        camera = self._cameras.get(headers.get('CAMID', '').lower(), None)
-        if camera is not None:
-            camera.received_frame(headers)
+        camera_id = headers.get('CAMID', '').lower()
+        print('Got frame from', camera_id, headers['DATE-OBS'], headers['TIME-SRC'])
+        self._last_exposure_started[camera_id] = Time(headers['DATE-OBS'], format='isot')
 
         with self._wait_condition:
             if self._wcs_status == WCSStatus.WaitingForWCS:
@@ -402,87 +426,3 @@ class WCSStatus:
 
 class ObservationStatus:
     PositionLost, OnTarget, DomeClosed, Complete, Error = range(5)
-
-
-class CameraWrapperStatus:
-    Idle, Active, Error, Stopping, Stopped, Skipped = range(6)
-
-
-class CameraWrapper:
-    """Holds camera-specific state"""
-    def __init__(self, camera_id, camera_config, log_name):
-        self.camera_id = camera_id
-        self.status = CameraWrapperStatus.Stopped if camera_config is not None else CameraWrapperStatus.Skipped
-        self._log_name = log_name
-        self._config = camera_config or {}
-        self._start_attempts = 0
-        self._last_frame_time = Time.now()
-
-    def stop(self):
-        if self.status == CameraWrapperStatus.Idle:
-            self.status = CameraWrapperStatus.Stopped
-        elif self.status == CameraWrapperStatus.Active:
-            self.status = CameraWrapperStatus.Stopping
-            cam_stop(self._log_name, self.camera_id)
-
-    # pylint: disable=unused-argument
-    def received_frame(self, headers):
-        """Callback to process an acquired frame. headers is a dictionary of header keys"""
-        self._last_frame_time = Time.now()
-    # pylint: enable=unused-argument
-
-    def update(self):
-        """Monitor camera status"""
-        if self.status in [CameraWrapperStatus.Error, CameraWrapperStatus.Stopped, CameraWrapperStatus.Skipped]:
-            return
-
-        # Start exposure sequence on first update
-        if self.status == CameraWrapperStatus.Idle:
-            if cam_take_images(self._log_name, self.camera_id, 0, self._config):
-                self._start_attempts = 0
-                self._last_frame_time = Time.now()
-                self.status = CameraWrapperStatus.Active
-                return
-
-            # Something went wrong - see if we can recover
-            self._start_attempts += 1
-            log.error(self._log_name, 'Failed to start exposures for camera ' + self.camera_id +
-                      f' (attempt {self._start_attempts} of 5)')
-
-            if self._start_attempts >= 5:
-                log.error(self._log_name, 'Too many start attempts: aborting')
-                self.status = CameraWrapperStatus.Error
-                return
-
-            # Try stopping the camera and see if we can recover on the next update loop
-            cam_stop(self._log_name, self.camera_id)
-            return
-
-        if self.status == CameraWrapperStatus.Stopping:
-            if cam_status(self._log_name, self.camera_id).get('state', CameraStatus.Idle) == CameraStatus.Idle:
-                self.status = CameraWrapperStatus.Stopped
-                return
-
-        # Assume that everything is ok if we are still receiving frames at a regular rate
-        if Time.now() < self._last_frame_time + self._config['exposure'] * u.s + MAX_PROCESSING_TIME:
-            return
-
-        # Exposure has timed out: lets find out why
-        status = cam_status(self._log_name, self.camera_id).get('state', None)
-
-        # Lost communication with camera daemon, this is assumed to be unrecoverable
-        if status is None:
-            log.error(self._log_name, 'Lost communication with camera ' + self.camera_id)
-            self.status = CameraWrapperStatus.Error
-            return
-
-        # Camera may be idle if the pipeline blocked for too long
-        if status is CameraStatus.Idle:
-            log.warning(self._log_name, 'Recovering idle camera ' + self.camera_id)
-            self.status = CameraWrapperStatus.Idle
-            self.update()
-            return
-
-        # Try stopping the camera and see if we can recover on the next update loop
-        log.warning(self._log_name, f'Camera has timed out in state {CameraStatus.label(status)}, stopping camera')
-        cam_stop(self._log_name, self.camera_id)
