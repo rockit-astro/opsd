@@ -27,7 +27,7 @@ from warwick.observatory.common import daemons, validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import log
 from warwick.observatory.camera.qhy import CameraStatus, CoolerMode
-from warwick.observatory.talon import TelState
+from warwick.observatory.lmount import MountState
 from .camera_helpers import cameras, cam_configure, cam_status, cam_stop
 from .mount_helpers import mount_status, mount_park
 
@@ -84,7 +84,7 @@ class ShutdownCameras(TelescopeAction):
             self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
 
         status = mount_status(self.log_name)
-        if status and 'state' in status and status['state'] != TelState.Absent:
+        if status and 'state' in status and status['state'] not in [MountState.Disabled, MountState.Parked]:
             self.set_task('Parking mount')
             mount_park(self.log_name)
 

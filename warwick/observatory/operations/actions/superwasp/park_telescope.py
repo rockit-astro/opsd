@@ -18,7 +18,7 @@
 
 import jsonschema
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
-from warwick.observatory.talon import TelState
+from warwick.observatory.lmount import MountState
 from .mount_helpers import mount_status, mount_stop, mount_park
 
 
@@ -34,7 +34,7 @@ class ParkTelescope(TelescopeAction):
         """Thread that runs the hardware actions"""
 
         status = mount_status(self.log_name)
-        if status and 'state' in status and status['state'] != TelState.Absent:
+        if status and 'state' in status and status['state'] not in [MountState.Disabled, MountState.Parked]:
             self.set_task('Parking mount')
             if not mount_stop(self.log_name):
                 self.status = TelescopeActionStatus.Error
