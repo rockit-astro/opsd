@@ -1,5 +1,5 @@
 Name:           python3-warwick-superwasp-operations
-Version:        20230325
+Version:        20230327
 Release:        0
 License:        GPL3
 Summary:        SuperWASP specific operations code

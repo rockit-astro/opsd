@@ -258,6 +258,8 @@ class ObserveFieldBase(TelescopeAction):
         # Start science observations
         pipeline_config = self.config['pipeline'].copy()
         pipeline_config['type'] = 'SCIENCE'
+        if 'archive' not in pipeline_config:
+            pipeline_config['archive'] = [camera_id.upper() for camera_id in self._camera_ids]
 
         if not configure_pipeline(self.log_name, pipeline_config):
             return ObservationStatus.Error
