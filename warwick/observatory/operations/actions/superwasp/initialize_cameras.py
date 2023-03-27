@@ -112,7 +112,7 @@ class InitializeCameras(TelescopeAction):
 
         self.set_task('Initializing Cameras')
         for camera_id in self.config['cameras']:
-            if not cam_initialize(camera_id):
+            if not cam_initialize(self.log_name, camera_id):
                 self.status = TelescopeActionStatus.Error
                 return
 
