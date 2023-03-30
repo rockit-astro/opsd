@@ -312,6 +312,9 @@ class ObserveFieldBase(TelescopeAction):
             self.status = TelescopeActionStatus.Complete
             return
 
+        # Make certain that the cameras aren't exposing from a previous action
+        cam_stop_synchronised(self.log_name, self._camera_ids)
+
         # Outer loop handles transitions between states
         # Each method call blocks, returning only when it is ready to exit or switch to a different state
         while True:
@@ -363,7 +366,7 @@ class ObserveFieldBase(TelescopeAction):
         self._last_exposure_started[camera_id] = Time(headers['DATE-OBS'], format='isot')
 
         with self._wait_condition:
-            if self._wcs_status == WCSStatus.WaitingForWCS:
+            if self._wcs_status == WCSStatus.WaitingForWCS and camera_id == self._acquisition_camera:
                 if 'CRVAL1' in headers and 'IMAG-RGN' in headers and 'SITELAT' in headers:
                     r = re.search(r'^\[(\d+):(\d+),(\d+):(\d+)\]$', headers['IMAG-RGN']).groups()
                     cx = (int(r[0]) - 1 + int(r[1])) / 2
