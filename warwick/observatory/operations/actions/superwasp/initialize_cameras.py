@@ -88,7 +88,9 @@ class InitializeCameras(TelescopeAction):
         """Thread that runs the hardware actions"""
         if self._start_date is not None and Time.now() < self._start_date:
             self.set_task(f'Waiting until {self._start_date.strftime("%H:%M:%S")}')
-            self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
+            if not self.wait_until_time_or_aborted(self._start_date, self._wait_condition):
+                self.status = TelescopeActionStatus.Complete
+                return
 
         # Power cameras on if needed
         switched = False

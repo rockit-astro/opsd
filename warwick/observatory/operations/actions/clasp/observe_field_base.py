@@ -68,12 +68,15 @@ class ObserveFieldBase(TelescopeAction):
             self.set_task(f'Waiting until {self._start_date.strftime("%H:%M:%S")}')
             self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
 
-        if Time.now() < self._end_date:
-            self.set_task('Slewing to field')
-            if not self.slew_to_field():
-                print('failed to slew to field')
-                self.status = TelescopeActionStatus.Error
-                return
+        if Time.now() >= self._end_date or self.aborted:
+            self.status = TelescopeActionStatus.Complete
+            return
+
+        self.set_task('Slewing to field')
+        if not self.slew_to_field():
+            print('failed to slew to field')
+            self.status = TelescopeActionStatus.Error
+            return
 
         while Time.now() < self._end_date and not self.aborted:
             # Monitor cameras and dome status
