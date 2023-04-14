@@ -28,7 +28,8 @@ from astropy.time import Time
 from astropy import units as u
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import log, validation
-from .camera_helpers import cameras, cam_stop
+from warwick.observatory.camera.qhy import CameraStatus
+from .camera_helpers import cameras, cam_initialize, cam_status, cam_stop
 from .mount_helpers import mount_status, mount_slew_altaz
 from .pipeline_helpers import pipeline_enable_archiving, configure_pipeline
 from .schema_helpers import pipeline_flat_schema, camera_flat_schema
@@ -285,11 +286,19 @@ class CameraWrapper:
 
     def check_timeout(self):
         """Sets error state if an expected frame is more than 30 seconds late"""
-        if self.state not in [AutoFlatState.Waiting, AutoFlatState.Saving]:
+        if self.state >= AutoFlatState.Complete or Time.now() < self._expected_complete:
             return
 
-        if Time.now() > self._expected_complete:
-            log.error(self._log_name, f'AutoFlat: camera {self.camera_id} exposure timed out')
+        log.error(self._log_name, f'AutoFlat: camera {self.camera_id} exposure timed out')
+        if self.state == AutoFlatState.Bias:
+            # cam4 often crashes when preparing to take the initial bias frame
+            # reinitializing and restarting is enough to fix it
+            status = cam_status(self._log_name, self.camera_id)
+            if status and status.get('state', CameraStatus.Idle) == CameraStatus.Disabled:
+                cam_initialize(self._log_name, self.camera_id)
+                self.start()
+                return
+
             self.state = AutoFlatState.Error
 
     def __take_image(self, exposure):
