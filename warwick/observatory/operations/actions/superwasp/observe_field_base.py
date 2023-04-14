@@ -306,7 +306,7 @@ class ObserveFieldBase(TelescopeAction):
             self.status = TelescopeActionStatus.Error
             return
 
-        self.set_task('Waiting for observation start')
+        self.set_task(f'Waiting until {self._start_date.strftime("%H:%M:%S")}')
         self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
         if Time.now() > self._end_date or self.aborted:
             self.status = TelescopeActionStatus.Complete
