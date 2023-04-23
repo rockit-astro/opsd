@@ -24,7 +24,7 @@ import astropy.units as u
 from warwick.observatory.common import daemons, validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import log
-from .camera_helpers import cameras, cam_initialize, cam_status
+from .camera_helpers import cameras, cam_cycle_power, cam_initialize, cam_status
 
 CAMERA_POWERON_DELAY = 5
 
@@ -115,8 +115,12 @@ class InitializeCameras(TelescopeAction):
         self.set_task('Initializing Cameras')
         for camera_id in self.config['cameras']:
             if not cam_initialize(self.log_name, camera_id):
-                self.status = TelescopeActionStatus.Error
-                return
+                # Cameras sometimes boot with a bogus device name
+                # This is usually fixed by a power cycle
+                cam_cycle_power(self.log_name, camera_id)
+                if not cam_initialize(self.log_name, camera_id):
+                    self.status = TelescopeActionStatus.Error
+                    return
 
         locked = self.__wait_for_temperature_lock()
         if self.aborted or locked:
