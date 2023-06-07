@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+#
+# This file is part of opsd.
+#
+# opsd is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# opsd is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with opsd.  If not, see <http://www.gnu.org/licenses/>.
+
+"""Simplified commandline client for Windmill Hill"""
+
+import glob
+import os
+import sys
+import time
+import Pyro4
+from astropy.time import Time
+import astropy.units as u
+from warwick.observatory.common import TFmt
+from warwick.observatory.operations import (
+    Config,
+    CommandStatus,
+    ConditionStatus,
+    DomeStatus,
+    OperationsMode
+)
+
+SCRIPT_NAME = os.path.basename(sys.argv[0])
+
+sys.excepthook = Pyro4.util.excepthook
+
+def run_command(command, args):
+    """Runs a daemon command, handling error messages"""
+    if 'OPSD_CONFIG_PATH' in os.environ:
+        config = Config(os.environ['OPSD_CONFIG_PATH'])
+    else:
+        # Load the config file defined in the OPSD_CONFIG_PATH environment variable or from the
+        # default system location (/etc/opsd/). Exit with an error if zero or multiple are found.
+        files = glob.glob("/etc/opsd/*.json")
+        if len(files) != 1:
+            print('error: failed to guess the default config file. ' +
+                  'Run as OPSD_CONFIG_PATH=/path/to/config.json ops <command>')
+            return 1
+
+        config = Config(files[0])
+
+    try:
+        ret = command(config, args)
+    except Pyro4.errors.CommunicationError:
+        ret = -101
+
+    # Print message associated with error codes, except for -1 (error handled locally)
+    if ret not in (0, -1):
+        print(CommandStatus.message(ret))
+    return ret
+
+
+def enable(config, _):
+    """Enable automatic dome control"""
+    with config.daemon.connect() as ops:
+        status = ops.status()
+
+        if status['dome']['mode'] == OperationsMode.Error:
+            ops.dome_control(False)
+            while True:
+                time.sleep(0.1)
+                status = ops.status()
+                if status['dome']['mode'] == OperationsMode.Manual:
+                    break
+
+        if status['telescope']['mode'] == OperationsMode.Error:
+            ops.tel_control(False)
+            while True:
+                time.sleep(0.1)
+                status = ops.status()
+                if status['telescope']['mode'] == OperationsMode.Manual:
+                    break
+
+        if status['dome']['mode'] == OperationsMode.Manual:
+            ops.dome_control(True)
+
+        if status['telescope']['mode'] == OperationsMode.Manual:
+            ops.tel_control(True)
+
+        current_night = Time.now()
+        if current_night.to_datetime().hour < 12:
+            current_night -= 1 * u.day
+
+        ops.schedule_observations({
+            'night': current_night.strftime('%Y-%m-%d'),
+            'dome': {
+                'open': 'auto',
+                'close': 'auto'
+            },
+            'actions': []
+        })
+
+        return CommandStatus.Succeeded
+
+
+def disable(config, _):
+    """Disable automatic dome control"""
+    with config.daemon.connect() as ops:
+        ops.clear_dome_window()
+        ops.dome_control(False)
+        ops.tel_control(False)
+        return CommandStatus.Succeeded
+
+
+def print_status(config, _):
+    """Prints the latest ops data in machine-readable form"""
+    with config.daemon.connect() as ops:
+        status = ops.status()
+
+    env_date = Time.strptime(status['environment']['updated'], '%Y-%m-%dT%H:%M:%SZ')
+    print('Environment status at ' + TFmt.Bold + env_date.strftime('%H:%M:%S') + TFmt.Clear + ':')
+
+    for label, sensors in status['environment']['conditions'].items():
+        line = '{:>17}'.format(label) + ': '
+        line += ', '.join([ConditionStatus.label(s, True) for s in sensors.values()])
+        print(line)
+    print()
+
+    dome = status['dome']
+    dome_date = Time.strptime(dome['status_updated'], '%Y-%m-%dT%H:%M:%SZ')
+    print('Dome status at ' + TFmt.Bold + dome_date.strftime('%H:%M:%S') + TFmt.Clear + ':')
+
+    dome_mode = '    Control: ' + OperationsMode.label(dome['mode'], True)
+    if dome['mode'] != dome['requested_mode']:
+        dome_mode += ' (' + OperationsMode.label(dome['requested_mode'], True) + ' queued)'
+    print(dome_mode)
+
+    if dome['mode'] == OperationsMode.Automatic:
+        open_str = TFmt.Yellow + 'Not Scheduled'
+        if dome['requested_open_date']:
+            open_str = dome['requested_open_date']
+        print('    Opening: ' + TFmt.Bold + open_str + TFmt.Clear)
+
+        close_str = TFmt.Yellow + 'Not Scheduled'
+        if dome['requested_close_date']:
+            close_str = dome['requested_close_date']
+        print('    Closing: ' + TFmt.Bold + close_str + TFmt.Clear)
+
+        dome_status = '    Shutter: ' + DomeStatus.label(dome['status'], True)
+        print(dome_status)
+
+    return 0
+
+
+def print_usage():
+    """Prints the utility help"""
+    print('Usage: {} <command>'.format(SCRIPT_NAME))
+    print()
+    print('   enable       enable automated dome control')
+    print('   disable      disable automated dome control')
+    print('   status       print a human-readable status summary')
+    print()
+
+    return 1
+
+
+if __name__ == '__main__':
+    commands = {
+        'status': print_status,
+        'enable': enable,
+        'disable': disable,
+    }
+
+    if len(sys.argv) >= 2 and sys.argv[1] in commands:
+        sys.exit(run_command(commands[sys.argv[1]], sys.argv[2:]))
+
+    sys.exit(print_usage())

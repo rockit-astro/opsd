@@ -133,6 +133,13 @@ class ConditionStatus:
     """Represents the status of a condition type"""
     Unknown, Safe, Warning, Unsafe = range(4)
 
+    _labels = {
+        0: 'UNKNOWN',
+        1: 'SAFE',
+        2: 'WARNING',
+        3: 'UNSAFE'
+    }
+
     _formats = {
         0: TFmt.Cyan + TFmt.Bold,
         1: TFmt.Green + TFmt.Bold,
@@ -145,3 +152,18 @@ class ConditionStatus:
         if status in cls._formats and status in cls._formats:
             return cls._formats[status] + label + TFmt.Clear
         return label
+
+    @classmethod
+    def label(cls, status, formatting=False):
+        """
+        Returns a human readable string describing a status
+        Set formatting=true to enable terminal formatting characters
+        """
+        if formatting:
+            if status in cls._formats and status in cls._formats:
+                return cls._formats[status] + cls._labels[status] + TFmt.Clear
+            return TFmt.Red + TFmt.Bold + 'UNKNOWN' + TFmt.Clear
+
+        if status in cls._labels:
+            return cls._labels[status]
+        return 'UNKNOWN'

@@ -88,7 +88,10 @@ class DomeController:
             auto_failure = self._mode == OperationsMode.Error and \
                 requested_mode == OperationsMode.Automatic
 
-            if requested_mode != self._mode and not auto_failure:
+            prioritise_closing = self._mode == OperationsMode.Automatic and status == DomeStatus.Open and \
+                                 requested_mode == OperationsMode.Manual and requested_status == DomeStatus.Closed
+
+            if requested_mode != self._mode and not auto_failure and not prioritise_closing:
                 print('dome: changing mode from ' + OperationsMode.label(self._mode) +
                       ' to ' + OperationsMode.label(requested_mode))
 

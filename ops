@@ -44,7 +44,7 @@ def run_command(command, args):
         config = Config(os.environ['OPSD_CONFIG_PATH'])
     else:
         # Load the config file defined in the OPSD_CONFIG_PATH environment variable or from the
-        # default system location (/etc/teld/). Exit with an error if zero or multiple are found.
+        # default system location (/etc/opsd/). Exit with an error if zero or multiple are found.
         files = glob.glob("/etc/opsd/*.json")
         if len(files) != 1:
             print('error: failed to guess the default config file. ' +
@@ -153,12 +153,8 @@ def schedule(config, args):
 
 def print_status(config, _):
     """Prints the latest ops data in machine-readable form"""
-    try:
-        with config.daemon.connect() as ops:
-            status = ops.status()
-    except Pyro4.errors.CommunicationError:
-        print('error: unable to communicate with the operations daemon')
-        return 1
+    with config.daemon.connect() as ops:
+        status = ops.status()
 
     env_date = Time.strptime(status['environment']['updated'], '%Y-%m-%dT%H:%M:%SZ')
     env_status = 'Environment status at ' + TFmt.Bold + env_date.strftime('%H:%M:%S') + TFmt.Clear + ': '
@@ -187,12 +183,12 @@ def print_status(config, _):
         open_str = TFmt.Yellow + 'Not Scheduled'
         if dome['requested_open_date']:
             open_str = dome['requested_open_date']
-        print('     Opening: ' + TFmt.Bold + open_str + TFmt.Clear)
+        print('    Opening: ' + TFmt.Bold + open_str + TFmt.Clear)
 
         close_str = TFmt.Yellow + 'Not Scheduled'
         if dome['requested_close_date']:
             close_str = dome['requested_close_date']
-        print('     Closing: ' + TFmt.Bold + close_str + TFmt.Clear)
+        print('    Closing: ' + TFmt.Bold + close_str + TFmt.Clear)
 
         dome_status = '    Shutters: ' + DomeStatus.label(dome['status'], True)
         print(dome_status)
@@ -223,12 +219,8 @@ def print_status(config, _):
 
 def print_json(config, _):
     """Prints the latest ops data in machine-readable form"""
-    try:
-        with config.daemon.connect() as ops:
-            status = ops.status()
-    except Pyro4.errors.CommunicationError:
-        print('error: unable to communicate with the operations daemon')
-        return 1
+    with config.daemon.connect() as ops:
+        status = ops.status()
 
     print(json.dumps(status))
 
