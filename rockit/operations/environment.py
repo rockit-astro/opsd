@@ -16,8 +16,8 @@
 
 """Class managing the environment status checks"""
 
-import datetime
 import threading
+from astropy.time import Time
 from rockit.common import log
 from .constants import ConditionStatus
 
@@ -93,7 +93,7 @@ class EnvironmentWatcher:
         self._conditions = [ConditionType(condition) for condition in config.environment_conditions]
 
         self.safe = False
-        self.updated = datetime.datetime.utcnow()
+        self.updated = Time.now()
 
     def update(self):
         """Queries environmentd for new data and updates flags"""
@@ -110,7 +110,7 @@ class EnvironmentWatcher:
                     unsafe_conditions.append(condition.label)
 
             with self._lock:
-                self.updated = datetime.datetime.utcnow()
+                self.updated = Time.now()
                 self.safe = safe
 
             if was_safe and not safe:
@@ -120,7 +120,7 @@ class EnvironmentWatcher:
                 log.info(self._config.log_name, 'Environment trigger timed out')
         except Exception as e:
             with self._lock:
-                self.updated = datetime.datetime.utcnow()
+                self.updated = Time.now()
                 self.safe = False
                 for condition in self._conditions:
                     condition.update({})

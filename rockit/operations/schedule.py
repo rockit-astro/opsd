@@ -16,7 +16,6 @@
 
 """Helper functions for validating and parsing schedule JSON objects into actions"""
 
-import datetime
 import sys
 import traceback
 import jsonschema
@@ -25,6 +24,7 @@ from skyfield.api import Loader
 from astropy.time import Time
 import astropy.units as u
 from rockit.common import validation
+
 
 
 def __format_errors(errors):
@@ -36,30 +36,36 @@ def __format_errors(errors):
             yield error.message
 
 
+def night_start_end(night, config):
+    loader = Loader('/var/tmp/')
+    ts = loader.timescale()
+    eph = loader('de421.bsp')
+
+    sun_above_horizon = almanac.risings_and_settings(eph, eph['Sun'], config.site_location)
+
+    # Search for sunset/sunrise between midday on 'night' and midday the following day
+    night = Time.strptime(night, '%Y-%m-%d') + 12 * u.hour
+    night_search_start = ts.from_astropy(night)
+    night_search_end = ts.from_astropy(night + 1 * u.day)
+    events, _ = almanac.find_discrete(night_search_start, night_search_end, sun_above_horizon)
+    return events[0].to_astropy(), events[1].to_astropy()
+
+
 def __validate_dome(block, config, night):
     """Returns a list of error messages that stop json from defining a valid dome schedule"""
     try:
-        loader = Loader('/var/tmp/')
-        ts = loader.timescale()
-        eph = loader('de421.bsp')
-
-        sun_above_horizon = almanac.risings_and_settings(eph, eph['Sun'], config.site_location)
-
-        # Search for sunset/sunrise between midday on 'night' and midday the following day
-        night_date = datetime.datetime.strptime(night, '%Y-%m-%d')
-        night_search_start = ts.utc(night_date.year, night_date.month, night_date.day, 12)
-        night_search_end = ts.tt_jd(night_search_start.tt + 1)
-        events, _ = almanac.find_discrete(night_search_start, night_search_end, sun_above_horizon)
-        night_start = events[0].utc_datetime()
-        night_end = events[1].utc_datetime()
+        night_start, night_end = night_start_end(night, config)
 
         # pylint: disable=unused-argument
         def require_night(validator, value, instance, schema):
             """Create a validator object that forces a tagged date to match
                the night defined in the observing plan
             """
+            if instance == 'auto':
+                return
+
             try:
-                date = datetime.datetime.strptime(instance, '%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc)
+                date = Time.strptime(instance, '%Y-%m-%dT%H:%M:%SZ')
             except Exception:
                 yield jsonschema.ValidationError('{} is not a valid datetime'.format(instance))
                 return
@@ -67,7 +73,7 @@ def __validate_dome(block, config, night):
             if value and (date < night_start or date > night_end):
                 start_str = night_start.strftime('%Y-%m-%dT%H:%M:%SZ')
                 end_str = night_end.strftime('%Y-%m-%dT%H:%M:%SZ')
-                yield jsonschema.ValidationError("{} is not between {} and {}".format(
+                yield jsonschema.ValidationError("{} is not auto or between {} and {}".format(
                     instance, start_str, end_str))
 
         # pylint: enable=unused-argument
@@ -79,12 +85,10 @@ def __validate_dome(block, config, night):
             'properties': {
                 'open': {
                     'type': 'string',
-                    'format': 'date-time',
                     'require-night': True
                 },
                 'close': {
                     'type': 'string',
-                    'format': 'date-time',
                     'require-night': True
                 }
             }
@@ -193,16 +197,24 @@ def parse_schedule_actions(config, json):
     return actions
 
 
-def parse_dome_window(json):
+def parse_dome_window(json, config):
     """
     Parses dome open and close dates from a schedule
     Returns a tuple of the open and close dates
     or None if the json does not define a dome block
     """
     if 'dome' in json and 'open' in json['dome'] and 'close' in json['dome']:
+        open_date = close_date = None
+        if json['dome']['open'] == 'auto' or json['dome']['close'] == 'auto':
+            open_date, close_date = night_start_end(json['night'], config)
+
         # These dates have already been validated by __validate_dome
-        open_date = datetime.datetime.strptime(json['dome']['open'], '%Y-%m-%dT%H:%M:%SZ')
-        close_date = datetime.datetime.strptime(json['dome']['close'], '%Y-%m-%dT%H:%M:%SZ')
+        if json['dome']['open'] != 'auto':
+            open_date = Time.strptime(json['dome']['open'], '%Y-%m-%dT%H:%M:%SZ')
+
+        if json['dome']['open'] != 'auto':
+            close_date = Time.strptime(json['dome']['close'], '%Y-%m-%dT%H:%M:%SZ')
+
         return open_date, close_date
 
     return None
