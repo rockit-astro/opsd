@@ -19,10 +19,9 @@
 # pylint: disable=too-many-branches
 
 import collections
-import datetime
 import threading
+from astropy.time import Time
 from rockit.common import log
-
 from .telescope_action import TelescopeActionStatus
 from .dome_controller import DomeStatus
 from .constants import OperationsMode
@@ -40,11 +39,11 @@ class TelescopeController:
         self._active_action = None
         self._idle = True
 
-        self._status_updated = datetime.datetime.utcnow()
+        self._status_updated = Time.now()
 
         self._lock = threading.Lock()
         self._mode = OperationsMode.Manual
-        self._mode_updated = datetime.datetime.utcnow()
+        self._mode_updated = Time.now()
         self._requested_mode = OperationsMode.Manual
 
         self._action_count = 0
@@ -91,7 +90,7 @@ class TelescopeController:
                         self._initialized = False
                         self._mode = OperationsMode.Automatic
 
-                self._status_updated = datetime.datetime.utcnow()
+                self._status_updated = Time.now()
 
                 if self._mode != OperationsMode.Manual:
                     # If the active action is None then we have either just finished

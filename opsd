@@ -187,7 +187,7 @@ class OperationsDaemon:
         if not valid:
             return CommandStatus.InvalidSchedule
 
-        dome_window = parse_dome_window(schedule)
+        dome_window = parse_dome_window(schedule, self._config)
         if dome_window and not self._dome.set_open_window(dome_window):
             return CommandStatus.DomeNotAutomatic
 

@@ -18,9 +18,9 @@
 
 # pylint: disable=too-many-branches
 
-import datetime
 import threading
-
+from astropy.time import Time
+import astropy.units as u
 from rockit.common import log
 from .constants import DomeStatus, OperationsMode
 
@@ -35,16 +35,16 @@ class DomeController:
         self._daemon_error = False
 
         self._mode = OperationsMode.Manual
-        self._mode_updated = datetime.datetime.utcnow()
+        self._mode_updated = Time.now()
         self._requested_mode = OperationsMode.Manual
         self._requested_open_date = None
         self._requested_close_date = None
 
         self._status = DomeStatus.Closed
-        self._status_updated = datetime.datetime.utcnow()
+        self._status_updated = Time.now()
 
         self._environment_safe = False
-        self._environment_safe_date = datetime.datetime.min
+        self._environment_safe_date = Time('2000-01-01T12:00:00')
 
         self._dome_interface = config.dome_interface_type(config.dome_json)
 
@@ -56,13 +56,13 @@ class DomeController:
         """Updates the dome status and resets the last updated time"""
         with self._lock:
             self._status = status
-            self._status_updated = datetime.datetime.utcnow()
+            self._status_updated = Time.now()
 
     def __set_mode(self, mode):
         """Updates the dome control mode and resets the last updated time"""
         with self._lock:
             self._mode = mode
-            self._mode_updated = datetime.datetime.utcnow()
+            self._mode_updated = Time.now()
 
     def __loop(self):
         """Thread that controls dome opening/closing to match requested state"""
@@ -75,7 +75,7 @@ class DomeController:
             with self._lock:
                 requested_mode = self._requested_mode
 
-                current_date = datetime.datetime.utcnow()
+                current_date = Time.now()
                 requested_open = self._requested_open_date is not None and \
                                  self._requested_close_date is not None and \
                                  self._requested_open_date < current_date < self._requested_close_date and \
@@ -83,7 +83,7 @@ class DomeController:
                                  self._environment_safe_date > self._requested_open_date
 
                 requested_status = DomeStatus.Open if requested_open else DomeStatus.Closed
-                environment_safe_age = (current_date - self._environment_safe_date).total_seconds()
+                environment_safe_age = (current_date - self._environment_safe_date).to_value(u.s)
 
             auto_failure = self._mode == OperationsMode.Error and \
                 requested_mode == OperationsMode.Automatic
@@ -194,8 +194,7 @@ class DomeController:
         if not dates or len(dates) < 2:
             return False
 
-        if not isinstance(dates[0], datetime.datetime) or \
-                not isinstance(dates[1], datetime.datetime):
+        if not isinstance(dates[0], Time) or not isinstance(dates[1], Time):
             return False
 
         with self._lock:
@@ -225,7 +224,7 @@ class DomeController:
         The heartbeat ping will only be sent if the environment was pinged within
         the last 30 seconds
         """
-        now = datetime.datetime.utcnow()
+        now = Time.now()
         self._environment_safe = is_safe
         self._environment_safe_date = now
 

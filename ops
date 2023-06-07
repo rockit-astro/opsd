@@ -17,12 +17,12 @@
 
 """Commandline client for communicating with the operations daemon"""
 
-import datetime
 import glob
 import json
 import os
 import sys
 import Pyro4
+from astropy.time import Time
 from rockit.common import TFmt
 from rockit.operations import (
     Config,
@@ -160,7 +160,7 @@ def print_status(config, _):
         print('error: unable to communicate with the operations daemon')
         return 1
 
-    env_date = datetime.datetime.strptime(status['environment']['updated'], '%Y-%m-%dT%H:%M:%SZ')
+    env_date = Time.strptime(status['environment']['updated'], '%Y-%m-%dT%H:%M:%SZ')
     env_status = 'Environment status at ' + TFmt.Bold + env_date.strftime('%H:%M:%S') + TFmt.Clear + ': '
     if status['environment']['safe']:
         env_status += TFmt.Bold + TFmt.Green + 'SAFE' + TFmt.Clear
@@ -175,7 +175,7 @@ def print_status(config, _):
     print()
 
     dome = status['dome']
-    dome_date = datetime.datetime.strptime(dome['status_updated'], '%Y-%m-%dT%H:%M:%SZ')
+    dome_date = Time.strptime(dome['status_updated'], '%Y-%m-%dT%H:%M:%SZ')
     print('Dome status at ' + TFmt.Bold + dome_date.strftime('%H:%M:%S') + TFmt.Clear + ':')
 
     dome_mode = '    Control: ' + OperationsMode.label(dome['mode'], True)
@@ -198,7 +198,7 @@ def print_status(config, _):
         print(dome_status)
 
     tel = status['telescope']
-    tel_date = datetime.datetime.strptime(tel['status_updated'], '%Y-%m-%dT%H:%M:%SZ')
+    tel_date = Time.strptime(tel['status_updated'], '%Y-%m-%dT%H:%M:%SZ')
     print('Telescope status at ' + TFmt.Bold + tel_date.strftime('%H:%M:%S') + TFmt.Clear + ':')
 
     tel_mode = '    Control: ' + OperationsMode.label(tel['mode'], True)
