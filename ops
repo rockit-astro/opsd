@@ -148,8 +148,6 @@ def schedule(config, args):
     with config.daemon.connect() as ops:
         return ops.schedule_observations(schedule)
 
-    return -1
-
 
 def print_status(config, _):
     """Prints the latest ops data in machine-readable form"""
@@ -174,20 +172,17 @@ def print_status(config, _):
     dome_date = Time.strptime(dome['status_updated'], '%Y-%m-%dT%H:%M:%SZ')
     print('Dome status at ' + TFmt.Bold + dome_date.strftime('%H:%M:%S') + TFmt.Clear + ':')
 
-    dome_mode = '    Control: ' + OperationsMode.label(dome['mode'], True)
-    if dome['mode'] != dome['requested_mode']:
-        dome_mode += ' (' + OperationsMode.label(dome['requested_mode'], True) + ' queued)'
-    print(dome_mode)
+    print('    Control: ' + OperationsMode.label(dome['mode'], True))
 
     if dome['mode'] == OperationsMode.Automatic:
         open_str = TFmt.Yellow + 'Not Scheduled'
-        if dome['requested_open_date']:
-            open_str = dome['requested_open_date']
+        if dome['open_date']:
+            open_str = dome['open_date']
         print('    Opening: ' + TFmt.Bold + open_str + TFmt.Clear)
 
         close_str = TFmt.Yellow + 'Not Scheduled'
-        if dome['requested_close_date']:
-            close_str = dome['requested_close_date']
+        if dome['close_date']:
+            close_str = dome['close_date']
         print('    Closing: ' + TFmt.Bold + close_str + TFmt.Clear)
 
         dome_status = '    Shutters: ' + DomeStatus.label(dome['status'], True)

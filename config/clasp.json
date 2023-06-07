@@ -11,8 +11,9 @@
   "dome": {
     "module": "rockit.operations.dome.astrohaven",
     "daemon": "clasp_dome",
-    "movement_timeout": 120,
-    "heartbeat_timeout": 119
+    "heartbeat_timeout": 60,
+    "reopen_after_weather_alert": true,
+    "environment_stale_limit": 30
   },
   "environment_daemon": "observatory_environment",
   "environment_conditions": [

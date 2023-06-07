@@ -18,11 +18,12 @@
 
 # pylint: disable=too-many-branches
 
+import queue
 import threading
 from astropy.time import Time
 import astropy.units as u
 from rockit.common import log
-from .constants import DomeStatus, OperationsMode
+from .constants import DomeStatus, OperationsMode, CommandStatus
 
 
 class DomeController:
@@ -32,13 +33,14 @@ class DomeController:
         self._lock = threading.Lock()
         self._wait_condition = threading.Condition()
 
-        self._daemon_error = False
+        self.comm_lock = threading.Lock()
+        self.command_queue = queue.Queue()
+        self.result_queue = queue.Queue()
 
         self._mode = OperationsMode.Manual
         self._mode_updated = Time.now()
-        self._requested_mode = OperationsMode.Manual
-        self._requested_open_date = None
-        self._requested_close_date = None
+        self._open_date = None
+        self._close_date = None
 
         self._status = DomeStatus.Closed
         self._status_updated = Time.now()
@@ -52,16 +54,10 @@ class DomeController:
         loop.daemon = True
         loop.start()
 
-    def __set_status(self, status):
-        """Updates the dome status and resets the last updated time"""
+    def __set_error(self):
         with self._lock:
-            self._status = status
-            self._status_updated = Time.now()
-
-    def __set_mode(self, mode):
-        """Updates the dome control mode and resets the last updated time"""
-        with self._lock:
-            self._mode = mode
+            self._mode = OperationsMode.Error
+            self._open_date = self._close_date = None
             self._mode_updated = Time.now()
 
     def __loop(self):
@@ -70,155 +66,156 @@ class DomeController:
             # Handle requests from the user to change between manual and automatic mode
             # Manual intervention is required to clear errors and return to automatic mode.
             # If an error does occur the dome heartbeat will timeout, and it will close itself.
+            try:
+                request, data = self.command_queue.get(timeout=self._config.loop_delay)
+            except queue.Empty:
+                request, data = None, None
 
-            # Copy public facing variables to avoid race conditions
-            with self._lock:
-                requested_mode = self._requested_mode
-
-                current_date = Time.now()
-                requested_open = self._requested_open_date is not None and \
-                                 self._requested_close_date is not None and \
-                                 self._requested_open_date < current_date < self._requested_close_date and \
-                                 self._environment_safe and \
-                                 self._environment_safe_date > self._requested_open_date
-
-                requested_status = DomeStatus.Open if requested_open else DomeStatus.Closed
-                environment_safe_age = (current_date - self._environment_safe_date).to_value(u.s)
-
-            auto_failure = self._mode == OperationsMode.Error and \
-                requested_mode == OperationsMode.Automatic
-
-            prioritise_closing = self._mode == OperationsMode.Automatic and status == DomeStatus.Open and \
-                                 requested_mode == OperationsMode.Manual and requested_status == DomeStatus.Closed
-
-            if requested_mode != self._mode and not auto_failure and not prioritise_closing:
-                print('dome: changing mode from ' + OperationsMode.label(self._mode) +
-                      ' to ' + OperationsMode.label(requested_mode))
-
-                try:
-                    if requested_mode == OperationsMode.Automatic:
-                        if self._dome_interface.ping_heartbeat():
-                            self.__set_mode(OperationsMode.Automatic)
+            if request == 'mode':
+                if data == self._mode:
+                    self.result_queue.put(CommandStatus.Succeeded)
+                else:
+                    print('dome: changing mode from ' + OperationsMode.label(self._mode) +
+                          ' to ' + OperationsMode.label(data))
+                    if data == OperationsMode.Automatic:
+                        ret = self._dome_interface.set_automatic()
+                        if ret == CommandStatus.Succeeded:
+                            with self._lock:
+                                self._mode = OperationsMode.Automatic
+                                self._mode_updated = Time.now()
                             log.info(self._config.log_name, 'Dome switched to Automatic mode')
                         else:
-                            self.__set_mode(OperationsMode.Error)
+                            self.__set_error()
                             log.info(self._config.log_name, 'Failed to switch dome to Automatic mode')
                     else:
-                        if self._dome_interface.disable_heartbeat():
-                            self.__set_mode(OperationsMode.Manual)
+                        ret = self._dome_interface.set_manual()
+                        if ret == CommandStatus.Succeeded:
+                            with self._lock:
+                                self._mode = OperationsMode.Manual
+                                self._open_date = self._close_date = None
+                                self._mode_updated = Time.now()
                             log.info(self._config.log_name, 'Dome switched to Manual mode')
                         else:
-                            self.__set_mode(OperationsMode.Error)
-                            log.error(self._config.log_name, 'Failed to switch dome to Manual mode')
-                    if self._daemon_error:
-                        log.info(self._config.log_name, 'Restored contact with Dome daemon')
-                except Exception:
-                    if not self._daemon_error:
-                        log.error(self._config.log_name, 'Lost contact with Dome daemon')
-                        self._daemon_error = True
+                            self.__set_error()
+                            log.info(self._config.log_name, 'Failed to switch dome to Manual mode')
+                    self.result_queue.put(ret)
+            elif request == 'schedule':
+                if self._mode != OperationsMode.Automatic:
+                    self.result_queue.put(CommandStatus.DomeNotAutomatic)
+                else:
+                    if isinstance(data[0], Time) and isinstance(data[1], Time):
+                        self._open_date, self._close_date = data
+                        open_str = data[0].strftime('%Y-%m-%dT%H:%M:%SZ')
+                        close_str = data[1].strftime('%Y-%m-%dT%H:%M:%SZ')
+                        log.info(self._config.log_name, f'Scheduled dome window {open_str} - {close_str}')
+                        self.result_queue.put(CommandStatus.Succeeded)
+                    else:
+                        self.result_queue.put(CommandStatus.Failed)
+            elif request == 'clear':
+                if self._mode != OperationsMode.Automatic:
+                    self.result_queue.put(CommandStatus.DomeNotAutomatic)
+                else:
+                    self._open_date = self._close_date = None
+                    log.info(self._config.log_name, 'Cleared dome window')
+                    self.result_queue.put(CommandStatus.Succeeded)
+            elif request == 'ping':
+                self.result_queue.put(CommandStatus.Succeeded)
+            elif request is not None:
+                self.result_queue.put(CommandStatus.Failed)
 
-                    self.__set_mode(OperationsMode.Error)
-
-            if self._mode == OperationsMode.Automatic:
-                try:
-                    status = self._dome_interface.query_status()
-                    self.__set_status(status)
-
-                    print('dome: is ' + DomeStatus.label(status) + ' and wants to be ' +
-                          DomeStatus.label(requested_status))
-
-                    if status == DomeStatus.Timeout:
-                        print('dome: detected heartbeat timeout!')
-                        self.__set_mode(OperationsMode.Error)
-                    elif requested_status == DomeStatus.Closed and status == DomeStatus.Open:
-                        self.__set_status(DomeStatus.Moving)
-                        if self._dome_interface.close():
-                            self.__set_status(DomeStatus.Closed)
-                        else:
-                            self.__set_mode(OperationsMode.Error)
-                    elif requested_status == DomeStatus.Open and status == DomeStatus.Closed:
-                        self.__set_status(DomeStatus.Moving)
-                        if self._dome_interface.open():
-                            self.__set_status(DomeStatus.Open)
-                        else:
-                            self.__set_mode(OperationsMode.Error)
-                    elif requested_status == status and environment_safe_age < 30:
-                        self._dome_interface.ping_heartbeat()
-                except Exception:
-                    if not self._daemon_error:
-                        log.error(self._config.log_name, 'Lost contact with Dome daemon')
-                        self._daemon_error = True
-
-                    self.__set_mode(OperationsMode.Error)
+            if self._mode != OperationsMode.Automatic:
+                continue
 
             # Clear the schedule if we have passed the close date
-            if self._requested_close_date and current_date > self._requested_close_date:
-                self.clear_open_window()
+            current_date = Time.now()
+            if self._close_date and current_date > self._close_date:
+                with self._lock:
+                    self._open_date = self._close_date = None
 
-            # Wait for the next loop period, unless woken up early by __shortcut_loop_wait
-            with self._wait_condition:
-                self._wait_condition.wait(self._config.loop_delay)
+            # Clear the schedule if the weather is bad
+            if not self._environment_safe and not self._dome_interface.reopen_after_weather_alert and \
+                    self._open_date is not None and self._environment_safe_date > self._open_date:
+                with self._lock:
+                    self._open_date = self._close_date = None
 
-    def __shortcut_loop_wait(self):
-        """Makes the run loop continue immediately if it is currently sleeping"""
-        with self._wait_condition:
-            self._wait_condition.notify_all()
+            should_be_open = self._open_date is not None and self._close_date is not None and \
+                             self._open_date < current_date < self._close_date and \
+                             self._environment_safe and self._environment_safe_date > self._open_date
+
+            status = self._dome_interface.query_status()
+            with self._lock:
+                self._status = status
+                self._status_updated = Time.now()
+
+            print('dome: is ' + DomeStatus.label(status) + ' and wants to be ' +
+                  DomeStatus.label(DomeStatus.Open if should_be_open else DomeStatus.Closed))
+
+            refresh_status = True
+            if status == DomeStatus.Offline:
+                print('dome: dome is offline')
+                self.__set_error()
+            elif status == DomeStatus.Timeout:
+                print('dome: detected heartbeat timeout!')
+                self.__set_error()
+            elif status in [DomeStatus.Open, DomeStatus.Opening] and not should_be_open:
+                if not self._dome_interface.close():
+                    self.__set_error()
+            elif status in [DomeStatus.Closed, DomeStatus.Closing] and should_be_open:
+                if not self._dome_interface.open():
+                    self.__set_error()
+            else:
+                refresh_status = False
+
+            if refresh_status:
+                status = self._dome_interface.query_status()
+                with self._lock:
+                    self._status = status
+                    self._status_updated = Time.now()
+
+            environment_safe_age = (current_date - self._environment_safe_date).to_value(u.s)
+            if environment_safe_age < self._dome_interface.environment_stale_limit:
+                self._dome_interface.ping_heartbeat()
 
     def status(self):
         """Returns a dictionary with the current dome status"""
         with self._lock:
             open_str = None
-            if self._requested_open_date:
-                open_str = self._requested_open_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+            if self._open_date:
+                open_str = self._open_date.strftime('%Y-%m-%dT%H:%M:%SZ')
             close_str = None
-            if self._requested_close_date:
-                close_str = self._requested_close_date.strftime('%Y-%m-%dT%H:%M:%SZ')
+            if self._close_date:
+                close_str = self._close_date.strftime('%Y-%m-%dT%H:%M:%SZ')
             return {
                 'mode': self._mode,
                 'mode_updated': self._mode_updated.strftime('%Y-%m-%dT%H:%M:%SZ'),
                 'status': self._status,
                 'status_updated': self._status_updated.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                'requested_mode': self._requested_mode,
-                'requested_open_date': open_str,
-                'requested_close_date': close_str,
+                'open_date': open_str,
+                'close_date': close_str,
             }
 
-    def request_mode(self, mode):
+    def set_mode(self, mode):
         """Request a dome mode change (automatic/manual)"""
-        with self._lock:
-            self._requested_mode = mode
-            self.__shortcut_loop_wait()
+        with self.comm_lock:
+            self.command_queue.put(('mode', mode))
+            return self.result_queue.get()
 
-    def set_open_window(self, dates):
+    def set_schedule(self, open, close):
         """
         Sets the datetimes that the dome should open and close
         These dates will be cleared automatically if a weather alert triggers
         """
-        if not dates or len(dates) < 2:
-            return False
+        with self.comm_lock:
+            self.command_queue.put(('schedule', (open, close)))
+            return self.result_queue.get()
 
-        if not isinstance(dates[0], Time) or not isinstance(dates[1], Time):
-            return False
-
-        with self._lock:
-            self._requested_open_date = dates[0]
-            self._requested_close_date = dates[1]
-
-            open_str = dates[0].strftime('%Y-%m-%dT%H:%M:%SZ')
-            close_str = dates[1].strftime('%Y-%m-%dT%H:%M:%SZ')
-            log.info(self._config.log_name, 'Scheduled dome window ' + open_str + ' - ' + close_str)
-
-            self.__shortcut_loop_wait()
-            return True
-
-    def clear_open_window(self):
+    def clear_schedule(self):
         """
         Clears the times that the dome should be automatically open
-        The dome will automatically close if it is currently within this window
         """
-        self._requested_open_date = self._requested_close_date = None
-        log.info(self._config.log_name, 'Cleared dome window')
-        self.__shortcut_loop_wait()
+        with self.comm_lock:
+            self.command_queue.put(('clear', None))
+            return self.result_queue.get()
 
     def notify_environment_status(self, is_safe):
         """
@@ -231,6 +228,7 @@ class DomeController:
         self._environment_safe = is_safe
         self._environment_safe_date = now
 
-        # Clear the dome schedule (forcing it to close) if the night has started
-        if not is_safe and self._requested_open_date and now > self._requested_open_date:
-            self.clear_open_window()
+        # Wake up the run loop so it can respond immediately
+        with self.comm_lock:
+            self.command_queue.put(('ping', None))
+            self.result_queue.get()

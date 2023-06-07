@@ -20,6 +20,6 @@ from .dome_controller import DomeController
 from .environment import EnvironmentWatcher
 from .config import Config
 from .constants import CommandStatus, OperationsMode, DomeStatus, ConditionStatus
-from .schedule import validate_schedule, parse_dome_window, parse_schedule_actions
+from .schedule import validate_schedule, parse_dome_window, parse_schedule_actions, night_start_end
 from .telescope_action import TelescopeAction, TelescopeActionStatus
 from .telescope_controller import TelescopeController

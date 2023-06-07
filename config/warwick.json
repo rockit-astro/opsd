@@ -11,8 +11,10 @@
   "dome": {
     "module": "warwick.observatory.operations.dome.ash",
     "daemon": "warwick_dome",
-    "movement_timeout": 135,
-    "heartbeat_timeout": 140
+    "init_timeout": 10,
+    "heartbeat_timeout": 60,
+    "reopen_after_weather_alert": false,
+    "environment_stale_limit": 30
   },
   "environment_daemon": "warwick_environment",
   "environment_conditions": [

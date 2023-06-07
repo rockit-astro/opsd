@@ -36,6 +36,9 @@ class CommandStatus:
     DomeNotAutomatic = 22
     TelescopeNotAutomatic = 23
 
+    DomeNotInitialized = 24
+    DomeHeartbeatTripped = 25
+
     _messages = {
         # General error codes
         1: 'error: command failed',
@@ -50,6 +53,8 @@ class CommandStatus:
         21: 'error: invalid schedule definition',
         22: 'error: dome is not in automatic mode',
         23: 'error: telescope is not in automatic mode',
+        24: 'error: dome has not been initialized',
+        25: 'error: dome heartbeat is tripped',
 
         -100: 'error: terminated by user',
         -101: 'error: unable to communicate with operations daemon'
@@ -97,20 +102,24 @@ class OperationsMode:
 
 class DomeStatus:
     """Aggregated dome status"""
-    Closed, Open, Moving, Timeout = range(4)
+    Closed, Open, Opening, Closing, Timeout, Offline = range(6)
 
     _labels = {
         0: 'CLOSED',
         1: 'OPEN',
-        2: 'MOVING',
-        3: 'TIMEOUT'
+        2: 'OPENING',
+        3: 'CLOSING',
+        4: 'TIMEOUT',
+        5: 'OFFLINE'
     }
 
     _formats = {
         0: TFmt.Red + TFmt.Bold,
         1: TFmt.Green + TFmt.Bold,
         2: TFmt.Yellow + TFmt.Bold,
-        3: TFmt.Red + TFmt.Bold
+        3: TFmt.Yellow + TFmt.Bold,
+        4: TFmt.Red + TFmt.Bold,
+        5: TFmt.Red + TFmt.Bold
     }
 
     @classmethod
