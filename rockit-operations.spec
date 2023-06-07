@@ -24,6 +24,7 @@ mkdir -p %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/halfmetre.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/onemetre.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/superwasp.json %{buildroot}%{_sysconfdir}/opsd
+%{__install} %{_sourcedir}/config/warwick.json %{buildroot}%{_sysconfdir}/opsd
 
 %package server
 Summary:  Operations server
@@ -87,5 +88,15 @@ Requires: python3-rockit-operations-superwasp
 %files data-superwasp
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/superwasp.json
+
+%package data-warwick
+Summary: Operations data for Windmill Hill observatory
+Group:   Unspecified
+Requires: python3-rockit-operations-warwick
+%description data-warwick
+
+%files data-warwick
+%defattr(0644,root,root,-)
+%{_sysconfdir}/opsd/warwick.json
 
 %changelog

@@ -1,0 +1,110 @@
+{
+  "daemon": "warwick_operations",
+  "log_name": "opsd@warwick",
+  "control_machines": ["WarwickTCS", "WarwickDome"],
+  "pipeline_machines": [],
+  "actions_module": "rockit.operations.actions.warwick",
+  "loop_delay": 10,
+  "site_latitude": "52.376861 N",
+  "site_longitude": "1.583861 W",
+  "site_elevation": 94,
+  "dome": {
+    "module": "rockit.operations.dome.ash",
+    "daemon": "warwick_dome",
+    "movement_timeout": 135,
+    "heartbeat_timeout": 140
+  },
+  "environment_daemon": "warwick_environment",
+  "environment_conditions": [
+    {
+      "label": "Wind",
+      "sensors": [
+        {
+          "label": "Warwick",
+          "sensor": "vaisala",
+          "parameter": "wind_speed"
+        }
+      ]
+    },
+    {
+      "label": "Median Wind",
+      "sensors": [
+        {
+          "label": "Warwick",
+          "sensor": "vaisala",
+          "parameter": "median_wind_speed"
+        }
+      ]
+    },
+    {
+      "label": "Temperature",
+      "sensors": [
+        {
+          "label": "Warwick",
+          "sensor": "vaisala",
+          "parameter": "temperature"
+        }
+      ]
+    },
+    {
+      "label": "Humidity",
+      "sensors": [
+        {
+          "label": "Warwick",
+          "sensor": "vaisala",
+          "parameter": "relative_humidity"
+        }
+      ]
+    },
+    {
+      "label": "Int. Temperature",
+      "sensors": [
+        {
+          "label": "Warwick",
+          "sensor": "internal",
+          "parameter": "temperature"
+        }
+      ]
+    },
+    {
+      "label": "Int. Humidity",
+      "sensors": [
+        {
+          "label": "Warwick",
+          "sensor": "internal",
+          "parameter": "humidity"
+        }
+      ]
+    },
+    {
+      "label": "Dew Point",
+      "sensors": [
+        {
+          "label": "Warwick",
+          "sensor": "vaisala",
+          "parameter": "dew_point_delta"
+        }
+      ]
+    },
+    {
+      "label": "Rain",
+      "sensors": [
+        {
+          "label": "Warwick",
+          "sensor": "rain",
+          "parameter": "unsafe_sensors"
+        }
+      ]
+    },
+    {
+      "label": "Disk Space",
+      "sensors": [
+        {
+          "label": "Bytes",
+          "sensor": "diskspace",
+          "parameter": "data_fs_available_bytes"
+        }
+      ]
+    }
+  ]
+}

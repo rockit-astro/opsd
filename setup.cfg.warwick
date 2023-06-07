@@ -1,0 +1,17 @@
+[metadata]
+name = rockit.operations.warwick
+version = file: VERSION
+
+[options]
+packages =
+  rockit.operations.actions.warwick
+  rockit.operations.dome.ash
+
+install_requires =
+    rockit.ashdome
+    rockit.atlas
+    rockit.cfw
+    rockit.meade
+    rockit.operations
+    rockit.pipeline
+    warwick.observatory.camera.qhy
