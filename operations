@@ -24,6 +24,7 @@ import Pyro4
 from astropy.time import Time
 from warwick.observatory.common import daemons, TFmt
 from warwick.observatory.operations import CommandStatus, ConditionStatus, DomeStatus, OperationsMode
+from warwick.observatory.ashdome import AzimuthStatus, HeartbeatStatus, CommandStatus as DomeCommandStatus
 
 SCRIPT_NAME = os.path.basename(sys.argv[0])
 
@@ -45,6 +46,31 @@ def run_command(command, args):
 
 def start(daemon, _):
     """Enable automatic dome control"""
+    # Check if the dome is ready first!
+    with daemons.warwick_dome.connect(timeout=10) as dome:
+        status = dome.status()
+        if status['azimuth_status'] == AzimuthStatus.Disconnected:
+            ret = dome.initialize()
+            if ret != DomeCommandStatus.Succeeded:
+                print('error: failed to initialize dome. Is it powered on?')
+                return 1
+
+            status = dome.status()
+
+        # Reset heartbeat status
+        if status['heartbeat_status'] in [HeartbeatStatus.TrippedIdle, HeartbeatStatus.TrippedClosing]:
+            ret = dome.set_heartbeat_timer(0)
+            if ret != DomeCommandStatus.Succeeded:
+                print('error: failed to reset heartbeat.')
+                return 1
+
+    if status == AzimuthStatus.NotHomed:
+        with daemons.warwick_dome.connect(timeout=0) as dome:
+            ret = dome.home_azimuth()
+            if ret != DomeCommandStatus.Succeeded:
+                print('error: failed to home dome.')
+                return 1
+
     with daemon.connect(timeout=30) as ops:
         status = ops.status()
         if status['dome']['mode'] != OperationsMode.Automatic:
@@ -65,6 +91,7 @@ def start(daemon, _):
             },
             'actions': []
         })
+
         if ret != CommandStatus.Succeeded:
             return ret
 
