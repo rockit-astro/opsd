@@ -38,6 +38,7 @@ jobs:
           rocky-packages/set-spec-release.sh python3-warwick-onemetre-operations.spec
           rocky-packages/set-spec-release.sh python3-warwick-superwasp-operations.spec
           rocky-packages/set-spec-release.sh python3-warwick-clasp-operations.spec
+          rocky-packages/set-spec-release.sh python3-warwick-halfmetre-operations.spec
 
       - name: Package RPMs
         run:

@@ -16,6 +16,8 @@ all:
 	${RPMBUILD} -ba python3-warwick-superwasp-operations.spec
 	rm -rf build/build
 	${RPMBUILD} -ba python3-warwick-clasp-operations.spec
+	rm -rf build/build
+	${RPMBUILD} -ba python3-warwick-halfmetre-operations.spec
 	mv build/noarch/*.rpm .
 	rm -rf build
 
