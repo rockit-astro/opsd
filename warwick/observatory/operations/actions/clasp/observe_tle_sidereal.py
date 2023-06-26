@@ -242,11 +242,11 @@ class ObserveTLESidereal(TelescopeAction):
 
                 while True:
                     with self._wait_condition:
-                        remaining = expected_complete - Time.now()
+                        remaining = (expected_complete - Time.now()).to(u.second).value
                         if remaining < 0 or self._wcs_status != WCSStatus.WaitingForWCS:
                             break
 
-                        self._wait_condition.wait(max(remaining.to(u.second).value, 1))
+                        self._wait_condition.wait(max(remaining, 1))
 
                 failed = self._wcs_status == WCSStatus.WCSFailed
                 timeout = self._wcs_status == WCSStatus.WaitingForWCS
