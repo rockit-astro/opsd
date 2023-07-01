@@ -80,7 +80,11 @@ class ObserveField(TelescopeAction):
         # Point to the requested location
         acquire_start = Time.now()
         print('ObserveField: slewing to target field')
-        if not mount_slew_radec(self.log_name, self.config['ra'], self.config['dec'], True):
+        blind_offset_dra = self.config.get('blind_offset_dra', 0)
+        blind_offset_ddec = self.config.get('blind_offset_ddec', 0)
+        acquisition_ra = self.config['ra'] + blind_offset_dra
+        acquisition_dec = self.config['dec'] + blind_offset_ddec
+        if not mount_slew_radec(self.log_name, acquisition_ra, acquisition_dec, True):
             return ObservationStatus.Error
 
         # Take a frame to solve field center
@@ -101,7 +105,9 @@ class ObserveField(TelescopeAction):
 
         # Converge on requested position
         attempt = 1
-        target = SkyCoord(self.config['ra'], self.config['dec'], unit=u.degree, frame='icrs')
+        target = SkyCoord(ra=acquisition_ra,
+                          dec=acquisition_dec,
+                          unit=u.degree, frame='icrs')
         while not self.aborted and self.dome_is_open:
             # Wait for telescope position to settle before taking first image
             time.sleep(5)
@@ -167,9 +173,19 @@ class ObserveField(TelescopeAction):
                   f'{offset_dec.to_value(u.arcsecond):.1f}')
 
             # Close enough!
-            if offset_ra < 5 * u.arcsecond and offset_dec < 5 * u.arcsecond:
+            # TODO: Unhardcode the pointing threshold
+            if abs(offset_ra) < 5 * u.arcsecond and abs(offset_dec) < 5 * u.arcsecond:
                 dt = (Time.now() - acquire_start).to(u.s).value
                 print(f'ObserveField: Acquired field in {dt:.1f} seconds')
+                if blind_offset_dra != 0 or blind_offset_ddec != 0:
+                    print('ObserveField: Offsetting to target')
+                    if not mount_offset_radec(self.log_name, -blind_offset_dra, -blind_offset_ddec):
+                        return ObservationStatus.Error
+
+                    # Wait for the offset to complete
+                    # TODO: monitor tel status instead!
+                    time.sleep(10)
+
                 return ObservationStatus.OnTarget
 
             # Offset telescope
@@ -404,6 +420,12 @@ class ObserveField(TelescopeAction):
                     'type': 'number',
                     'minimum': -90,
                     'maximum': 90
+                },
+                'blind_offset_dra': {
+                    'type': 'number'
+                },
+                'blind_offset_ddec': {
+                    'type': 'number'
                 },
                 'pipeline': pipeline_science_schema(),
                 'camera': camera_science_schema()
