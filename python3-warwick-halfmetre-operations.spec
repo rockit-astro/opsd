@@ -1,5 +1,5 @@
 Name:           python3-warwick-halfmetre-operations
-Version:        20230625
+Version:        20230701
 Release:        0
 License:        GPL3
 Summary:        CLASP specific operations code

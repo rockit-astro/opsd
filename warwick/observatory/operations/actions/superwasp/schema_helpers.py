@@ -98,6 +98,11 @@ def camera_science_schema():
                     },
                 ]
             },
+            'bin': {
+                'type': 'number',
+                'minimum': 1,
+                'maximum': 9600,
+            },
             'temperature': {
                 'type': 'number',
                 'minimum': -20,
