@@ -19,6 +19,7 @@
 # pylint: disable=too-many-return-statements
 # pylint: disable=too-many-branches
 
+from collections import deque
 import re
 import sys
 import threading
@@ -54,6 +55,18 @@ WCS_EXPOSURE_TIME = 5 * u.s
 # Amount of time to wait between camera status checks while observing
 CAM_CHECK_STATUS_DELAY = 10 * u.s
 
+
+# Track a limited history of shifts so we can handle outliers
+GUIDE_BUFFER_REJECTION_SIGMA = 10
+GUIDE_BUFFER_LENGTH = 20
+
+# Shifts larger than this are automatically rejected without touching the guide buffer
+GUIDE_MAX_PIXEL_ERROR = 100
+
+# PID loop coefficients
+GUIDE_PID = [0.75, 0.02, 0.0]
+
+
 class ObserveField(TelescopeAction):
     """Telescope action to observe a sidereally tracked field"""
     def __init__(self, log_name, config):
@@ -73,6 +86,11 @@ class ObserveField(TelescopeAction):
         self._guide_profiles = None
 
         self._camera = CameraWrapper(self.config.get('camera', None), self.log_name)
+
+        self._guide_buff_x = deque(maxlen=GUIDE_BUFFER_LENGTH)
+        self._guide_buff_y = deque(maxlen=GUIDE_BUFFER_LENGTH)
+        self._guide_pid_x = PIDController(*GUIDE_PID)
+        self._guide_pid_y = PIDController(*GUIDE_PID)
 
     def __acquire_field(self):
         self.set_task('Acquiring field')
@@ -372,25 +390,41 @@ class ObserveField(TelescopeAction):
             # Measure image offset
             dx = cross_correlate(profile_x, self._guide_profiles[0])
             dy = cross_correlate(profile_y, self._guide_profiles[1])
-
-            # TODO: Use WCS matrix to convert pixel offsets to sky offsets
             print(f'ObserveField: measured guide offsets {dx:.2f} {dy:.2f} px')
-            dra = self._wcs_derivatives[0] * dx
-            ddec = self._wcs_derivatives[1] * dy
-            print(f'ObserveField: measured guide offsets {dra * 3600:.2f} {ddec * 3600:.2f} arcsec')
 
-            # Stop science observations and reacquire using WCS if we are too far off target
-            if abs(dra) > 30. / 3600 or abs(ddec) > 30. / 3600:
-                self._is_guiding = False
+            # Ignore suspiciously big shifts
+            if abs(dx) > GUIDE_MAX_PIXEL_ERROR or abs(dy) > GUIDE_MAX_PIXEL_ERROR:
+                print(f'ObserveField: Offset larger than max allowed pixel shift: x: {dx} y:{dy}')
+                print('ObserveField: Skipping this correction')
                 return
 
-            # TODO: Use PID/buffer to calculate correction
-            corr_dra = -dra
-            corr_ddec = -ddec
+            # Store the pre-pid values in the buffer
+            self._guide_buff_x.append(dx)
+            self._guide_buff_y.append(dx)
+
+            # Ignore shifts that are inconsistent with previous shifts,
+            # but only after we have collected enough measurements to trust the stats
+            if len(self._guide_buff_x) == self._guide_buff_x.maxlen:
+                if abs(dx) > GUIDE_BUFFER_REJECTION_SIGMA * np.std(self._guide_buff_x) or \
+                        abs(dy) > GUIDE_BUFFER_REJECTION_SIGMA * np.std(self._guide_buff_y):
+                    print(f'ObserveField: Guide correction(s) too large x:{dx:.2f} y:{dy:.2f}')
+                    print('ObserveField: Skipping this correction but adding to stats buffer')
+                    return
+
+            # Generate the corrections from the PID controllers
+            corr_dx = -self._guide_pid_x.update(dx)
+            corr_dy = -self._guide_pid_y.update(dy)
+            print(f'ObserveField: post-PID corrections {corr_dx:.2f} {corr_dy:.2f} px')
+
+            corr_dra = self._wcs_derivatives[0, 0] * corr_dx + self._wcs_derivatives[0, 1] * corr_dy
+            corr_ddec = self._wcs_derivatives[1, 0] * corr_dx + self._wcs_derivatives[1, 1] * corr_dy
+            print(f'ObserveField: post-PID corrections {corr_dra * 3600:.2f} {corr_ddec * 3600:.2f} arcsec')
+
+            # TODO: reacquire using WCS (self._is_guiding = False) if we detect things have gone wrong
 
             # Apply correction
-            mount_offset_radec(corr_dra, corr_ddec)
-        except Exception as e:
+            mount_offset_radec(self.log_name, corr_dra, corr_ddec)
+        except Exception:
             traceback.print_exc(file=sys.stdout)
             self._is_guiding = False
 
@@ -470,6 +504,30 @@ def cross_correlate(check, reference):
     if peak <= len(corr) / 2:
         return -(-coeffs[1] / (2 * coeffs[0]))
     return len(corr) + (coeffs[1] / (2 * coeffs[0]))
+
+class PIDController:
+    """
+    Simple PID controller that acts to minimise the given error term.
+    Note that this assumes that frames are coming in with an equal cadence,
+    which allows us to ignore the delta-time handling from the loop
+    """
+
+    def __init__(self, kp, ki, kd, max_integrated_error=500):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.max_integrated_error = max_integrated_error
+
+        self.previous_error = 0
+        self.integral = 0
+        self.derivative = 0
+
+    def update(self, error):
+        # Reduce the impact of "windup error" by bounding the integral within a maximum range
+        self.integral = max(min(self.integral + error, self.max_integrated_error), -self.max_integrated_error)
+        self.derivative = error - self.previous_error
+        self.previous_error = error
+        return self.kp * error + self.ki * self.integral + self.kd * (error - self.previous_error)
 
 
 class WCSStatus:
