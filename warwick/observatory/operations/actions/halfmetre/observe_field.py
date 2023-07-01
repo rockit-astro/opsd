@@ -96,7 +96,7 @@ class ObserveField(TelescopeAction):
         cam_config = {}
         cam_config.update(self.config.get('camera', {}))
         cam_config.update({
-            'exposure': WCS_EXPOSURE_TIME.to(u.second).value,
+            'exposure': WCS_EXPOSURE_TIME.to(u.second).value
         })
 
         # Converge on requested position
@@ -135,7 +135,7 @@ class ObserveField(TelescopeAction):
             while True:
                 with self._wait_condition:
                     remaining = (expected_complete - Time.now()).to(u.second).value
-                    if remaining < 0 or self._wcs_status != WCSStatus.WaitingForWCS:
+                    if remaining < 0 * u.s or self._wcs_status != WCSStatus.WaitingForWCS:
                         break
 
                     self._wait_condition.wait(max(remaining, 1))
@@ -201,6 +201,7 @@ class ObserveField(TelescopeAction):
         pipeline_config = self.config['pipeline'].copy()
         pipeline_config['guide'] = 'HALFMETRE'
         pipeline_config['type'] = 'SCIENCE'
+        pipeline_config['archive'] = ['HALFMETRE']
 
         if not configure_pipeline(self.log_name, pipeline_config):
             return ObservationStatus.Error
