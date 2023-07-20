@@ -49,10 +49,14 @@ class ObserveTLETracking(TelescopeAction):
             "1 16908U 86061A   22263.84101197 -.00000106  00000-0 -62449-4 0  9999",
             "2 16908  50.0120  25.7334 0011166 305.3244 183.4486 12.44497094310376"
         ],
-        "cam<1..2>": { # Optional: cameras that aren't listed won't be used
+        "cam1": { # Optional: cameras that aren't listed won't be focused
             "exposure": 1,
             "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
-            # Also supports optional temperature, gain, offset, stream (advanced options)
+            # Also supports optional temperature, window, gain, offset, stream (advanced options)
+        },
+        "cam2": { # Optional: cameras that aren't listed won't be focused
+            "exposure": 1,
+            # Also supports optional temperature (advanced options)
         },
         "pipeline": {
            "prefix": "16908",
@@ -238,6 +242,6 @@ class ObserveTLETracking(TelescopeAction):
         schema['properties']['pipeline']['required'].remove('object')
 
         for camera_id in cameras:
-            schema['properties'][camera_id] = camera_science_schema()
+            schema['properties'][camera_id] = camera_science_schema(camera_id)
 
         return validation.validation_errors(config_json, schema)

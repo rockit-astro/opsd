@@ -24,11 +24,9 @@ import astropy.units as u
 from warwick.observatory.common import daemons, validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import log
-from warwick.observatory.camera.qhy import CommandStatus as CamCommandStatus
-from .camera_helpers import cameras, cam_status
+from .camera_helpers import cameras, cam_initialize, cam_status
 
 CAMERA_POWERON_DELAY = 5
-CAMERA_INIT_TIMEOUT = 30
 
 # Interval (in seconds) to poll the camera for temperature lock
 CAMERA_CHECK_INTERVAL = 10
@@ -56,29 +54,6 @@ class InitializeCameras(TelescopeAction):
             self._start_date = None
 
         self._wait_condition = threading.Condition()
-
-    def __initialize_camera(self, camera_id):
-        """Initializes a given camera and resets configuration"""
-        try:
-            self.set_task('Initializing Cameras')
-            with cameras[camera_id].connect(timeout=CAMERA_INIT_TIMEOUT) as cam:
-                status = cam.initialize()
-                if status not in [CamCommandStatus.Succeeded,
-                                  CamCommandStatus.CameraNotUninitialized]:
-                    log.error(self.log_name, 'Failed to initialize camera ' + camera_id)
-                    return False
-
-                if cam.configure({}, quiet=True) != CamCommandStatus.Succeeded:
-                    log.error(self.log_name, 'Failed to reset camera ' + camera_id + ' to defaults')
-                    return False
-        except Pyro4.errors.CommunicationError:
-            log.error(self.log_name, 'Failed to communicate with camera ' + camera_id)
-            return False
-        except Exception:
-            log.error(self.log_name, 'Unknown error with camera ' + camera_id)
-            traceback.print_exc(file=sys.stdout)
-            return False
-        return True
 
     def __wait_for_temperature_lock(self):
         """Waits until all cameras have reached their target temperature
@@ -136,8 +111,9 @@ class InitializeCameras(TelescopeAction):
             with self._wait_condition:
                 self._wait_condition.wait(CAMERA_POWERON_DELAY)
 
+        self.set_task('Initializing Cameras')
         for camera_id in self.config['cameras']:
-            if not self.__initialize_camera(camera_id):
+            if not cam_initialize(self.log_name, camera_id):
                 self.status = TelescopeActionStatus.Error
                 return
 

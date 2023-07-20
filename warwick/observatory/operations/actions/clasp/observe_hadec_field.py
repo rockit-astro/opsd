@@ -33,10 +33,14 @@ class ObserveHADecField(ObserveFieldBase):
         "ha": 0,
         "dec": -4.5,
         "onsky": true, # Optional: defaults to true
-        "cam<1..2>": { # Optional: cameras that aren't listed won't be used
+        "cam1": { # Optional: cameras that aren't listed won't be focused
             "exposure": 1,
             "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
-            # Also supports optional temperature, gain, offset, stream (advanced options)
+            # Also supports optional temperature, window, gain, offset, stream (advanced options)
+        },
+        "cam2": { # Optional: cameras that aren't listed won't be focused
+            "exposure": 1,
+            # Also supports optional temperature (advanced options)
         },
         "pipeline": {
            "prefix": "survey",
@@ -69,7 +73,7 @@ class ObserveHADecField(ObserveFieldBase):
             },
             'dec': {
                 'type': 'number',
-                'minimum': -30,
+                'minimum': -40,
                 'maximum': 85
             }
         })

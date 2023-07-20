@@ -43,9 +43,14 @@ class AutoFocus(TelescopeAction):
         "expires": "2022-09-18T22:30:00", # Optional: defaults to never
         "ra": 0, # Optional: defaults to zenith
         "dec": -4.5, # Optional: defaults to zenith
-        "cam<1..2>": { # Optional: cameras that aren't listed won't be focused
-            "exposure": 1
+        "cam1": { # Optional: cameras that aren't listed won't be focused
+            "exposure": 1,
+            "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
             # Also supports optional temperature, window, gain, offset, stream (advanced options)
+        },
+        "cam2": { # Optional: cameras that aren't listed won't be focused
+            "exposure": 1,
+            # Also supports optional temperature (advanced options)
         }
     }
     """
@@ -212,7 +217,7 @@ class AutoFocus(TelescopeAction):
         }
 
         for camera_id in cameras:
-            schema['properties'][camera_id] = camera_science_schema()
+            schema['properties'][camera_id] = camera_science_schema(camera_id)
 
         return validation.validation_errors(config_json, schema)
 
@@ -260,7 +265,8 @@ class CameraWrapper:
 
         # Set the camera config once at the start to avoid duplicate changes
         cam_config = self._camera_config.copy()
-        cam_config['stream'] = False
+        if self.camera_id != 'cam2':
+            cam_config['stream'] = False
 
         if not cam_configure(self._log_name, self.camera_id, cam_config):
             self.state = AutoFocusState.Error
@@ -417,9 +423,6 @@ CONFIG = {
     # Real stars should never be smaller than this
     'minimum_hfd': 2.5,
 
-    # Number of objects that are required to consider MEDHFD valid
-    'minimum_object_count': 50,
-
     # Aim to reach this HFD on the inside edge of the v-curve
     # before offsetting to the final focus
     'target_hfd': 6,
@@ -446,6 +449,9 @@ CAMERA_CONFIG = {
         # The HFD value where the two v-curve edges cross
         # This is a more convenient way of representing the position intercept difference
         'crossing_hfd': 0,
+
+        # Number of objects that are required to consider MEDHFD valid
+        'minimum_object_count': 50,
     },
     'cam2': {
         # The slope (in hfd / step) on the inside edge of the v-curve
@@ -454,5 +460,8 @@ CAMERA_CONFIG = {
         # The HFD value where the two v-curve edges cross
         # This is a more convenient way of representing the position intercept difference
         'crossing_hfd': 0,
+
+        # Number of objects that are required to consider MEDHFD valid
+        'minimum_object_count': 20,
     },
 }

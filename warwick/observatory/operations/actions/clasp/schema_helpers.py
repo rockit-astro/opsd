@@ -74,80 +74,99 @@ def pipeline_flat_schema():
     }
 
 
-def camera_science_schema():
-    """Schema block for QHY cameras"""
-    return {
-        'type': 'object',
-        'additionalProperties': False,
-        'required': ['exposure'],
-        'properties': {
-            'exposure': {
-                'type': 'number',
-                'minimum': 0
-            },
-            'window': {
-                'type': 'array',
-                'maxItems': 4,
-                'minItems': 4,
-                'items': [
-                    {
-                        'type': 'number',
-                        'minimum': 1,
-                        'maximum': 9600,
-                    },
-                    {
-                        'type': 'number',
-                        'minimum': 1,
-                        'maximum': 9600,
-                    },
-                    {
-                        'type': 'number',
-                        'minimum': 1,
-                        'maximum': 6422,
-                    },
-                    {
-                        'type': 'number',
-                        'minimum': 1,
-                        'maximum': 6422,
-                    },
-                ]
-            },
-            'bin': {
-                'type': 'number',
-                'minimum': 1,
-                'maximum': 9600,
-            },
-            'temperature': {
-                'type': 'number',
-                'minimum': -20,
-                'maximum': 30,
-            },
-            'gain': {
-                'type': 'integer',
-                'min': 0,
-                'max': 100,
-            },
-            'offset': {
-                'type': 'integer',
-                'min': 0,
-                'max': 1000,
-            },
-            'stream': {
-                'type': 'boolean'
+def camera_science_schema(camera_id):
+    """Schema block for cameras"""
+    if camera_id == 'cam2':
+        return {
+            'type': 'object',
+            'additionalProperties': False,
+            'required': ['exposure'],
+            'properties': {
+                'exposure': {
+                    'type': 'number',
+                    'minimum': 0
+                },
+                'temperature': {
+                    'type': 'number',
+                    'minimum': -30,
+                    'maximum': 30,
+                },
             }
         }
-    }
+    else:
+        return {
+            'type': 'object',
+            'additionalProperties': False,
+            'required': ['exposure'],
+            'properties': {
+                'exposure': {
+                    'type': 'number',
+                    'minimum': 0
+                },
+                'window': {
+                    'type': 'array',
+                    'maxItems': 4,
+                    'minItems': 4,
+                    'items': [
+                        {
+                            'type': 'number',
+                            'minimum': 1,
+                            'maximum': 9600,
+                        },
+                        {
+                            'type': 'number',
+                            'minimum': 1,
+                            'maximum': 9600,
+                        },
+                        {
+                            'type': 'number',
+                            'minimum': 1,
+                            'maximum': 6422,
+                        },
+                        {
+                            'type': 'number',
+                            'minimum': 1,
+                            'maximum': 6422,
+                        },
+                    ]
+                },
+                'bin': {
+                    'type': 'number',
+                    'minimum': 1,
+                    'maximum': 9600,
+                },
+                'temperature': {
+                    'type': 'number',
+                    'minimum': -20,
+                    'maximum': 30,
+                },
+                'gain': {
+                    'type': 'integer',
+                    'min': 0,
+                    'max': 100,
+                },
+                'offset': {
+                    'type': 'integer',
+                    'min': 0,
+                    'max': 1000,
+                },
+                'stream': {
+                    'type': 'boolean'
+                }
+            }
+        }
 
 
-def camera_flat_schema():
+def camera_flat_schema(camera_id):
     """Flat-specific schema block for QHY cameras"""
-    schema = camera_science_schema()
+    schema = camera_science_schema(camera_id)
 
     # Exposure is calculated dynamically
     schema['properties'].pop('exposure')
     schema['required'].remove('exposure')
 
     # Streaming is force-disabled as images are processed one-by-one
-    schema['properties'].pop('stream')
+    if camera_id != 'cam2':
+        schema['properties'].pop('stream')
 
     return schema

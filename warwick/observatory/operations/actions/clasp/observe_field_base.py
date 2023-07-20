@@ -23,8 +23,7 @@ import threading
 from astropy.time import Time
 import jsonschema
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
-from warwick.observatory.camera.qhy import CameraStatus
-from .camera_helpers import cameras, cam_status, cam_stop, cam_take_images
+from .camera_helpers import cameras, cam_status, cam_stop, cam_take_images, cam_is_active, cam_is_idle
 from .mount_helpers import mount_stop
 from .pipeline_helpers import configure_pipeline
 from .schema_helpers import pipeline_science_schema, camera_science_schema
@@ -91,9 +90,9 @@ class ObserveFieldBase(TelescopeAction):
                 if status is None:
                     continue
 
-                if status['state'] in [CameraStatus.Acquiring, CameraStatus.Reading] and not active:
+                if cam_is_active(self.log_name, camera_id, status) and not active:
                     cam_stop(self.log_name, camera_id, CAM_STOP_TIMEOUT)
-                elif status['state'] == CameraStatus.Idle and active:
+                elif cam_is_idle(self.log_name, camera_id, status) and active:
                     cam_take_images(self.log_name, camera_id, 0, self.config[camera_id])
 
             with self._wait_condition:
@@ -146,7 +145,7 @@ class ObserveFieldBase(TelescopeAction):
         }
 
         for camera_id in cameras:
-            schema['properties'][camera_id] = camera_science_schema()
+            schema['properties'][camera_id] = camera_science_schema(camera_id)
 
         return schema
 

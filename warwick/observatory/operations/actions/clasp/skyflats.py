@@ -60,7 +60,12 @@ class SkyFlats(TelescopeAction):
 
         self._cameras = {}
         for camera_id, camera_daemon in cameras.items():
-            self._cameras[camera_id] = CameraWrapper(camera_id, camera_daemon, self.config.get(camera_id, None),
+            camera_config = {}
+            camera_config.update(CONFIG)
+            camera_config.update(CAMERA_CONFIG.get(camera_id, {}))
+
+            self._cameras[camera_id] = CameraWrapper(camera_id, camera_config, camera_daemon,
+                                                     self.config.get(camera_id, None),
                                                      self.config['evening'], self.log_name)
 
     def run_thread(self):
@@ -226,7 +231,7 @@ class SkyFlats(TelescopeAction):
         }
 
         for camera_id in cameras:
-            schema['properties'][camera_id] = camera_flat_schema()
+            schema['properties'][camera_id] = camera_flat_schema(camera_id)
 
         return validation.validation_errors(config_json, schema)
 
@@ -248,16 +253,17 @@ class AutoFlatState:
 
 class CameraWrapper:
     """Holds camera-specific flat state"""
-    def __init__(self, camera_id, daemon, camera_config, is_evening, log_name):
+    def __init__(self, camera_id, config, daemon, camera_config, is_evening, log_name):
         self.camera_id = camera_id
+        self._config = config
         self._daemon = daemon
         self._log_name = log_name
         self._camera_config = camera_config or {}
         self._expected_complete = Time.now()
         self._is_evening = is_evening
         self.state = AutoFlatState.Bias if camera_config is not None else AutoFlatState.Complete
-        self._scale = CONFIG['evening_scale'] if is_evening else CONFIG['dawn_scale']
-        self._start_exposure = CONFIG['min_exposure'] if is_evening else CONFIG['min_save_exposure']
+        self._scale = config['evening_scale'] if is_evening else config['dawn_scale']
+        self._start_exposure = config['min_exposure'] if is_evening else config['min_save_exposure']
         self._start_time = None
         self._exposure_count = 0
         self._bias_level = 0
@@ -294,7 +300,7 @@ class CameraWrapper:
 
     def __take_image(self, exposure):
         """Tells the camera to take an exposure"""
-        self._expected_complete = Time.now() + (exposure + CONFIG['max_processing_time']) * u.s
+        self._expected_complete = Time.now() + (exposure + self._config['max_processing_time']) * u.s
 
         try:
             # Need to communicate directly with camera daemon
@@ -345,29 +351,29 @@ class CameraWrapper:
 
             # If the count rate is too low then we scale the exposure by the maximum amount
             if counts > 0:
-                new_exposure = self._scale * exposure * CONFIG['target_counts'] / counts
+                new_exposure = self._scale * exposure * self._config['target_counts'] / counts
             else:
-                new_exposure = exposure * CONFIG['max_exposure_delta']
+                new_exposure = exposure * self._config['max_exposure_delta']
 
             # Clamp the exposure to a sensible range
-            clamped_exposure = min(new_exposure, CONFIG['max_exposure'], exposure * CONFIG['max_exposure_delta'])
-            clamped_exposure = max(clamped_exposure, CONFIG['min_exposure'], exposure / CONFIG['max_exposure_delta'])
+            clamped_exposure = min(new_exposure, self._config['max_exposure'], exposure * self._config['max_exposure_delta'])
+            clamped_exposure = max(clamped_exposure, self._config['min_exposure'], exposure / self._config['max_exposure_delta'])
 
             clamped_desc = f' (clamped from {new_exposure:.2f}s)' if new_exposure > clamped_exposure else ''
             print(f'AutoFlat: camera {self.camera_id} exposure {exposure:.2f}s counts {counts:.0f} ADU ' +
                   f'-> {clamped_exposure:.2f}s' + clamped_desc)
 
             if self._is_evening:
-                if clamped_exposure == CONFIG['max_exposure'] and counts < CONFIG['min_save_counts']:
+                if clamped_exposure == self._config['max_exposure'] and counts < self._config['min_save_counts']:
                     self.state = AutoFlatState.Complete
-                elif self.state == AutoFlatState.Waiting and counts > CONFIG['min_save_counts'] \
-                        and new_exposure > CONFIG['min_save_exposure']:
+                elif self.state == AutoFlatState.Waiting and counts > self._config['min_save_counts'] \
+                        and new_exposure > self._config['min_save_exposure']:
                     self.state = AutoFlatState.Saving
             else:
                 # Sky is increasing in brightness
-                if clamped_exposure < CONFIG['min_save_exposure']:
+                if clamped_exposure < self._config['min_save_exposure']:
                     self.state = AutoFlatState.Complete
-                elif self.state == AutoFlatState.Waiting and counts > CONFIG['min_save_counts']:
+                elif self.state == AutoFlatState.Waiting and counts > self._config['min_save_counts']:
                     self.state = AutoFlatState.Saving
 
             if self.state != last_state:
@@ -399,7 +405,7 @@ class CameraWrapper:
 
 CONFIG = {
     # Range of sun angles where we can acquire useful data
-    'max_sun_altitude': -6,
+    'max_sun_altitude': -3,
     'min_sun_altitude': -10,
     'sun_altitude_check_interval': 30,
 
@@ -413,16 +419,34 @@ CONFIG = {
     # Number of seconds to add to the exposure time to account for readout + object detection
     # Consider the frame lost if this is exceeded
     'max_processing_time': 10,
+}
 
-    # Exposure limits in seconds
-    'min_exposure': 0.1,
-    'max_exposure': 20,
+CAMERA_CONFIG = {
+    'cam1': {
 
-    'min_save_exposure': 1.0,
+        # Exposure limits in seconds
+        'min_exposure': 0.1,
+        'max_exposure': 20,
 
-    # Exposures with less counts than this lack the signal to noise ratio that we desire
-    'min_save_counts': 15000,
+        'min_save_exposure': 1.0,
 
-    # Target flat counts to aim for
-    'target_counts': 30000,
+        # Exposures with less counts than this lack the signal to noise ratio that we desire
+        'min_save_counts': 15000,
+
+        # Target flat counts to aim for
+        'target_counts': 30000,
+    },
+    'cam2': {
+        # Exposure limits in seconds
+        'min_exposure': 0.05,
+        'max_exposure': 2,
+
+        'min_save_exposure': 0.1,
+
+        # Exposures with less counts than this lack the signal to noise ratio that we desire
+        'min_save_counts': 1000,
+
+        # Target flat counts to aim for
+        'target_counts': 2000
+    }
 }

@@ -27,9 +27,8 @@ from astropy.time import Time
 from warwick.observatory.common import daemons, validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.common import log
-from warwick.observatory.camera.qhy import CameraStatus, CoolerMode
 from warwick.observatory.lmount import MountState
-from .camera_helpers import cameras, cam_configure, cam_status, cam_stop
+from .camera_helpers import cameras, cam_configure, cam_status, cam_stop, cam_is_warm, cam_shutdown
 from .mount_helpers import mount_status, mount_park
 
 CAMERA_SHUTDOWN_TIMEOUT = 10
@@ -64,20 +63,6 @@ class ShutdownCameras(TelescopeAction):
 
         self._wait_condition = threading.Condition()
 
-    def __shutdown_camera(self, camera_id):
-        """Disables a given camera"""
-        try:
-            with cameras[camera_id].connect(timeout=CAMERA_SHUTDOWN_TIMEOUT) as cam:
-                cam.shutdown()
-        except Pyro4.errors.CommunicationError:
-            log.error(self.log_name, 'Failed to communicate with camera ' + camera_id)
-            return False
-        except Exception:
-            log.error(self.log_name, 'Unknown error with camera ' + camera_id)
-            traceback.print_exc(file=sys.stdout)
-            return False
-        return True
-
     def run_thread(self):
         """Thread that runs the hardware actions"""
         if self._start_date is not None and Time.now() < self._start_date:
@@ -102,13 +87,7 @@ class ShutdownCameras(TelescopeAction):
                     continue
 
                 status = cam_status(self.log_name, camera_id)
-                if status['state'] == CameraStatus.Disabled:
-                    warm[camera_id] = True
-                elif 'cooler_mode' not in status:
-                    log.error(self.log_name, 'Failed to check temperature on camera ' + camera_id)
-                    warm[camera_id] = True
-                else:
-                    warm[camera_id] = status['cooler_mode'] == CoolerMode.Warm
+                warm[camera_id] = cam_is_warm(self.log_name, camera_id, status)
 
             if all(warm[k] for k in warm):
                 break
@@ -120,7 +99,7 @@ class ShutdownCameras(TelescopeAction):
             # Power cameras off
             self.set_task('Disabling cameras')
             for camera_id in self._camera_ids:
-                self.__shutdown_camera(camera_id)
+                cam_shutdown(self.log_name, camera_id)
 
             try:
                 with daemons.clasp_power.connect() as powerd:

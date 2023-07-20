@@ -72,6 +72,10 @@ class ObserveTLESidereal(TelescopeAction):
             "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
             # Also supports optional temperature, gain, offset, stream (advanced options)
         },
+        "cam2": {
+            "exposure": 1,
+            # Also supports optional temperature (advanced options)
+        },
         "pipeline": {
            "prefix": "36033",
            "object": "THOR 6", # Optional: defaults to the TLE name without leading "0 "
@@ -387,7 +391,7 @@ class ObserveTLESidereal(TelescopeAction):
                     'format': 'date-time',
                 },
                 'pipeline': pipeline_science_schema(),
-                'cam1': camera_science_schema()
+                'cam1': camera_science_schema(camera_id)
             }
         }
 

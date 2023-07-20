@@ -57,6 +57,10 @@ class FocusSweep(TelescopeAction):
             "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
             # Also supports optional temperature, gain, offset, stream (advanced options)
         },
+        "cam2": { # Must match "camera"
+            "exposure": 1,
+            # Also supports optional temperature (advanced options)
+        },
         "pipeline": {
            "prefix": "focussweep",
            "archive": ["CAM1"] # Optional: defaults to "camera"
@@ -285,13 +289,13 @@ class FocusSweep(TelescopeAction):
         }
 
         for camera_id in cameras:
-            schema['properties'][camera_id] = camera_science_schema()
+            schema['properties'][camera_id] = camera_science_schema(camera_id)
             schema['anyOf'].append({
                 'properties': {
                     'camera': {
                         'enum': [camera_id]
                     },
-                    camera_id: camera_science_schema()
+                    camera_id: camera_science_schema(camera_id)
                 },
                 'required': [camera_id]
             })
