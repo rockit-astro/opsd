@@ -239,6 +239,7 @@ class ObserveField(TelescopeAction):
         return ObservationStatus.Error
 
     def __wait_for_dome(self):
+        self._progress = Progress.Waiting
         while True:
             with self._wait_condition:
                 if Time.now() > self._end_date or self.aborted:

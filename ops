@@ -216,7 +216,11 @@ def print_status(config, _):
                     label += ':'
                 print(label)
                 for task in action['tasks']:
-                    print(f'       - {task}')
+                    if isinstance(task, list):
+                        for subtask in task:
+                            print(f'          - {subtask}')
+                    else:
+                        print(f'       - {task}')
         else:
             print(f'   Schedule: {TFmt.Bold}{TFmt.Yellow}EMPTY{TFmt.Clear}')
 
