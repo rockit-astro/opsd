@@ -21,6 +21,7 @@
 
 import threading
 import numpy as np
+from astropy.coordinates import SkyCoord
 from astropy.time import Time
 import astropy.units as u
 from rockit.common import log, validation
@@ -30,6 +31,10 @@ from .focus_helpers import focus_set, focus_get
 from .camera_helpers import cameras, cam_configure, cam_take_images
 from .pipeline_helpers import configure_pipeline
 from .schema_helpers import camera_science_schema
+
+
+class Progress:
+    Waiting, Slewing, Focusing = range(3)
 
 
 class AutoFocus(TelescopeAction):
@@ -57,6 +62,7 @@ class AutoFocus(TelescopeAction):
     def __init__(self, log_name, config):
         super().__init__('Auto Focus', log_name, config)
         self._wait_condition = threading.Condition()
+        self._progress = Progress.Waiting
 
         if 'start' in config:
             self._start_date = Time(config['start'])
@@ -76,17 +82,49 @@ class AutoFocus(TelescopeAction):
             self._cameras[camera_id] = CameraWrapper(camera_id, camera_config, self.config.get(camera_id, None),
                                                      self.log_name)
 
+    def task_labels(self):
+        """Returns list of tasks to be displayed in the schedule table"""
+        tasks = []
+
+        if self._progress <= Progress.Waiting:
+            if self._start_date:
+                tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
+        elif not self.dome_is_open:
+            label = 'Wait for dome'
+            if self._expires_date:
+                label += f' (expires {self._expires_date.strftime("%H:%M:%S")})'
+            tasks.append(label)
+
+        if self._progress <= Progress.Slewing:
+            ra = self.config.get('ra', None)
+            dec = self.config.get('dec', None)
+            if ra and dec:
+                coord = SkyCoord(ra=ra, dec=dec, unit=u.deg)
+                tasks.append(f'Slew to {coord.to_string("hmsdms", sep=":", precision=0)}')
+            else:
+                tasks.append('Slew to zenith')
+
+        if self._progress < Progress.Focusing:
+            camera_ids = [c.camera_id for c in self._cameras.values() if c.state != AutoFocusState.Complete]
+            tasks.append(f'Run AutoFocus ({", ".join(camera_ids)})')
+        elif self._progress == Progress.Focusing:
+            tasks.append('Run AutoFocus:')
+            camera_state = []
+            for camera_id, camera in self._cameras.items():
+                camera_state.append(f'{camera_id}: {AutoFocusState.Labels[camera.state]}')
+            tasks.append(camera_state)
+
+        return tasks
+
     def run_thread(self):
         """Thread that runs the hardware actions"""
         if self._start_date is not None and Time.now() < self._start_date:
-            self.set_task(f'Waiting until {self._start_date.strftime("%H:%M:%S")}')
             self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
 
         while not self.aborted and not self.dome_is_open:
             if self._expires_date is not None and Time.now() > self._expires_date:
                 break
 
-            self.set_task('Waiting for dome')
             with self._wait_condition:
                 self._wait_condition.wait(10)
 
@@ -104,18 +142,16 @@ class AutoFocus(TelescopeAction):
                 self.status = TelescopeActionStatus.Error
                 return
 
-            if ra is None:
+            if ra is None or dec is None:
                 ra = ms['lst']
-
-            if dec is None:
                 dec = ms['site_latitude']
 
-        self.set_task('Slewing to field')
+        self._progress = Progress.Slewing
         if not mount_slew_radec(self.log_name, ra, dec, True):
             self.status = TelescopeActionStatus.Error
             return
 
-        self.set_task('Preparing cameras')
+        self._progress = Progress.Focusing
 
         pipeline_config = {
             'hfd': True,
@@ -136,12 +172,9 @@ class AutoFocus(TelescopeAction):
             with self._wait_condition:
                 self._wait_condition.wait(5)
 
-            codes = ''
             for camera in self._cameras.values():
                 camera.check_timeout()
-                codes += AutoFocusState.Codes[camera.state]
 
-            self.set_task('Focusing (' + ''.join(codes) + ')')
             if self.aborted:
                 break
 
@@ -213,6 +246,10 @@ class AutoFocus(TelescopeAction):
                     'type': 'string',
                     'format': 'date-time',
                 }
+            },
+            'dependencies': {
+                'ra': ['dec'],
+                'dec': ['ra']
             }
         }
 
@@ -223,11 +260,21 @@ class AutoFocus(TelescopeAction):
 
 
 class AutoFocusState:
-    """Possible states of the AutoFlat routine"""
+    """Possible states of the AutoFocus routine"""
     MeasureInitial, FindPositionOnVCurve, FindTargetHFD, MeasureTargetHFD, \
         MeasureFinalHFD, Aborting, Complete, Failed, Error = range(9)
 
-    Codes = ['I', 'V', 'T', 'M', 'N', 'A', 'C', 'F', 'E']
+    Labels = {
+        0: 'Measuring initial HFD',
+        1: 'Finding position on V curve',
+        2: 'Moving to target HFD',
+        3: 'Measuring HFD',
+        4: 'Measuring final HFD',
+        5: 'Aborting',
+        6: 'Complete',
+        7: 'Failed',
+        8: 'Error'
+    }
 
 
 class CameraWrapper:

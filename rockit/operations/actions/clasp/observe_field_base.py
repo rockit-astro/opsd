@@ -31,6 +31,10 @@ CAM_STOP_TIMEOUT = 10
 LOOP_INTERVAL = 30
 
 
+class Progress:
+    Waiting, AcquiringTarget, Observing = range(3)
+
+
 class ObserveFieldBase(TelescopeAction):
     """
     Base field observation logic that is inherited by other telescope actions.
@@ -38,10 +42,30 @@ class ObserveFieldBase(TelescopeAction):
     """
     def __init__(self, action_name, log_name, config):
         super().__init__(action_name, log_name, config)
+        self._progress = Progress.Waiting
         self._start_date = Time(config['start'])
         self._end_date = Time(config['end'])
         self._wait_condition = threading.Condition()
         self._camera_ids = [c for c in cameras if c in self.config]
+
+    def task_labels(self):
+        """Returns list of tasks to be displayed in the schedule table"""
+        tasks = []
+
+        if self._progress <= Progress.Waiting:
+            if self._start_date:
+                tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
+        elif not self.dome_is_open:
+            tasks.append('Wait for dome')
+
+        target_name = self.config["pipeline"]["object"]
+        if self._progress <= Progress.AcquiringTarget:
+            tasks.append(f'Acquire target ({target_name})')
+            tasks.append(f'Observe until {self._end_date.strftime("%H:%M:%S")}')
+        elif self._progress <= Progress.Observing:
+            tasks.append(f'Observe target ({target_name}) until {self._end_date.strftime("%H:%M:%S")}')
+
+        return tasks
 
     def slew_to_field(self):
         """
@@ -63,27 +87,22 @@ class ObserveFieldBase(TelescopeAction):
             return
 
         if Time.now() < self._start_date:
-            self.set_task(f'Waiting until {self._start_date.strftime("%H:%M:%S")}')
             self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
 
         if Time.now() >= self._end_date or self.aborted:
             self.status = TelescopeActionStatus.Complete
             return
 
-        self.set_task('Slewing to field')
+        self._progress = Progress.AcquiringTarget
         if not self.slew_to_field():
             print('failed to slew to field')
             self.status = TelescopeActionStatus.Error
             return
 
+        self._progress = Progress.Observing
         while Time.now() < self._end_date and not self.aborted:
             # Monitor cameras and dome status
             active = self.dome_is_open or not self.config.get('onsky', True)
-            if active:
-                self.set_task(f'Observing until {self._end_date.strftime("%H:%M:%S")}')
-            else:
-                self.set_task(f'Waiting until {self._end_date.strftime("%H:%M:%S")}')
-
             for camera_id in self._camera_ids:
                 status = cam_status(self.log_name, camera_id)
                 if status is None:

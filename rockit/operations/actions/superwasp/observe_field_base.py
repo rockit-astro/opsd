@@ -50,6 +50,10 @@ WCS_EXPOSURE_TIME = 5 * u.s
 CAM_CHECK_STATUS_DELAY = 10 * u.s
 
 
+class Progress:
+    Waiting, Acquiring, Observing = range(3)
+
+
 class ObserveFieldBase(TelescopeAction):
     """
     Base field observation logic that is inherited by other telescope actions.
@@ -61,6 +65,8 @@ class ObserveFieldBase(TelescopeAction):
 
         self._start_date = Time(config['start'])
         self._end_date = Time(config['end'])
+        self._progress = Progress.Waiting
+
         self._camera_ids = [c for c in cameras if c in self.config]
         self._acquisition_camera = config.get('acquisition', None)
 
@@ -70,6 +76,26 @@ class ObserveFieldBase(TelescopeAction):
         self._wcs_status = WCSStatus.Inactive
         self._wcs = None
         self._wcs_field_center = None
+
+    def task_labels(self):
+        """Returns list of tasks to be displayed in the schedule table"""
+        tasks = []
+
+        if self._progress <= Progress.Waiting:
+            if self._start_date:
+                tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
+        elif not self.dome_is_open:
+            tasks.append('Wait for dome')
+
+        target_name = self.config["pipeline"]["object"]
+        if self._progress <= Progress.Acquiring:
+            tasks.append(f'Acquire target field for {target_name}')
+            tasks.append(f'Observe until {self._end_date.strftime("%H:%M:%S")}')
+
+        elif self._progress <= Progress.Observing:
+            tasks.append(f'Observe target {target_name} until {self._end_date.strftime("%H:%M:%S")}')
+
+        return tasks
 
     def slew_to_field(self):
         """
@@ -88,7 +114,7 @@ class ObserveFieldBase(TelescopeAction):
         return ObservationStatus.OnTarget
 
     def __acquire_field(self):
-        self.set_task('Acquiring field')
+        self._progress = Progress.Acquiring
 
         # Point to the requested location
         acquire_start = Time.now()
@@ -125,11 +151,6 @@ class ObserveFieldBase(TelescopeAction):
         while not self.aborted and self.dome_is_open:
             # Wait for telescope position to settle before taking first image
             time.sleep(5)
-
-            if attempt > 1:
-                self.set_task(f'Measuring position (attempt {attempt})')
-            else:
-                self.set_task('Measuring position')
 
             self._wcs = None
             self._wcs_status = WCSStatus.WaitingForWCS
@@ -262,10 +283,10 @@ class ObserveFieldBase(TelescopeAction):
         if 'archive' not in pipeline_config:
             pipeline_config['archive'] = [camera_id.upper() for camera_id in self._camera_ids]
 
+        self._progress = Progress.Observing
         if not configure_pipeline(self.log_name, pipeline_config):
             return ObservationStatus.Error
 
-        self.set_task('Preparing Cameras')
         if not self.__start_exposures():
             return ObservationStatus.Error
 
@@ -275,7 +296,6 @@ class ObserveFieldBase(TelescopeAction):
             self._last_exposure_started[camera_id] = Time.now() + self.config[camera_id]['exposure'] * u.s
 
         # Monitor observation status
-        self.set_task(f'Ends {self._end_date.strftime("%H:%M:%S")}')
         return_status = ObservationStatus.Complete
         while True:
             if self.aborted or Time.now() > self._end_date:
@@ -306,7 +326,6 @@ class ObserveFieldBase(TelescopeAction):
             self.status = TelescopeActionStatus.Error
             return
 
-        self.set_task(f'Waiting until {self._start_date.strftime("%H:%M:%S")}')
         self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
         if Time.now() > self._end_date or self.aborted:
             self.status = TelescopeActionStatus.Complete

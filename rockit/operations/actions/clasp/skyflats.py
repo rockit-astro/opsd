@@ -36,6 +36,10 @@ from .schema_helpers import pipeline_flat_schema, camera_flat_schema
 LOOP_INTERVAL = 5
 
 
+class Progress:
+    Waiting, Slewing, Measuring = range(3)
+
+
 class SkyFlats(TelescopeAction):
     """
     Telescope action to acquire sky flats
@@ -57,6 +61,7 @@ class SkyFlats(TelescopeAction):
     def __init__(self, log_name, config):
         super().__init__('Sky Flats', log_name, config)
         self._wait_condition = threading.Condition()
+        self._progress = Progress.Waiting
 
         self._cameras = {}
         for camera_id, camera_daemon in cameras.items():
@@ -67,6 +72,33 @@ class SkyFlats(TelescopeAction):
             self._cameras[camera_id] = CameraWrapper(camera_id, camera_config, camera_daemon,
                                                      self.config.get(camera_id, None),
                                                      self.config['evening'], self.log_name)
+
+    def task_labels(self):
+        """Returns list of tasks to be displayed in the schedule table"""
+        tasks = []
+
+        if self._progress <= Progress.Waiting:
+            if self.config['evening']:
+                tasks.append(f'Wait until sunalt < {CONFIG["max_sun_altitude"]} deg')
+            else:
+                tasks.append(f'Wait until sunalt > {CONFIG["min_sun_altitude"]} deg')
+        elif not self.dome_is_open:
+            tasks.append('Wait for dome')
+
+        if self._progress <= Progress.Slewing:
+            tasks.append('Slew to flats location')
+
+        if self._progress < Progress.Measuring:
+            camera_ids = [c.camera_id for c in self._cameras.values() if c.state != AutoFlatState.Complete]
+            tasks.append(f'Run AutoFlat ({", ".join(camera_ids)})')
+        elif self._progress == Progress.Measuring:
+            tasks.append('Run AutoFlat:')
+            camera_state = []
+            for camera_id, camera in self._cameras.items():
+                camera_state.append(f'{camera_id}: {AutoFlatState.Labels[camera.state]}')
+            tasks.append(camera_state)
+
+        return tasks
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
@@ -95,7 +127,6 @@ class SkyFlats(TelescopeAction):
             return
 
         while not self.aborted:
-            waiting_for = []
             sun_altitude = sun_position(location)[0]
             if self.config['evening']:
                 if sun_altitude < CONFIG['min_sun_altitude']:
@@ -105,12 +136,6 @@ class SkyFlats(TelescopeAction):
 
                 if sun_altitude < CONFIG['max_sun_altitude'] and self.dome_is_open:
                     break
-
-                if not self.dome_is_open:
-                    waiting_for.append('Dome')
-
-                if sun_altitude >= CONFIG['max_sun_altitude']:
-                    waiting_for.append(f'Sun < {CONFIG["max_sun_altitude"]:.1f} deg')
 
                 print(f'AutoFlat: {sun_altitude:.1f} > {CONFIG["max_sun_altitude"]:.1f}; ' +
                       f'dome {self.dome_is_open} - keep waiting')
@@ -123,16 +148,9 @@ class SkyFlats(TelescopeAction):
                 if sun_altitude > CONFIG['min_sun_altitude'] and self.dome_is_open:
                     break
 
-                if not self.dome_is_open:
-                    waiting_for.append('Dome')
-
-                if sun_altitude < CONFIG['min_sun_altitude']:
-                    waiting_for.append(f'Sun > {CONFIG["min_sun_altitude"]:.1f} deg')
-
                 print(f'AutoFlat: {sun_altitude:.1f} < {CONFIG["min_sun_altitude"]:.1f}; ' +
                       f'dome {self.dome_is_open} - keep waiting')
 
-            self.set_task('Waiting for ' + ', '.join(waiting_for))
             with self._wait_condition:
                 self._wait_condition.wait(CONFIG['sun_altitude_check_interval'])
 
@@ -140,12 +158,11 @@ class SkyFlats(TelescopeAction):
             self.status = TelescopeActionStatus.Complete
             return
 
-        self.set_task('Slewing to antisolar point')
-
         # The anti-solar point is opposite the sun at 75 degrees
         sun_altaz = sun_position(location)
         print('AutoFlat: Sun position is', sun_altaz)
 
+        self._progress = Progress.Slewing
         if not mount_slew_altaz(self.log_name, 75, sun_altaz[1] + 180, False):
             if not self.aborted:
                 log.error(self.log_name, 'AutoFlat: Failed to slew telescope')
@@ -159,6 +176,7 @@ class SkyFlats(TelescopeAction):
 
         # This starts the autoflat logic, which is run
         # in the received_frame callbacks
+        self._progress = Progress.Measuring
         for camera in self._cameras.values():
             camera.start()
 
@@ -167,12 +185,9 @@ class SkyFlats(TelescopeAction):
             with self._wait_condition:
                 self._wait_condition.wait(LOOP_INTERVAL)
 
-            codes = ''
             for camera in self._cameras.values():
                 camera.check_timeout()
-                codes += AutoFlatState.Codes[camera.state]
 
-            self.set_task('Acquiring (' + ''.join(codes) + ')')
             if self.aborted:
                 break
 
@@ -247,8 +262,7 @@ def sun_position(location):
 class AutoFlatState:
     """Possible states of the AutoFlat routine"""
     Bias, Waiting, Saving, Complete, Error = range(5)
-    Names = ['Bias', 'Waiting', 'Saving', 'Complete', 'Error']
-    Codes = ['B', 'W', 'S', 'C', 'E']
+    Labels = ['Bias', 'Waiting', 'Saving', 'Complete', 'Error']
 
 
 class CameraWrapper:
@@ -385,8 +399,8 @@ class CameraWrapper:
                     self.state = AutoFlatState.Error
                     return
 
-                print('AutoFlat: camera ' + self.camera_id + ' ' + AutoFlatState.Names[last_state] +
-                      ' -> ' + AutoFlatState.Names[self.state])
+                print('AutoFlat: camera ' + self.camera_id + ' ' + AutoFlatState.Labels[last_state] +
+                      ' -> ' + AutoFlatState.Labels[self.state])
 
                 if self.state == AutoFlatState.Saving:
                     log.info(self._log_name, f'AutoFlat: {self.camera_id} saving enabled')

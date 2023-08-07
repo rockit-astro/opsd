@@ -36,6 +36,10 @@ CAMERA_STOP_TIMEOUT = 30
 CAMERA_CHECK_INTERVAL = 10
 
 
+class Progress:
+    Waiting, Parking, Warming, ShuttingDown = range(4)
+
+
 class ShutdownCameras(TelescopeAction):
     """
     Telescope action to park the mount and warm then power off the cameras.
@@ -49,6 +53,7 @@ class ShutdownCameras(TelescopeAction):
     """
     def __init__(self, log_name, config):
         super().__init__('Shutdown Cameras', log_name, config)
+        self._progress = Progress.Waiting
         if 'start' in config:
             self._start_date = Time(config['start'])
         else:
@@ -61,19 +66,35 @@ class ShutdownCameras(TelescopeAction):
 
         self._wait_condition = threading.Condition()
 
+    def task_labels(self):
+        """Returns list of tasks to be displayed in the schedule table"""
+        tasks = []
+        if self._progress <= Progress.Waiting and self._start_date:
+            tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
+
+        if self._progress <= Progress.Parking:
+            tasks.append('Park mount')
+
+        if self._progress <= Progress.Warming:
+            tasks.append(f'Warm cameras ({", ".join(self._camera_ids)})')
+
+        if self._progress <= Progress.ShuttingDown:
+            tasks.append(f'Shutdown cameras ({", ".join(self._camera_ids)})')
+
+        return tasks
+
     def run_thread(self):
         """Thread that runs the hardware actions"""
         if self._start_date is not None and Time.now() < self._start_date:
-            self.set_task(f'Waiting until {self._start_date.strftime("%H:%M:%S")}')
             self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
 
         status = mount_status(self.log_name)
-        if status and 'state' in status and status['state'] != MountState.Disabled:
-            self.set_task('Parking mount')
+        if status and 'state' in status and status['state'] not in [MountState.Disabled, MountState.Parked]:
+            self._progress = Progress.Parking
             mount_park(self.log_name)
 
         # Warm cameras
-        self.set_task('Warming cameras')
+        self._progress = Progress.Warming
         for camera_id in self._camera_ids:
             cam_stop(self.log_name, camera_id, timeout=CAMERA_STOP_TIMEOUT)
             cam_configure(self.log_name, camera_id, {'temperature': None}, quiet=True)
@@ -95,7 +116,7 @@ class ShutdownCameras(TelescopeAction):
 
         if not self.aborted:
             # Power cameras off
-            self.set_task('Disabling cameras')
+            self._progress = Progress.ShuttingDown
             for camera_id in self._camera_ids:
                 cam_shutdown(self.log_name, camera_id)
 

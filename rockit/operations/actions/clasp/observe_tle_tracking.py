@@ -34,6 +34,10 @@ LOOP_INTERVAL = 5
 MIN_ALTITUDE = 10
 
 
+class Progress:
+    Waiting, WaitingForTarget, Acquiring, Tracking = range(4)
+
+
 class ObserveTLETracking(TelescopeAction):
     """
     Telescope action to observe a satellite tracking its TLE
@@ -72,8 +76,38 @@ class ObserveTLETracking(TelescopeAction):
 
         self._start_date = Time(config['start'])
         self._end_date = Time(config['end'])
+        self._progress = Progress.Waiting
 
         self._camera_ids = [c for c in cameras if c in self.config]
+
+    def task_labels(self):
+        """Returns list of tasks to be displayed in the schedule table"""
+        tasks = []
+
+        if self._progress <= Progress.Waiting:
+            if self._start_date:
+                tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
+
+        if self._progress == Progress.WaitingForTarget:
+            if not self.dome_is_open:
+                label = 'Wait for dome'
+                if self._end_date:
+                    label += f' (expires {self._end_date.strftime("%H:%M:%S")})'
+            else:
+                label = 'Wait for target to rise'
+                if self._end_date:
+                    label += f' (expires {self._end_date.strftime("%H:%M:%S")})'
+            tasks.append(label)
+
+        target_name = self.config["pipeline"]["object"]
+        if self._progress == Progress.Acquiring:
+            tasks.append(f'Acquire target {target_name}')
+            tasks.append(f'Observe until {self._end_date.strftime("%H:%M:%S")}')
+
+        elif self._progress <= Progress.Tracking:
+            tasks.append(f'Observe target {target_name} until {self._end_date.strftime("%H:%M:%S")}')
+
+        return tasks
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
@@ -99,7 +133,6 @@ class ObserveTLETracking(TelescopeAction):
             self.status = TelescopeActionStatus.Error
             return
 
-        self.set_task('Waiting for observation start')
         self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
         if self.aborted or Time.now() > self._end_date:
             self.status = TelescopeActionStatus.Complete
@@ -121,6 +154,7 @@ class ObserveTLETracking(TelescopeAction):
             self.config['tle'][2],
             name=self.config['tle'][0])
 
+        self._progress = Progress.WaitingForTarget
         timescale = Loader('/var/tmp').timescale()
 
         while not self.aborted:
@@ -135,13 +169,11 @@ class ObserveTLETracking(TelescopeAction):
                 break
 
             print(f'Target alt is {alt}; dec is {dec}')
-            self.set_task('Waiting for target to rise')
             with self._wait_condition:
                 self._wait_condition.wait(LOOP_INTERVAL)
 
         require_onsky = self.config.get('onsky', True)
         if require_onsky and not self.dome_is_open:
-            self.set_task('Waiting for dome')
             while not self.dome_is_open and Time.now() <= self._end_date and not self.aborted:
                 with self._wait_condition:
                     self._wait_condition.wait(LOOP_INTERVAL)
@@ -153,7 +185,7 @@ class ObserveTLETracking(TelescopeAction):
         # Note: from this point we'll keep observing, even if the dome closes mid-pass.
         # This keeps the action simple, and we already expect the person reducing the data
         # to have to manually discard frames blocked by the dome walls, W1m dome, etc.
-        self.set_task('Acquiring target')
+        self._progress = Progress.Acquiring
         if not mount_track_tle(self.log_name, self.config['tle']):
             print('failed to track target')
             if self.aborted:
@@ -167,7 +199,7 @@ class ObserveTLETracking(TelescopeAction):
             if camera_id in self.config:
                 cam_take_images(self.log_name, camera_id, 0, self.config[camera_id])
 
-        self.set_task(f'Ends {self._end_date.strftime("%H:%M:%S")}')
+        self._progress = Progress.Tracking
 
         # Wait until the target sets or the requested end time
         while True:

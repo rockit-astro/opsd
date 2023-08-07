@@ -30,6 +30,7 @@ import numpy as np
 from scipy import conjugate, polyfit
 from scipy.fftpack import fft, ifft
 from rockit.common import log, validation
+from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.camera.andor import CameraStatus
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cameras, cam_status, cam_take_images, cam_stop
@@ -53,6 +54,11 @@ WCS_EXPOSURE_TIME = 5 * u.s
 # Amount of time to wait between camera status checks while observing
 CAM_CHECK_STATUS_DELAY = 10 * u.s
 
+
+class Progress:
+    Waiting, Acquiring, Observing = range(3)
+
+
 class ObserveField(TelescopeAction):
     """Telescope action to observe a sidereally tracked field"""
     def __init__(self, log_name, config):
@@ -62,6 +68,7 @@ class ObserveField(TelescopeAction):
         self._start_date = Time(config['start'])
         self._end_date = Time(config['end'])
         self._guide_camera = config['guide_camera']
+        self._progress = Progress.Waiting
 
         self._wcs_status = WCSStatus.Inactive
         self._wcs = None
@@ -75,8 +82,28 @@ class ObserveField(TelescopeAction):
         for camera_id in cameras:
             self._cameras[camera_id] = CameraWrapper(camera_id, self.config.get(camera_id, None), self.log_name)
 
+    def task_labels(self):
+        """Returns list of tasks to be displayed in the schedule table"""
+        tasks = []
+
+        if self._progress <= Progress.Waiting:
+            if self._start_date:
+                tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
+        elif not self.dome_is_open:
+            tasks.append('Wait for dome')
+
+        target_name = self.config["pipeline"]["object"]
+        if self._progress <= Progress.Acquiring:
+            tasks.append(f'Acquire target field for {target_name}')
+            tasks.append(f'Observe until {self._end_date.strftime("%H:%M:%S")}')
+
+        elif self._progress <= Progress.Observing:
+            tasks.append(f'Observe target {target_name} until {self._end_date.strftime("%H:%M:%S")}')
+
+        return tasks
+
     def __acquire_field(self):
-        self.set_task('Acquiring field')
+        self._progress = Progress.Acquiring
 
         # Point to the requested location
         acquire_start = Time.now()
@@ -107,11 +134,6 @@ class ObserveField(TelescopeAction):
         while not self.aborted and self.dome_is_open:
             # Wait for telescope position to settle before taking first image
             time.sleep(5)
-
-            if attempt > 1:
-                self.set_task(f'Measuring position (attempt {attempt})')
-            else:
-                self.set_task('Measuring position')
 
             self._wcs = None
             self._wcs_status = WCSStatus.WaitingForWCS
@@ -175,7 +197,6 @@ class ObserveField(TelescopeAction):
                 return ObservationStatus.OnTarget
 
             # Offset telescope
-            self.set_task('Refining pointing')
             if not mount_offset_radec(self.log_name, offset_ra.to_value(u.deg), offset_dec.to_value(u.deg)):
                 return ObservationStatus.Error
 
@@ -216,7 +237,7 @@ class ObserveField(TelescopeAction):
         self._is_guiding = True
 
         # Monitor observation status
-        self.set_task(f'Ends {self._end_date.strftime("%H:%M:%S")}')
+        self._progress = Progress.Observing
         return_status = ObservationStatus.Complete
         while True:
             if self.aborted or Time.now() > self._end_date:
@@ -267,7 +288,6 @@ class ObserveField(TelescopeAction):
             self.status = TelescopeActionStatus.Error
             return
 
-        self.set_task('Waiting for observation start')
         self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
         if Time.now() > self._end_date:
             self.status = TelescopeActionStatus.Complete

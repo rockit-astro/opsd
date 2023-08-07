@@ -33,6 +33,11 @@ from .schema_helpers import camera_science_schema
 # Amount of time to allow for readout + object detection + wcs solution
 # Consider the frame lost if this is exceeded
 MAX_PROCESSING_TIME = 45 * u.s
+MEASUREMENT_ATTEMPTS = 5
+
+
+class Progress:
+    Slewing, Measuring = range(2)
 
 
 class PointingModelPointing(TelescopeAction):
@@ -55,9 +60,25 @@ class PointingModelPointing(TelescopeAction):
     """
     def __init__(self, log_name, config):
         super().__init__('Pointing Model', log_name, config)
+        self._progress = Progress.Slewing
         self._wait_condition = threading.Condition()
         self._wcs_status = WCSStatus.Inactive
         self._wcs = None
+        self._measurement_attempt = 0
+
+    def task_labels(self):
+        """Returns list of tasks to be displayed in the schedule table"""
+        tasks = []
+        if self._progress <= Progress.Slewing:
+            tasks.append(f'Slew to alt {round(self.config["alt"])}\u00B0, az {round(self.config["az"])}\u00B0')
+
+        if self._progress <= Progress.Measuring:
+            label = 'Measure position'
+            if self._measurement_attempt > 0:
+                label += f' (attempt {self._measurement_attempt} / {MEASUREMENT_ATTEMPTS})'
+            tasks.append(label)
+
+        return tasks
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
@@ -75,7 +96,6 @@ class PointingModelPointing(TelescopeAction):
         coords = SkyCoord(alt=self.config['alt'], az=self.config['az'], unit=u.deg, frame='altaz',
                           location=location, obstime=Time.now())
 
-        self.set_task('Slewing')
         if not mount_slew_radec(self.log_name, coords.icrs.ra.to_value(u.deg), coords.icrs.dec.to_value(u.deg), True):
             self.status = TelescopeActionStatus.Complete
             return
@@ -83,6 +103,8 @@ class PointingModelPointing(TelescopeAction):
         if not self.dome_is_open:
             self.status = TelescopeActionStatus.Complete
             return
+
+        self._progress = Progress.Measuring
 
         # Take a frame to solve field center
         pipeline_config = {
@@ -100,11 +122,6 @@ class PointingModelPointing(TelescopeAction):
 
         attempt = 1
         while not self.aborted and self.dome_is_open:
-            if attempt > 1:
-                self.set_task(f'Measuring position (attempt {attempt})')
-            else:
-                self.set_task('Measuring position')
-
             self._wcs = None
             self._wcs_status = WCSStatus.WaitingForWCS
 

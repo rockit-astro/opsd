@@ -34,6 +34,10 @@ CAMERA_CHECK_INTERVAL = 10
 CAMERA_COOLING_TIMEOUT = 900
 
 
+class Progress:
+    Waiting, Initalizing, Cooling = range(3)
+
+
 class InitializeCameras(TelescopeAction):
     """
     Telescope action to power on and cool the cameras.
@@ -47,6 +51,8 @@ class InitializeCameras(TelescopeAction):
     """
     def __init__(self, log_name, config):
         super().__init__('Initializing Cameras', log_name, config)
+        self._progress = Progress.Waiting
+
         if 'start' in config:
             self._start_date = Time(config['start'])
         else:
@@ -54,13 +60,25 @@ class InitializeCameras(TelescopeAction):
 
         self._wait_condition = threading.Condition()
 
+    def task_labels(self):
+        """Returns list of tasks to be displayed in the schedule table"""
+        tasks = []
+        if self._progress <= Progress.Waiting and self._start_date:
+            tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
+
+        if self._progress <= Progress.Initalizing:
+            tasks.append(f'Initialize cameras ({", ".join(self.config["cameras"])})')
+
+        if self._progress <= Progress.Cooling:
+            tasks.append('Wait for temperature lock')
+
+        return tasks
 
     def __wait_for_temperature_lock(self):
         """Waits until all cameras have reached their target temperature
            Returns True on success, False on error
         """
         # Wait for cameras to cool if required
-        self.set_task('Cooling cameras')
         locked = {camera_id: False for camera_id in self.config['cameras']}
 
         start = Time.now()
@@ -86,10 +104,11 @@ class InitializeCameras(TelescopeAction):
     def run_thread(self):
         """Thread that runs the hardware actions"""
         if self._start_date is not None and Time.now() < self._start_date:
-            self.set_task(f'Waiting until {self._start_date.strftime("%H:%M:%S")}')
             if not self.wait_until_time_or_aborted(self._start_date, self._wait_condition):
                 self.status = TelescopeActionStatus.Complete
                 return
+
+        self._progress = Progress.Initalizing
 
         # Power cameras on if needed
         switched = False
@@ -111,7 +130,6 @@ class InitializeCameras(TelescopeAction):
             with self._wait_condition:
                 self._wait_condition.wait(CAMERA_POWERON_DELAY)
 
-        self.set_task('Initializing Cameras')
         for camera_id in self.config['cameras']:
             if not cam_initialize(self.log_name, camera_id):
                 # Cameras sometimes boot with a bogus device name
@@ -121,6 +139,7 @@ class InitializeCameras(TelescopeAction):
                     self.status = TelescopeActionStatus.Error
                     return
 
+        self._progress = Progress.Cooling
         locked = self.__wait_for_temperature_lock()
         if self.aborted or locked:
             self.status = TelescopeActionStatus.Complete
