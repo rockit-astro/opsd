@@ -20,6 +20,7 @@
 # pylint: disable=too-many-branches
 
 import threading
+from astropy.coordinates import SkyCoord
 from astropy.time import Time
 import astropy.units as u
 from rockit.common import log, validation
@@ -35,6 +36,10 @@ from .schema_helpers import camera_science_schema, pipeline_junk_schema
 MAX_PROCESSING_TIME = 20
 
 LOOP_INTERVAL = 5
+
+
+class Progress:
+    Waiting, Slewing, Focusing = range(3)
 
 
 class FocusSweep(TelescopeAction):
@@ -66,6 +71,7 @@ class FocusSweep(TelescopeAction):
     def __init__(self, log_name, config):
         super().__init__('Focus Sweep', log_name, config)
         self._wait_condition = threading.Condition()
+        self._progress = Progress.Waiting
         self._focus_measurements = {}
 
         if 'start' in config:
@@ -79,6 +85,36 @@ class FocusSweep(TelescopeAction):
             self._expires_date = None
 
         self._camera_id = config['camera']
+
+    def task_labels(self):
+        """Returns list of tasks to be displayed in the schedule table"""
+        tasks = []
+
+        if self._progress <= Progress.Waiting:
+            if self._start_date:
+                tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
+        elif not self.dome_is_open:
+            label = 'Wait for dome'
+            if self._expires_date:
+                label += f' (expires {self._expires_date.strftime("%H:%M:%S")})'
+            tasks.append(label)
+
+        if self._progress <= Progress.Slewing:
+            ra = self.config.get('ra', None)
+            dec = self.config.get('dec', None)
+            if ra and dec:
+                coord = SkyCoord(ra=ra, dec=dec, unit=u.deg)
+                tasks.append(f'Slew to {coord.to_string("hmsdms", sep=":", precision=0)}')
+            else:
+                tasks.append('Slew to zenith')
+
+        if self._progress < Progress.Focusing:
+            tasks.append(f'Run Focus Sweep ({self._camera_id})')
+        elif self._progress == Progress.Focusing:
+            count = int((self.config['max'] - self.config['min']) / self.config['step'])
+            tasks.append(f'Run Focus Sweep ({self._camera_id}; {len(self._focus_measurements) + 1} / {count})')
+
+        return tasks
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
@@ -97,14 +133,12 @@ class FocusSweep(TelescopeAction):
             return
 
         if self._start_date is not None and Time.now() < self._start_date:
-            self.set_task(f'Waiting until {self._start_date.strftime("%H:%M:%S")}')
             self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
 
         while not self.aborted and not self.dome_is_open:
             if self._expires_date is not None and Time.now() > self._expires_date:
                 break
 
-            self.set_task('Waiting for dome')
             with self._wait_condition:
                 self._wait_condition.wait(10)
 
@@ -128,12 +162,12 @@ class FocusSweep(TelescopeAction):
             if dec is None:
                 dec = ms['site_latitude']
 
-        self.set_task('Slewing to field')
+        self._progress = Progress.Slewing
         if not mount_slew_radec(self.log_name, ra, dec, True):
             self.status = TelescopeActionStatus.Error
             return
 
-        self.set_task('Preparing camera')
+        self._progress = Progress.Focusing
 
         # Record the initial focus so we can return on error
         initial_focus = focus_get(self.log_name, self._camera_id)
@@ -160,10 +194,7 @@ class FocusSweep(TelescopeAction):
 
         expected_next_exposure = Time.now() + (camera_config['exposure'] + MAX_PROCESSING_TIME) * u.s
 
-        count = int((self.config['max'] - self.config['min']) / self.config['step'])
         while True:
-            self.set_task(f'Measuring position {len(self._focus_measurements) + 1} / {count}')
-
             # The wait period rate limits the camera status check
             # The frame received callback will wake this up immediately
             with self._wait_condition:
@@ -271,11 +302,23 @@ class FocusSweep(TelescopeAction):
                     'type': 'integer',
                     'minimum': 0
                 },
+                'start': {
+                    'type': 'string',
+                    'format': 'date-time',
+                },
+                'expires': {
+                    'type': 'string',
+                    'format': 'date-time',
+                },
                 'pipeline': pipeline_junk_schema(),
                 'camera': {
                     'type': 'string',
                     'enum': list(cameras.keys())
                 }
+            },
+            'dependencies': {
+                'ra': ['dec'],
+                'dec': ['ra']
             },
             'anyOf': []
         }

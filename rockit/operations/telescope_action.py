@@ -34,7 +34,6 @@ class TelescopeAction:
     def __init__(self, name, log_name, config):
         self.name = name
         self.config = config
-        self.task = None
         self.log_name = log_name
 
         # The current status of the action, queried by the controller thread
@@ -56,10 +55,6 @@ class TelescopeAction:
         """Returns an iterator of schema violations for the given json configuration"""
         yield iter()
     # pylint: enable=unused-argument
-
-    def set_task(self, task):
-        """Updates the task shown to the user"""
-        self.task = task
 
     def start(self, dome_is_open):
         """Spawns the run thread that runs the hardware actions"""
@@ -122,3 +117,12 @@ class TelescopeAction:
 
     def received_guide_profile(self, headers, profile_x, profile_y):
         """Notification called when a guide profile has been calculated by the data pipeline"""
+
+    def task_labels(self):
+        """Returns list of tasks to be displayed in the schedule table"""
+        return []
+
+    def set_task(self, task):
+        """Deprecated and no longer used."""
+        # TODO: Remove this after all actions are ported to using task_labels()
+        pass

@@ -34,7 +34,6 @@ class ParkTelescope(TelescopeAction):
         """Thread that runs the hardware actions"""
         status = mount_status(self.log_name)
         if status and 'state' in status and status['state'] != TelState.Absent:
-            self.set_task('Parking')
             if not mount_stop(self.log_name):
                 self.status = TelescopeActionStatus.Error
                 return

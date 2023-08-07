@@ -53,6 +53,10 @@ FIELD_END_SEARCH_STEP = TimeDelta(5, format='sec')
 WCS_EXPOSURE_TIME = TimeDelta(5, format='sec')
 
 
+class Progress:
+    Waiting, AcquiringTarget, Observing = range(3)
+
+
 class ObserveTLESidereal(TelescopeAction):
     """
     Telescope action to observe a GEO object with cam1 by allowing it to trail in front of tracked stars
@@ -72,10 +76,6 @@ class ObserveTLESidereal(TelescopeAction):
             "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
             # Also supports optional temperature, gain, offset, stream (advanced options)
         },
-        "cam2": {
-            "exposure": 1,
-            # Also supports optional temperature (advanced options)
-        },
         "pipeline": {
            "prefix": "36033",
            "object": "THOR 6", # Optional: defaults to the TLE name without leading "0 "
@@ -87,16 +87,38 @@ class ObserveTLESidereal(TelescopeAction):
     def __init__(self, log_name, config):
         super().__init__('Observe TLE', log_name, config)
         self._wait_condition = threading.Condition()
+        self._progress = Progress.Waiting
         self._camera = 'cam1'
 
         self._start_date = Time(config['start'])
         self._end_date = Time(config['end'])
+        self._field_end_date = None
 
         self._field_width = 2.6 * u.deg
         self._field_height = 1.69 * u.deg
 
         self._wcs_status = WCSStatus.Inactive
         self._wcs_center = None
+
+    def task_labels(self):
+        """Returns list of tasks to be displayed in the schedule table"""
+        tasks = []
+
+        if self._progress <= Progress.Waiting:
+            if self._start_date:
+                tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
+        elif not self.dome_is_open:
+            tasks.append('Wait for dome')
+
+        if self._progress <= Progress.AcquiringTarget:
+            tasks.append(f'Acquire target ({self.target_name()})')
+            tasks.append(f'Observe until {self._end_date.strftime("%H:%M:%S")}')
+        else:
+            tasks.append(f'Observe target ({self.target_name()}) until {self._field_end_date.strftime("%H:%M:%S")}')
+            tasks.append(f'Reacquire and repeat until {self._end_date.strftime("%H:%M:%S")}')
+
+        return tasks
+
 
     def __set_failed_status(self):
         """Sets self.status to Complete if aborted otherwise Error"""
@@ -140,16 +162,21 @@ class ObserveTLESidereal(TelescopeAction):
         midpoint = SkyCoord(points.data.mean(), frame=points)
         return midpoint, end_time
 
+    def target_name(self):
+        if 'object' in self.config['pipeline']:
+            return self.config['pipeline']['object']
+
+        name = self.config['tle'][0]
+        if name.startswith('0 '):
+            name = name[2:]
+        return name
+
     def run_thread(self):
         """Thread that runs the hardware actions"""
         # Configure pipeline immediately so the dashboard can show target name etc
         pipeline_science_config = self.config['pipeline'].copy()
         pipeline_science_config['type'] = 'SCIENCE'
-        if 'object' not in pipeline_science_config:
-            name = self.config['tle'][0]
-            if name.startswith('0 '):
-                name = name[2:]
-            pipeline_science_config['object'] = name
+        pipeline_science_config['object'] = self.target_name()
 
         if 'archive' not in pipeline_science_config:
             pipeline_science_config['archive'] = [self._camera.upper()]
@@ -164,7 +191,6 @@ class ObserveTLESidereal(TelescopeAction):
             self.status = TelescopeActionStatus.Error
             return
 
-        self.set_task('Waiting for observation start')
         self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
 
         # Remember coordinate offset between pointings
@@ -190,14 +216,14 @@ class ObserveTLESidereal(TelescopeAction):
         timescale = Loader('/var/tmp').timescale()
 
         while not self.aborted and self.dome_is_open:
+            self._progress = Progress.AcquiringTarget
             acquire_start = Time.now()
             if acquire_start > self._end_date:
                 break
 
-            self.set_task('Acquiring field')
             field_start = acquire_start + SETUP_DELAY
             target_coord, field_end = self.__field_coord(field_start, observer, target, timescale)
-
+            self._field_end_date = field_end
             if not mount_slew_radec(self.log_name,
                                     (target_coord.ra + last_offset_ra).to_value(u.deg),
                                     (target_coord.dec + last_offset_dec).to_value(u.deg),
@@ -229,11 +255,6 @@ class ObserveTLESidereal(TelescopeAction):
             # Converge on requested position
             attempt = 1
             while not self.aborted and self.dome_is_open:
-                if attempt > 1:
-                    self.set_task(f'Measuring position (attempt {attempt})')
-                else:
-                    self.set_task('Measuring position')
-
                 if not cam_take_images(self.log_name, self._camera, 1, cam_config, quiet=True):
                     # Try stopping the camera, waiting a bit, then try again
                     cam_stop(self.log_name, self._camera)
@@ -285,7 +306,6 @@ class ObserveTLESidereal(TelescopeAction):
                     break
 
                 # Offset telescope
-                self.set_task('Refining pointing')
                 if not mount_offset_radec(self.log_name,
                                           offset_ra.to_value(u.deg),
                                           offset_dec.to_value(u.deg)):
@@ -305,7 +325,7 @@ class ObserveTLESidereal(TelescopeAction):
                 self.__set_failed_status()
                 return
 
-            self.set_task(f'Ends {field_end.strftime("%H:%M:%S")} / {self._end_date.strftime("%H:%M:%S")}')
+            self._progress = Progress.Observing
             if not cam_take_images(self.log_name, self._camera, 0, self.config.get(self._camera, {})):
                 print('Failed to take_images - will retry for next field')
 

@@ -35,7 +35,6 @@ class ParkTelescope(TelescopeAction):
 
         status = mount_status(self.log_name)
         if status and 'state' in status and status['state'] not in [MountState.Disabled, MountState.Parked]:
-            self.set_task('Parking mount')
             if not mount_stop(self.log_name):
                 self.status = TelescopeActionStatus.Error
                 return

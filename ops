@@ -207,16 +207,18 @@ def print_status(config, _):
 
     print(tel_mode)
 
-    if 'action_name' in tel:
-        name = '       Name: ' + TFmt.Bold + tel['action_name'] + TFmt.Clear
-        if tel['action_number'] > 0:
-            name += ' (' + str(tel['action_number']) + ' of ' + str(tel['action_count']) + ')'
-        print(name)
-
-        if tel['action_task']:
-            print('       Task: ' + TFmt.Bold + tel['action_task'] + TFmt.Clear)
-    elif tel['mode'] == 1:
-        print('    Action name: ' + TFmt.Bold + 'IDLE' + TFmt.Clear)
+    if tel['mode'] == OperationsMode.Automatic:
+        if 'schedule' in tel and tel['schedule']:
+            print('   Schedule:')
+            for action in tel['schedule']:
+                label = f'      {TFmt.Bold}{action["name"]}{TFmt.Clear}'
+                if action['tasks']:
+                    label += ':'
+                print(label)
+                for task in action['tasks']:
+                    print(f'       - {task}')
+        else:
+            print(f'   Schedule: {TFmt.Bold}{TFmt.Yellow}EMPTY{TFmt.Clear}')
 
     return 0
 

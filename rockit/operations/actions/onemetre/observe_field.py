@@ -30,6 +30,7 @@ import numpy as np
 from scipy import conjugate, polyfit
 from scipy.fftpack import fft, ifft
 from rockit.common import log, validation
+from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from warwick.observatory.camera.andor import CameraStatus
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cameras, cam_status, cam_take_images, cam_stop

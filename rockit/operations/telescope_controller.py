@@ -43,11 +43,7 @@ class TelescopeController:
 
         self._lock = threading.Lock()
         self._mode = OperationsMode.Manual
-        self._mode_updated = Time.now()
         self._requested_mode = OperationsMode.Manual
-
-        self._action_count = 0
-        self._current_action_number = 0
 
         self._dome_controller = dome_controller
         self._dome_was_open = False
@@ -80,14 +76,10 @@ class TelescopeController:
 
                             log.info(self._config.log_name, 'Aborting action queue')
                             self._action_queue.clear()
-                            self._action_count = self._current_action_number = 0
                         elif self._active_action is None:
                             self._mode = OperationsMode.Manual
 
-                    # When switching to automatic mode we must reinitialize
-                    # the telescope to make sure it is in a consistent state
                     elif self._requested_mode == OperationsMode.Automatic:
-                        self._initialized = False
                         self._mode = OperationsMode.Automatic
 
                 self._status_updated = Time.now()
@@ -101,12 +93,10 @@ class TelescopeController:
                         if self._action_queue:
                             self._idle = False
                             self._active_action = self._action_queue.pop()
-                            self._current_action_number += 1
                         # We have nothing left to do, so stow the telescope until next time
                         elif not self._action_queue and not self._idle and \
                                 self._requested_mode != OperationsMode.Manual:
                             self._active_action = self._park_action(self._config.log_name)
-                            self._action_count = self._current_action_number = 0
 
                         # Start the action running
                         if self._active_action is not None:
@@ -121,7 +111,6 @@ class TelescopeController:
                             log.info(self._config.log_name, 'Aborting action queue and parking telescope')
                             self._action_queue.clear()
                             self._mode = OperationsMode.Error
-                            self._action_count = self._current_action_number = 0
 
                         if status == TelescopeActionStatus.Incomplete:
                             if dome_is_open != self._dome_was_open:
@@ -147,23 +136,27 @@ class TelescopeController:
     def status(self):
         """Returns a dictionary with the current telescope status"""
         with self._action_lock:
-            ret = {
-                'mode': self._mode,
-                'mode_updated': self._mode_updated.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                'requested_mode': self._requested_mode,
-                'status_updated': self._status_updated.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                'action_number': self._current_action_number,
-                'action_count': self._action_count
-            }
-
-            if self._active_action is not None:
-                ret.update({
-                    'action_name': self._active_action.name,
-                    'action_task': self._active_action.task,
-                    'action_status': self._active_action.status
+            schedule = []
+            if self._active_action and self._active_action.status == TelescopeActionStatus.Incomplete:
+                schedule.append({
+                    'name': self._active_action.name,
+                    'tasks': self._active_action.task_labels()
                 })
 
-            return ret
+            action_count = len(self._action_queue)
+            for i in range(action_count):
+                action = self._action_queue[action_count - i - 1]
+                schedule.append({
+                    'name': action.name,
+                    'tasks': action.task_labels()
+                })
+
+            return {
+                'mode': self._mode,
+                'requested_mode': self._requested_mode,
+                'status_updated': self._status_updated.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                'schedule': schedule
+            }
 
     def request_mode(self, mode):
         """Request a telescope mode change (automatic/manual)"""
@@ -183,7 +176,7 @@ class TelescopeController:
 
             for action in actions:
                 self._action_queue.appendleft(action)
-                self._action_count += 1
+
             self.__shortcut_loop_wait()
         return True
 
@@ -214,4 +207,3 @@ class TelescopeController:
             if self._active_action:
                 self._action_queue.clear()
                 self._active_action.abort()
-                self._action_count = self._current_action_number = 0

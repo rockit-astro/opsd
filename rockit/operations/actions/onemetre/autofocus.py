@@ -21,6 +21,7 @@
 
 import threading
 import numpy as np
+from astropy.coordinates import SkyCoord
 from astropy.time import Time
 import astropy.units as u
 from rockit.common import log, validation
@@ -32,6 +33,10 @@ from .pipeline_helpers import configure_pipeline
 from .schema_helpers import camera_science_schema
 
 LOOP_INTERVAL = 5
+
+
+class Progress:
+    Waiting, Slewing, Blue, Red = range(3)
 
 
 class AutoFocus(TelescopeAction):
@@ -54,6 +59,8 @@ class AutoFocus(TelescopeAction):
     def __init__(self, log_name, config):
         super().__init__('Auto Focus', log_name, config)
         self._wait_condition = threading.Condition()
+        self._progress = Progress.Waiting
+        self._current_state = AutoFocusState.MeasureInitial
 
         if 'start' in config:
             self._start_date = Time(config['start'])
@@ -73,17 +80,49 @@ class AutoFocus(TelescopeAction):
             if camera_id in self.config:
                 self._camera_ids.append(camera_id)
 
+    def task_labels(self):
+        """Returns list of tasks to be displayed in the schedule table"""
+        tasks = []
+
+        if self._progress <= Progress.Waiting:
+            if self._start_date:
+                tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
+        elif not self.dome_is_open:
+            label = 'Wait for dome'
+            if self._expires_date:
+                label += f' (expires {self._expires_date.strftime("%H:%M:%S")})'
+            tasks.append(label)
+
+        if self._progress <= Progress.Slewing:
+            ra = self.config.get('ra', None)
+            dec = self.config.get('dec', None)
+            if ra and dec:
+                coord = SkyCoord(ra=ra, dec=dec, unit=u.deg)
+                tasks.append(f'Slew to {coord.to_string("hmsdms", sep=":", precision=0)}')
+            else:
+                tasks.append('Slew to zenith')
+
+        if self._progress < Progress.Blue and 'blue' in self._camera_ids:
+            tasks.append('Focus Blue camera')
+        elif self._progress == Progress.Blue:
+            tasks.append(f'Focus Blue camera ({AutoFocusState.Labels[self._current_state]})')
+
+        if self._progress < Progress.Red and 'red' in self._camera_ids:
+            tasks.append('Focus Red camera')
+        elif self._progress == Progress.Red:
+            tasks.append(f'Focus Red camera ({AutoFocusState.Labels[self._current_state]})')
+
+        return tasks
+
     def run_thread(self):
         """Thread that runs the hardware actions"""
         if self._start_date is not None and Time.now() < self._start_date:
-            self.set_task(f'Waiting until {self._start_date.strftime("%H:%M:%S")}')
             self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
 
         while not self.aborted and not self.dome_is_open:
             if self._expires_date is not None and Time.now() > self._expires_date:
                 break
 
-            self.set_task('Waiting for dome')
             with self._wait_condition:
                 self._wait_condition.wait(LOOP_INTERVAL)
 
@@ -116,13 +155,18 @@ class AutoFocus(TelescopeAction):
             if dec is None:
                 dec = ms['site_latitude']
 
-        self.set_task('Slewing to field')
+        self._progress = Progress.Slewing
         if not mount_slew_radec(self.log_name, ra, dec, True):
             self.status = TelescopeActionStatus.Error
             return
 
-        camera_count = len(self._camera_ids)
-        for i, camera_id in enumerate(self._camera_ids):
+        for camera_id in self._camera_ids:
+            self._current_state = AutoFocusState.MeasureInitial
+            if camera_id == 'blue':
+                self._progress = Progress.Blue
+            elif camera_id == 'red':
+                self._progress = Progress.Red
+
             camera_config = CONFIG[camera_id]
             start_time = Time.now()
             success = False
@@ -132,8 +176,6 @@ class AutoFocus(TelescopeAction):
 
             try:
                 log.info(self.log_name, f'AutoFocus: Focusing {camera_id}')
-
-                self.set_task(f'Sampling initial HFD ({i}/{camera_count})')
                 initial_hfd = min_hfd = self.measure_current_hfd(camera_id, camera_config['coarse_measure_repeats'])
                 if initial_hfd is None:
                     continue
@@ -141,7 +183,7 @@ class AutoFocus(TelescopeAction):
                 log.info(self.log_name, f'AutoFocus: HFD at {current_focus} steps is ' +
                          f'{initial_hfd:.1f}" ({camera_config["coarse_measure_repeats"]} samples)')
 
-                self.set_task(f'Searching v-curve position ({i}/{camera_count})')
+                self._current_state = AutoFocusState.FindPositionOnVCurve
 
                 # Step inwards until we are well defocused on the inside edge of the v curve
                 failed = False
@@ -170,7 +212,7 @@ class AutoFocus(TelescopeAction):
 
                 # We may have stepped to far inwards in the previous step
                 # Step outwards if needed until the current HFD is closer to the target
-                self.set_task(f'Searching for HFD {camera_config["target_hfd"]} ({i}/{camera_count})')
+                self._current_state = AutoFocusState.FindTargetHFD
                 failed = False
                 while current_hfd > 2 * camera_config['target_hfd']:
                     log.info(self.log_name, f'AutoFocus: Stepping towards HFD {camera_config["target_hfd"]}')
@@ -197,7 +239,7 @@ class AutoFocus(TelescopeAction):
                     continue
 
                 # Take more frames to get an improved HFD estimate at the current position
-                self.set_task(f'Sampling HFD for final move ({i}/{camera_count})')
+                self._current_state = AutoFocusState.MeasureTargetHFD
                 current_hfd = self.measure_current_hfd(camera_id, camera_config['fine_measure_repeats'])
                 if current_hfd is None:
                     continue
@@ -212,7 +254,7 @@ class AutoFocus(TelescopeAction):
                 if not focus_set(self.log_name, camera_id, current_focus):
                     continue
 
-                self.set_task(f'Sampling final HFD ({i}/{camera_count})')
+                self._current_state = AutoFocusState.MeasureFinalHFD
                 current_hfd = self.measure_current_hfd(camera_id, camera_config['fine_measure_repeats'])
                 if current_hfd is None:
                     continue
@@ -337,6 +379,10 @@ class AutoFocus(TelescopeAction):
                     'type': 'string',
                     'format': 'date-time',
                 }
+            },
+            'dependencies': {
+                'ra': ['dec'],
+                'dec': ['ra']
             }
         }
 
@@ -344,6 +390,25 @@ class AutoFocus(TelescopeAction):
             schema['properties'][camera_id] = camera_science_schema(camera_id)
 
         return validation.validation_errors(config_json, schema)
+
+
+class AutoFocusState:
+    """Possible states of the AutoFocus routine"""
+    MeasureInitial, FindPositionOnVCurve, FindTargetHFD, MeasureTargetHFD, \
+        MeasureFinalHFD, Aborting, Complete, Failed, Error = range(9)
+
+    Labels = {
+        0: 'Measuring initial HFD',
+        1: 'Finding position on V curve',
+        2: 'Moving to target HFD',
+        3: 'Measuring HFD',
+        4: 'Measuring final HFD',
+        5: 'Aborting',
+        6: 'Complete',
+        7: 'Failed',
+        8: 'Error'
+    }
+
 
 CONFIG = {
     'blue': {
