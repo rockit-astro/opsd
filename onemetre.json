@@ -28,6 +28,11 @@
           "label": "GOTO",
           "sensor": "goto_vaisala",
           "parameter": "wind_speed"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "wind_speed"
         }
       ]
     },
@@ -42,6 +47,11 @@
         {
           "label": "GOTO",
           "sensor": "goto_vaisala",
+          "parameter": "median_wind_speed"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
           "parameter": "median_wind_speed"
         }
       ]
@@ -58,6 +68,11 @@
           "label": "GOTO",
           "sensor": "goto_vaisala",
           "parameter": "temperature"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "temperature"
         }
       ]
     },
@@ -72,6 +87,11 @@
         {
           "label": "GOTO",
           "sensor": "goto_vaisala",
+          "parameter": "relative_humidity"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
           "parameter": "relative_humidity"
         }
       ]
@@ -98,6 +118,11 @@
           "label": "GOTO",
           "sensor": "goto_vaisala",
           "parameter": "dew_point_delta"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "dew_point_delta"
         }
       ]
     },
@@ -108,6 +133,11 @@
           "label": "W1m",
           "sensor": "rain",
           "parameter": "unsafe_boards"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "rg11_unsafe"
         }
       ]
     },
