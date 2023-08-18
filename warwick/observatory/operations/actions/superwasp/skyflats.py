@@ -349,7 +349,7 @@ class CameraWrapper:
             if self.state == AutoFlatState.Saving:
                 self._exposure_count += 1
 
-            counts = headers['MEDCNTS'] - self._bias_level
+            counts = (headers['MEDCNTS'] - self._bias_level) / headers['CAM-BIN']**2
             exposure = headers['EXPTIME']
 
             # If the count rate is too low then we scale the exposure by the maximum amount
@@ -364,6 +364,7 @@ class CameraWrapper:
 
             clamped_desc = f' (clamped from {new_exposure:.2f}s)' if new_exposure > clamped_exposure else ''
             print(f'AutoFlat: camera {self.camera_id} exposure {exposure:.2f}s counts {counts:.0f} ADU ' +
+                  f'(bin {headers["CAM-BIN"]} x {headers["CAM-BIN"]}) ' +
                   f'-> {clamped_exposure:.2f}s' + clamped_desc)
 
             if self._is_evening:
