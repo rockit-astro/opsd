@@ -130,21 +130,6 @@
       ]
     },
     {
-      "label": "UPS Status",
-      "sensors": [
-        {
-          "label": "UPS1",
-          "sensor": "halfmetre_power",
-          "parameter": "ups1_status"
-        },
-        {
-          "label": "UPS2",
-          "sensor": "halfmetre_power",
-          "parameter": "ups2_status"
-        }
-      ]
-    },
-    {
       "label": "UPS Battery",
       "sensors": [
         {

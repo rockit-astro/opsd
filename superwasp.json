@@ -122,30 +122,15 @@
       ]
     },
     {
-      "label": "UPS 1",
+      "label": "UPS Battery",
       "sensors": [
         {
-          "label": "Status",
-          "sensor": "clasp_power",
-          "parameter": "ups1_status"
-        },
-        {
-          "label": "Battery",
+          "label": "UPS1",
           "sensor": "clasp_power",
           "parameter": "ups1_battery_remaining"
-        }
-      ]
-    },
-    {
-      "label": "UPS 2",
-      "sensors": [
-        {
-          "label": "Status",
-          "sensor": "clasp_power",
-          "parameter": "ups2_status"
         },
         {
-          "label": "Battery",
+          "label": "UPS2",
           "sensor": "clasp_power",
           "parameter": "ups2_battery_remaining"
         }
