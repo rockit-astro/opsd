@@ -22,7 +22,7 @@ import Pyro4
 from warwick.observatory.common import daemons, log
 from warwick.observatory.lmount import CommandStatus as TelCommandStatus
 
-PARK_POSITION = 'zenith'
+PARK_POSITION = 'stow'
 PARK_TIMEOUT = 30
 HOME_TIMEOUT = 60
 SLEW_TIMEOUT = 60
