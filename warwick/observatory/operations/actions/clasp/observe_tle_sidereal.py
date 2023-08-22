@@ -154,6 +154,12 @@ class ObserveTLESidereal(TelescopeAction):
         if 'archive' not in pipeline_science_config:
             pipeline_science_config['archive'] = [self._camera.upper()]
 
+        # The leading line number is omitted to keep the string within the 68 character fits limit
+        pipeline_science_config['headers'] = [
+            {'keyword': 'TLE1', 'value': self.config['tle'][1][2:]},
+            {'keyword': 'TLE2', 'value': self.config['tle'][2][2:]},
+        ]
+
         if not configure_pipeline(self.log_name, pipeline_science_config, quiet=True):
             self.status = TelescopeActionStatus.Error
             return
