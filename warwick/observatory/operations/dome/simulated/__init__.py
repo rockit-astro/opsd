@@ -17,7 +17,7 @@
 """Interface to simulate a virtual dome"""
 import time
 from warwick.observatory.operations.constants import DomeStatus
-from warwick.observatory.common import validation
+from rockit.common import validation
 
 
 CONFIG_SCHEMA = {

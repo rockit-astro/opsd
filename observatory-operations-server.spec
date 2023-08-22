@@ -7,7 +7,7 @@ License:   GPL-3.0
 Group:     Unspecified
 BuildArch: noarch
 Requires:  python3 python3-numpy python3-strict-rfc3339 python3-jsonschema python3-Pyro4
-Requires:  python3-warwick-observatory-common python3-warwick-observatory-operations
+Requires:  python3-rockit-common python3-warwick-observatory-operations
 
 %description
 

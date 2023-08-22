@@ -21,7 +21,7 @@ from warwick.observatory.dome import (
     DomeShutterStatus,
     DomeHeartbeatStatus)
 from warwick.observatory.operations.constants import DomeStatus
-from warwick.observatory.common import daemons, validation
+from rockit.common import daemons, validation
 
 CONFIG_SCHEMA = {
     'type': 'object',

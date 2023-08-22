@@ -29,7 +29,7 @@ import astropy.units as u
 import jsonschema
 from warwick.observatory.camera.qhy import CameraStatus
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
-from warwick.observatory.common import log
+from rockit.common import log
 from .camera_helpers import cameras, cam_initialize, cam_status, cam_configure, cam_take_images, cam_stop, \
     cam_cycle_power, cam_reinitialize_synchronised, cam_start_synchronised, cam_stop_synchronised
 from .mount_helpers import mount_stop

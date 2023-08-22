@@ -20,7 +20,7 @@ import numpy as np
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
 import astropy.units as u
-from warwick.observatory.common import validation
+from rockit.common import validation
 from .mount_helpers import mount_slew_hadec, mount_offset_radec
 from .observe_field_base import ObserveFieldBase, ObservationStatus
 

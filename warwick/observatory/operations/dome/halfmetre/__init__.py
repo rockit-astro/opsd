@@ -17,8 +17,8 @@
 """Interface to allow the dome controller to operate SuperWASP's roof"""
 
 from warwick.observatory.operations.constants import DomeStatus
-from warwick.observatory.common import daemons, validation
-from warwick.observatory.roof import RoofStatus, HeartbeatStatus, CommandStatus as RoofCommandStatus
+from rockit.common import daemons, validation
+from rockit.roof import RoofStatus, HeartbeatStatus, CommandStatus as RoofCommandStatus
 
 CONFIG_SCHEMA = {
     'type': 'object',

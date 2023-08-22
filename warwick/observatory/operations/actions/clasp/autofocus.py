@@ -24,7 +24,7 @@ import numpy as np
 from astropy.time import Time
 import astropy.units as u
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
-from warwick.observatory.common import log, validation
+from rockit.common import log, validation
 from .mount_helpers import mount_slew_radec, mount_status, mount_stop
 from .focus_helpers import focus_set, focus_get
 from .camera_helpers import cameras, cam_configure, cam_take_images

@@ -18,7 +18,7 @@
 
 import jsonschema
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
-from warwick.observatory.lmount import MountState
+from rockit.lmount import MountState
 from .mount_helpers import mount_status, mount_stop, mount_park
 
 

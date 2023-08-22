@@ -23,7 +23,7 @@ from astropy import wcs
 from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.time import Time
 import astropy.units as u
-from warwick.observatory.common import validation
+from rockit.common import validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cam_take_images
 from .mount_helpers import mount_slew_radec, mount_stop, mount_status, mount_add_pointing_model_point

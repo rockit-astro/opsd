@@ -19,7 +19,7 @@
 import sys
 import traceback
 import Pyro4
-from warwick.observatory.common import daemons, log
+from rockit.common import daemons, log
 from warwick.observatory.talon import CommandStatus as TelCommandStatus
 
 PARK_ALTAZ = (35, 25)

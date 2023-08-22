@@ -25,7 +25,7 @@ import traceback
 from astropy.time import Time
 import astropy.units as u
 import Pyro4
-from warwick.observatory.common import daemons, log
+from rockit.common import daemons, log
 from warwick.observatory.camera.qhy import CameraStatus, CommandStatus as CamCommandStatus
 
 cameras = {

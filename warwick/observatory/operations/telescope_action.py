@@ -21,7 +21,7 @@ import threading
 import traceback
 from astropy.time import Time
 import astropy.units as u
-from warwick.observatory.common import log
+from rockit.common import log
 
 
 class TelescopeActionStatus:

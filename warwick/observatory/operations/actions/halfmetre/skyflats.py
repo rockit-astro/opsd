@@ -27,7 +27,7 @@ from astropy.coordinates import get_sun, EarthLocation, AltAz
 from astropy.time import Time
 from astropy import units as u
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
-from warwick.observatory.common import daemons, log, validation
+from rockit.common import daemons, log, validation
 from .camera_helpers import cam_stop
 from .mount_helpers import mount_status, mount_slew_altaz
 from .pipeline_helpers import pipeline_enable_archiving, configure_pipeline

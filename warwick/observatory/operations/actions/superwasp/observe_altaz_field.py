@@ -16,7 +16,7 @@
 
 """Telescope action to observe a static Alt/Az field within a defined time window"""
 
-from warwick.observatory.common import validation
+from rockit.common import validation
 from .mount_helpers import mount_slew_altaz
 from .observe_field_base import ObserveFieldBase
 

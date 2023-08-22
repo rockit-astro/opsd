@@ -23,7 +23,7 @@ import json
 import os
 import sys
 import Pyro4
-from warwick.observatory.common import TFmt
+from rockit.common import TFmt
 from warwick.observatory.operations import (
     Config,
     CommandStatus,

@@ -24,11 +24,10 @@ import threading
 import traceback
 import Pyro4
 from astropy.time import Time
-from warwick.observatory.common import daemons, validation
+from rockit.common import daemons, log, validation
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
-from warwick.observatory.common import log
 from warwick.observatory.camera.qhy import CameraStatus, CoolerMode
-from warwick.observatory.lmount import MountState
+from rockit.lmount import MountState
 from .camera_helpers import cam_configure, cam_status, cam_stop
 from .mount_helpers import mount_status, mount_park
 

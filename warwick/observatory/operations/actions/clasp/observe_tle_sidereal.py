@@ -30,7 +30,7 @@ import numpy as np
 from skyfield.sgp4lib import EarthSatellite
 from skyfield.api import Loader, Topos
 from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
-from warwick.observatory.common import validation
+from rockit.common import validation
 from .mount_helpers import mount_slew_radec, mount_status, mount_offset_radec, mount_stop
 from .camera_helpers import cam_take_images, cam_stop
 from .pipeline_helpers import configure_pipeline

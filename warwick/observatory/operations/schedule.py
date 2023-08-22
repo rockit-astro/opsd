@@ -24,7 +24,8 @@ from skyfield import almanac
 from skyfield.api import Loader
 from astropy.time import Time
 import astropy.units as u
-from warwick.observatory.common import validation
+from rockit.common import validation
+
 
 def __format_errors(errors):
     for error in sorted(errors, key=lambda e: e.path):

@@ -21,7 +21,7 @@
 import datetime
 import threading
 
-from warwick.observatory.common import log
+from rockit.common import log
 from .constants import DomeStatus, OperationsMode
 
 

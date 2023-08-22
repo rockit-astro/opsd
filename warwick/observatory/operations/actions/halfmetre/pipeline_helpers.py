@@ -19,8 +19,9 @@
 import sys
 import traceback
 import Pyro4
-from warwick.observatory.common import daemons, log
-from warwick.observatory.pipeline import CommandStatus as PipelineCommandStatus
+from rockit.common import daemons, log
+from rockit.pipeline import CommandStatus as PipelineCommandStatus
+
 
 def pipeline_enable_archiving(log_name, enabled):
     """Toggle archiving on or off for a given arm name"""

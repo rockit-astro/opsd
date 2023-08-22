@@ -21,7 +21,7 @@
 import collections
 import datetime
 import threading
-from warwick.observatory.common import log
+from rockit.common import log
 
 from .telescope_action import TelescopeActionStatus
 from .dome_controller import DomeStatus

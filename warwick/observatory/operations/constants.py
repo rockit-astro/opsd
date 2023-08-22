@@ -16,7 +16,7 @@
 
 """Constants and status codes used by opsd"""
 
-from warwick.observatory.common import TFmt
+from rockit.common import TFmt
 
 
 class CommandStatus:

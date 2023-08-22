@@ -24,7 +24,7 @@ import traceback
 from astropy.time import Time
 import astropy.units as u
 import Pyro4
-from warwick.observatory.common import daemons, log
+from rockit.common import daemons, log
 from warwick.observatory.camera.qhy import CameraStatus as QHYStatus, CommandStatus as QHYCommandStatus, CoolerMode as QHYCoolerMode
 from warwick.observatory.camera.raptor import CameraStatus as SWIRStatus, CommandStatus as SWIRCommandStatus, CoolerMode as SWIRCoolerMode
 

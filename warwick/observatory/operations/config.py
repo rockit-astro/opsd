@@ -24,7 +24,7 @@ import sys
 import traceback
 import jsonschema
 from skyfield.api import Topos
-from warwick.observatory.common import daemons, IP, validation
+from rockit.common import daemons, IP, validation
 from .telescope_action import TelescopeAction
 
 CONFIG_SCHEMA = {

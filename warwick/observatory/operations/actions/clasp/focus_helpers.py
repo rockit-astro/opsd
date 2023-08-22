@@ -19,8 +19,8 @@
 import sys
 import traceback
 import Pyro4
-from warwick.observatory.common import daemons, log
-from warwick.observatory.multifocus import FocuserStatus, CommandStatus as FocCommandStatus
+from rockit.common import daemons, log
+from rockit.focuser import FocuserStatus, CommandStatus as FocCommandStatus
 
 FOCUS_TIMEOUT=300
 
@@ -38,8 +38,11 @@ def focus_get(log_name, camera_id):
         with daemons.clasp_focus.connect() as focusd:
             channel = channels[camera_id]
             status = focusd.report_status()
-            if status['status_' + str(channel)] != FocuserStatus.Idle:
-                log.error(log_name, 'Focuser status is not idle')
+            if status['status'] != FocuserStatus.Active:
+                log.error(log_name, 'Focuser is offline')
+                return None
+            if status['moving_' + str(channel)]:
+                log.error(log_name, 'Focuser is moving')
                 return None
             return status['current_steps_' + str(channel)]
     except Pyro4.errors.CommunicationError:
