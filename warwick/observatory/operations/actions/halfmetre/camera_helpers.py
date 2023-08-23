@@ -33,12 +33,6 @@ def cam_configure(log_name, config=None, quiet=False):
        configuration that has been validated by the camera schema.
     """
     try:
-        if config:
-            # HACK: work around qhy SDK crashes when using streaming mode
-            # TODO: Remove this after patching the sdk
-            config = config.copy()
-            config['stream'] = False
-
         with daemons.halfmetre_cam.connect() as cam:
             if config:
                 status = cam.configure(config, quiet=quiet)
