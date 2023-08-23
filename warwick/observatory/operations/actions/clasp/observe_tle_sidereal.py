@@ -397,7 +397,7 @@ class ObserveTLESidereal(TelescopeAction):
                     'format': 'date-time',
                 },
                 'pipeline': pipeline_science_schema(),
-                'cam1': camera_science_schema(camera_id)
+                'cam1': camera_science_schema('cam1')
             }
         }
 

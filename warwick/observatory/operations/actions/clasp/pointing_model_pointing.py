@@ -221,7 +221,7 @@ class PointingModelPointing(TelescopeAction):
         }
 
         for camera_id in cameras:
-            schema['properties'][camera_id] = camera_science_schema()
+            schema['properties'][camera_id] = camera_science_schema(camera_id)
             schema['anyOf'].append({
                 'properties': {
                     'camera': {
