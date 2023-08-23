@@ -23,8 +23,8 @@ from astropy.time import Time
 import astropy.units as u
 from skyfield.sgp4lib import EarthSatellite
 from skyfield.api import Loader, Topos
-from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from rockit.common import validation
+from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from .mount_helpers import mount_track_tle, mount_stop, mount_status
 from .camera_helpers import cameras, cam_take_images, cam_stop
 from .pipeline_helpers import configure_pipeline

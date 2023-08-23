@@ -23,8 +23,8 @@ import threading
 import numpy as np
 from astropy.time import Time
 import astropy.units as u
-from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from rockit.common import log, validation
+from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from .mount_helpers import mount_slew_radec, mount_status, mount_stop
 from .focus_helpers import focus_set, focus_get
 from .camera_helpers import cameras, cam_configure, cam_take_images

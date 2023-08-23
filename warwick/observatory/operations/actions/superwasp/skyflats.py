@@ -26,9 +26,9 @@ import Pyro4
 from astropy.coordinates import get_sun, EarthLocation, AltAz
 from astropy.time import Time
 from astropy import units as u
-from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from rockit.common import log, validation
 from warwick.observatory.camera.qhy import CameraStatus
+from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cameras, cam_initialize, cam_status, cam_stop
 from .mount_helpers import mount_status, mount_slew_altaz
 from .pipeline_helpers import pipeline_enable_archiving, configure_pipeline

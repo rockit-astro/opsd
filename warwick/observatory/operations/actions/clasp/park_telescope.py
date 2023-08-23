@@ -17,8 +17,8 @@
 """Telescope action to park the telescope"""
 
 import jsonschema
-from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from rockit.lmount import MountState
+from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from .mount_helpers import mount_status, mount_stop, mount_park
 
 

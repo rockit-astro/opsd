@@ -34,9 +34,9 @@ import astropy.units as u
 import numpy as np
 from scipy import conjugate, polyfit
 from scipy.fftpack import fft, ifft
-from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from rockit.common import log, validation
 from warwick.observatory.camera.qhy import CameraStatus
+from warwick.observatory.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cam_status, cam_take_images, cam_stop
 from .mount_helpers import mount_slew_radec, mount_offset_radec, mount_stop
 from .pipeline_helpers import configure_pipeline
