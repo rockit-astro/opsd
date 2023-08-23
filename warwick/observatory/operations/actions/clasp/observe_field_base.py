@@ -16,7 +16,6 @@
 
 """Base logic for observe_*_field telescope actions"""
 
-# pylint: disable=no-self-use
 # pylint: disable=too-many-branches
 
 import threading

@@ -93,68 +93,68 @@ def camera_science_schema(camera_id):
                 },
             }
         }
-    else:
-        return {
-            'type': 'object',
-            'additionalProperties': False,
-            'required': ['exposure'],
-            'properties': {
-                'exposure': {
-                    'type': 'number',
-                    'minimum': 0
-                },
-                'window': {
-                    'type': 'array',
-                    'maxItems': 4,
-                    'minItems': 4,
-                    'items': [
-                        {
-                            'type': 'number',
-                            'minimum': 1,
-                            'maximum': 9600,
-                        },
-                        {
-                            'type': 'number',
-                            'minimum': 1,
-                            'maximum': 9600,
-                        },
-                        {
-                            'type': 'number',
-                            'minimum': 1,
-                            'maximum': 6422,
-                        },
-                        {
-                            'type': 'number',
-                            'minimum': 1,
-                            'maximum': 6422,
-                        },
-                    ]
-                },
-                'bin': {
-                    'type': 'number',
-                    'minimum': 1,
-                    'maximum': 9600,
-                },
-                'temperature': {
-                    'type': 'number',
-                    'minimum': -20,
-                    'maximum': 30,
-                },
-                'gain': {
-                    'type': 'integer',
-                    'min': 0,
-                    'max': 100,
-                },
-                'offset': {
-                    'type': 'integer',
-                    'min': 0,
-                    'max': 1000,
-                },
-                'stream': {
-                    'type': 'boolean'
-                }
+    # cam1
+    return {
+        'type': 'object',
+        'additionalProperties': False,
+        'required': ['exposure'],
+        'properties': {
+            'exposure': {
+                'type': 'number',
+                'minimum': 0
+            },
+            'window': {
+                'type': 'array',
+                'maxItems': 4,
+                'minItems': 4,
+                'items': [
+                    {
+                        'type': 'number',
+                        'minimum': 1,
+                        'maximum': 9600,
+                    },
+                    {
+                        'type': 'number',
+                        'minimum': 1,
+                        'maximum': 9600,
+                    },
+                    {
+                        'type': 'number',
+                        'minimum': 1,
+                        'maximum': 6422,
+                    },
+                    {
+                        'type': 'number',
+                        'minimum': 1,
+                        'maximum': 6422,
+                    },
+                ]
+            },
+            'bin': {
+                'type': 'number',
+                'minimum': 1,
+                'maximum': 9600,
+            },
+            'temperature': {
+                'type': 'number',
+                'minimum': -20,
+                'maximum': 30,
+            },
+            'gain': {
+                'type': 'integer',
+                'min': 0,
+                'max': 100,
+            },
+            'offset': {
+                'type': 'integer',
+                'min': 0,
+                'max': 1000,
+            },
+            'stream': {
+                'type': 'boolean'
             }
         }
+    }
 
 
 def camera_flat_schema(camera_id):

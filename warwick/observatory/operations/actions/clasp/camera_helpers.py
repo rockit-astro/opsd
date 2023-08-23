@@ -25,8 +25,14 @@ from astropy.time import Time
 import astropy.units as u
 import Pyro4
 from rockit.common import daemons, log
-from warwick.observatory.camera.qhy import CameraStatus as QHYStatus, CommandStatus as QHYCommandStatus, CoolerMode as QHYCoolerMode
-from warwick.observatory.camera.raptor import CameraStatus as SWIRStatus, CommandStatus as SWIRCommandStatus, CoolerMode as SWIRCoolerMode
+from warwick.observatory.camera.qhy import (
+    CameraStatus as QHYStatus,
+    CommandStatus as QHYCommandStatus,
+    CoolerMode as QHYCoolerMode)
+from warwick.observatory.camera.raptor import (
+    CameraStatus as SWIRStatus,
+    CommandStatus as SWIRCommandStatus,
+    CoolerMode as SWIRCoolerMode)
 
 cameras = {
     'cam1': daemons.clasp_camera_1,
@@ -237,19 +243,24 @@ def cam_shutdown(log_name, camera_id):
         traceback.print_exc(file=sys.stdout)
     return False
 
+# pylint: disable=unused-argument
+
 
 def cam_is_active(log_name, camera_id, status):
     if camera_id == 'cam2':
         return status['state'] in [SWIRStatus.Acquiring, SWIRStatus.Reading]
-    else:
-        return status['state'] in [QHYStatus.Acquiring, QHYStatus.Reading]
+
+    # cam1
+    return status['state'] in [QHYStatus.Acquiring, QHYStatus.Reading]
 
 
 def cam_is_idle(log_name, camera_id, status):
     if camera_id == 'cam2':
         return status['state'] == SWIRStatus.Idle
-    else:
-        return status['state'] == QHYStatus.Idle
+
+    # cam1
+    return status['state'] == QHYStatus.Idle
+# pylint: enable=unused-argument
 
 
 def cam_is_warm(log_name, camera_id, status):
@@ -263,12 +274,12 @@ def cam_is_warm(log_name, camera_id, status):
 
         return status['cooler_mode'] == SWIRCoolerMode.Off
 
-    else:
-        if status['state'] == QHYStatus.Disabled:
-            return True
+    # cam1
+    if status['state'] == QHYStatus.Disabled:
+        return True
 
-        if 'cooler_mode' not in status:
-            log.error(log_name, 'Failed to check temperature on camera ' + camera_id)
-            return True
+    if 'cooler_mode' not in status:
+        log.error(log_name, 'Failed to check temperature on camera ' + camera_id)
+        return True
 
-        return status['cooler_mode'] == QHYCoolerMode.Warm
+    return status['cooler_mode'] == QHYCoolerMode.Warm

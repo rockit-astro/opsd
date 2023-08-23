@@ -356,8 +356,10 @@ class CameraWrapper:
                 new_exposure = exposure * self._config['max_exposure_delta']
 
             # Clamp the exposure to a sensible range
-            clamped_exposure = min(new_exposure, self._config['max_exposure'], exposure * self._config['max_exposure_delta'])
-            clamped_exposure = max(clamped_exposure, self._config['min_exposure'], exposure / self._config['max_exposure_delta'])
+            clamped_exposure = min(new_exposure, self._config['max_exposure'],
+                                   exposure * self._config['max_exposure_delta'])
+            clamped_exposure = max(clamped_exposure, self._config['min_exposure'],
+                                   exposure / self._config['max_exposure_delta'])
 
             clamped_desc = f' (clamped from {new_exposure:.2f}s)' if new_exposure > clamped_exposure else ''
             print(f'AutoFlat: camera {self.camera_id} exposure {exposure:.2f}s counts {counts:.0f} ADU ' +
