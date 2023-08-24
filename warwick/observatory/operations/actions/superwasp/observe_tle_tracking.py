@@ -87,8 +87,8 @@ class ObserveTLETracking(TelescopeAction):
 
         # The leading line number is omitted to keep the string within the 68 character fits limit
         pipeline_science_config['headers'] = [
-            {'keyword': 'TLE1', 'value': self.config['tle'][1][2:]},
-            {'keyword': 'TLE2', 'value': self.config['tle'][2][2:]},
+            {'keyword': 'MNTTLE1', 'value': self.config['tle'][1][2:]},
+            {'keyword': 'MNTTLE2', 'value': self.config['tle'][2][2:]},
         ]
 
         if not configure_pipeline(self.log_name, pipeline_science_config, quiet=True):
