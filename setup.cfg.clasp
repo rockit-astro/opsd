@@ -1,0 +1,17 @@
+[metadata]
+name = rockit.operations.clasp
+version = file: VERSION
+
+[options]
+packages =
+  rockit.operations.actions.clasp
+  rockit.operations.dome.astrohaven
+
+install_requires =
+    rockit.lmount
+    rockit.focuser
+    rockit.operations
+    rockit.pipeline
+    warwick.observatory.camera.qhy
+    warwick.observatory.camera.raptor
+    warwick.observatory.dome

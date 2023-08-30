@@ -4,8 +4,6 @@
 
 `ops` is a commandline utility that controls the operations daemon.
 
-See [Software Infrastructure](https://github.com/warwick-one-metre/docs/wiki/Software-Infrastructure) for an overview of the software architecture and instructions for developing and deploying the code.
-
 ### Configuration
 
 Configuration is read from a json file that is installed by default to `/etc/opsd`.
@@ -13,21 +11,21 @@ A configuration file is specified when launching the server, and the `ops` front
 
 ```python
 {
-  "daemon": "superwasp_operations", # Run the server as this daemon. Daemon types are registered in `warwick.observatory.common.daemons`.
+  "daemon": "superwasp_operations", # Run the server as this daemon. Daemon types are registered in `rockit.common.daemons`.
   "log_name": "opsd@superwasp", # The name to use when writing messages to the observatory log.
-  "control_machines": ["SWASPTCS"], # Machine names that are allowed to control (rather than just query) state. Machine names are registered in `warwick.observatory.common.IP`.
+  "control_machines": ["SWASPTCS"], # Machine names that are allowed to control (rather than just query) state. Machine names are registered in `rockit.common.IP`.
   "pipeline_machines": ["SWASPTCS"], # Machine names that are allowed to notify pipelined frame metadata.
-  "actions_module": "warwick.observatory.operations.actions.superwasp", # Python module to search for actions for this telescope.
+  "actions_module": "rockit.operations.actions.superwasp", # Python module to search for actions for this telescope.
   "loop_delay": 10, # Delay between loop updates.
   "site_latitude": "28.76022 N", # Telescope latitude used for scheduling calculations.
   "site_longitude": "17.87928 W", # Telescope longitude used for scheduling calculations.
   "site_elevation": 2350, # Telescope elevation used for scheduling calculations.
   "dome": {
-    "module": "warwick.observatory.operations.dome.simulated", # Python module defining the dome interface logic.
+    "module": "rockit.operations.dome.simulated", # Python module defining the dome interface logic.
     "open_delay": 60, # Module-specific configuration.
     "close_delay": 120
   },
-  "environment_daemon": "observatory_environment", # Daemon to query environment state from. Daemon types are registered in `warwick.observatory.common.daemons`.
+  "environment_daemon": "observatory_environment", # Daemon to query environment state from. Daemon types are registered in `rockit.common.daemons`.
   "environment_conditions": [
     { # Each condition type can contain multiple sensors, pulled from the environment data dictionary.
       "label": "Wind", # Human readable label for this condition type (visible in ops output and web dashboard).
@@ -67,20 +65,15 @@ The dome and telescope should be in automatic mode before trying to schedule a p
 
 ### Initial Installation
 
-The automated packaging scripts will push 5 RPM packages to the observatory package repository:
+The automated packaging scripts will push a collection of RPM packages to the observatory package repository:
 
-| Package           | Description |
-| ----------------- | ------ |
-| observatory-operations-server | Contains the `opsd` server and systemd service file. |
-| observatory-operations-client | Contains the `ops` commandline utility for controlling the operations server. |
-| python3-warwick-observatory-operations | Contains the python module with shared code for all telescopes. |
-| python3-warwick-clasp-operations | Contains the python module with CLASP specific code and configuration. |
-| python3-warwick-onemetre-operations | Contains the python module with W1m specific code and configuration. |
-| python3-warwick-superwasp-operations | Contains the python module with SuperWASP specific code and configuration. |
-
-`observatory-operations-server` and `observatory-operations-client` and `python3-warwick-clasp-operations` should be installed on the `clasp-tcs` machine.
-`observatory-operations-server` and `observatory-operations-client` and `python3-warwick-onemetre-operations` should be installed on the `onemetre-dome` machine.
-`observatory-operations-server` and `observatory-operations-client` and `python3-warwick-superwasp-operations` should be installed on the `wasp-tcs` machine.
+| Package                               | Description                                                                      |
+|---------------------------------------|----------------------------------------------------------------------------------|
+| rockit-operations-server              | Contains the `opsd` server and systemd service file.                             |
+| rockit-operations-client              | Contains the `ops` commandline utility for controlling the operations server.    |
+| rockit-operations-data-<telescope>    | Contains the telescope-specific configuration.                                   |
+| python3-rockit-operations             | Contains the python module with shared code for all telescopes.                  |
+| python3-rockit-operations-<telescope> | Contains the python module with telescope-specific code (actions, dome control). |
 
 After installing packages, the systemd service should be enabled:
 
@@ -95,7 +88,7 @@ Now open a port in the firewall:
 sudo firewall-cmd --zone=public --add-port=<port>/tcp --permanent
 sudo firewall-cmd --reload
 ```
-where `port` is the port defined in `warwick.observatory.common.daemons` for the daemon specified in the ops config.
+where `port` is the port defined in `rockit.common.daemons` for the daemon specified in the ops config.
 
 ### Upgrading Installation
 

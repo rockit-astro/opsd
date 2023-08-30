@@ -6,18 +6,22 @@ RPMBUILD = rpmbuild --define "_topdir %(pwd)/build" \
 
 all:
 	mkdir -p build
-	${RPMBUILD} -ba observatory-operations-server.spec
-	${RPMBUILD} -ba observatory-operations-client.spec
-	rm -rf build/build
-	${RPMBUILD} -ba python3-warwick-observatory-operations.spec
-	rm -rf build/build
-	${RPMBUILD} -ba python3-warwick-onemetre-operations.spec
-	rm -rf build/build
-	${RPMBUILD} -ba python3-warwick-superwasp-operations.spec
-	rm -rf build/build
-	${RPMBUILD} -ba python3-warwick-clasp-operations.spec
-	rm -rf build/build
-	${RPMBUILD} -ba python3-warwick-halfmetre-operations.spec
+	date --utc +%Y%m%d%H%M%S > VERSION
+	${RPMBUILD} --define "_version %(cat VERSION)" -ba rockit-operations.spec
 	mv build/noarch/*.rpm .
-	rm -rf build
-
+	rm -rf build/*
+	${RPMBUILD} --define "_version %(cat VERSION)" -ba python3-rockit-operations.spec
+	mv build/noarch/*.rpm .
+	rm -rf build/*
+	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope clasp" --define "_label CLASP" -ba python3-rockit-operations.spec
+	mv build/noarch/*.rpm .
+	rm -rf build/*
+	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope halfmetre" --define "_label Half metre" -ba python3-rockit-operations.spec
+	mv build/noarch/*.rpm .
+	rm -rf build/*
+	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope onemetre" --define "_label W1m" -ba python3-rockit-operations.spec
+	mv build/noarch/*.rpm .
+	rm -rf build/*
+	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope superwasp" --define "_label SuperWASP" -ba python3-rockit-operations.spec
+	mv build/noarch/*.rpm .
+	rm -rf build VERSION

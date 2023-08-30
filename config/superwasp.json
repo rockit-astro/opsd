@@ -1,0 +1,210 @@
+{
+  "daemon": "superwasp_operations",
+  "log_name": "opsd@superwasp",
+  "control_machines": ["SWASPTCS"],
+  "pipeline_machines": ["SWASPCameraPi1", "SWASPCameraPi2", "SWASPCameraPi3", "SWASPCameraPi4"],
+  "actions_module": "rockit.operations.actions.superwasp",
+  "loop_delay": 10,
+  "site_latitude": "28.76022 N",
+  "site_longitude": "17.87928 W",
+  "site_elevation": 2350,
+  "dome": {
+    "module": "rockit.operations.dome.astrohaven",
+    "daemon": "superwasp_dome",
+    "movement_timeout": 60,
+    "heartbeat_timeout": 119
+  },
+  "environment_daemon": "observatory_environment",
+  "environment_conditions": [
+    {
+      "label": "Wind",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_vaisala",
+          "parameter": "wind_speed"
+        },
+        {
+          "label": "GOTO",
+          "sensor": "goto_vaisala",
+          "parameter": "wind_speed"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "wind_speed"
+        }
+      ]
+    },
+    {
+      "label": "Median Wind",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_vaisala",
+          "parameter": "median_wind_speed"
+        },
+        {
+          "label": "GOTO",
+          "sensor": "goto_vaisala",
+          "parameter": "median_wind_speed"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "median_wind_speed"
+        }
+      ]
+    },
+    {
+      "label": "Temperature",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_vaisala",
+          "parameter": "temperature"
+        },
+        {
+          "label": "GOTO",
+          "sensor": "goto_vaisala",
+          "parameter": "temperature"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "temperature"
+        }
+      ]
+    },
+    {
+      "label": "Humidity",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_vaisala",
+          "parameter": "relative_humidity"
+        },
+        {
+          "label": "GOTO",
+          "sensor": "goto_vaisala",
+          "parameter": "relative_humidity"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "relative_humidity"
+        }
+      ]
+    },
+    {
+      "label": "Int. Humidity",
+      "sensors": [
+        {
+          "label": "Dome",
+          "sensor": "clasp_domealert",
+          "parameter": "superwasp_humidity"
+        }
+      ]
+    },
+    {
+      "label": "Dew Point",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_vaisala",
+          "parameter": "dew_point_delta"
+        },
+        {
+          "label": "GOTO",
+          "sensor": "goto_vaisala",
+          "parameter": "dew_point_delta"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "dew_point_delta"
+        }
+      ]
+    },
+    {
+      "label": "Rain",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "rain",
+          "parameter": "unsafe_boards"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "rg11_unsafe"
+        }
+      ]
+    },
+    {
+      "label": "Network",
+      "sensors": [
+        {
+          "label": "Google",
+          "sensor": "netping",
+          "parameter": "google"
+        },
+        {
+          "label": "NGTSHead",
+          "sensor": "netping",
+          "parameter": "ngtshead"
+        }
+      ]
+    },
+    {
+      "label": "UPS Battery",
+      "sensors": [
+        {
+          "label": "UPS1",
+          "sensor": "clasp_power",
+          "parameter": "ups1_battery_remaining"
+        },
+        {
+          "label": "UPS2",
+          "sensor": "clasp_power",
+          "parameter": "ups2_battery_remaining"
+        }
+      ]
+    },
+    {
+      "label": "Disk Space",
+      "sensors": [
+        {
+          "label": "DAS1",
+          "sensor": "superwasp_diskspace_cam1",
+          "parameter": "data_fs_available_bytes"
+        },
+        {
+          "label": "DAS2",
+          "sensor": "superwasp_diskspace_cam2",
+          "parameter": "data_fs_available_bytes"
+        },
+        {
+          "label": "DAS3",
+          "sensor": "superwasp_diskspace_cam3",
+          "parameter": "data_fs_available_bytes"
+        },
+        {
+          "label": "DAS4",
+          "sensor": "superwasp_diskspace_cam4",
+          "parameter": "data_fs_available_bytes"
+        }
+      ]
+    },
+    {
+      "label": "Sun",
+      "sensors": [
+        {
+          "label": "Altitude",
+          "sensor": "ephem",
+          "parameter": "sun_alt"
+        }
+      ]
+    }
+  ]
+}
