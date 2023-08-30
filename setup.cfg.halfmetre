@@ -1,0 +1,16 @@
+[metadata]
+name = rockit.operations.halfmetre
+version = file: VERSION
+
+[options]
+packages =
+  rockit.operations.actions.halfmetre
+  rockit.operations.dome.astrohaven
+
+install_requires =
+    rockit.focuser
+    rockit.lmount
+    rockit.operations
+    rockit.pipeline
+    rockit.roof
+    warwick.observatory.camera.qhy

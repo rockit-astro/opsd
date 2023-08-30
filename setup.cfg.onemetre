@@ -1,0 +1,15 @@
+[metadata]
+name = rockit.operations.onemetre
+version = file: VERSION
+
+[options]
+packages =
+  rockit.operations.actions.onemetre
+  rockit.operations.dome.astrohaven
+
+install_requires =
+    rockit.operations
+    rockit.pipeline
+    warwick.observatory.camera.andor
+    warwick.observatory.dome
+    warwick.observatory.talon
