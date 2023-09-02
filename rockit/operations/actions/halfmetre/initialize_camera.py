@@ -21,9 +21,9 @@ import traceback
 import Pyro4
 from astropy.time import Time
 import astropy.units as u
+from rockit.camera.qhy import CommandStatus as CamCommandStatus
 from rockit.common import daemons, log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from warwick.observatory.camera.qhy import CommandStatus as CamCommandStatus
 from .camera_helpers import cam_status
 
 CAMERA_POWERON_DELAY = 5

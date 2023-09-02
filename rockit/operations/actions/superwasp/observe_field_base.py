@@ -27,8 +27,8 @@ from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.time import Time
 import astropy.units as u
 import jsonschema
+from rockit.camera.qhy import CameraStatus
 from rockit.common import log
-from warwick.observatory.camera.qhy import CameraStatus
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cameras, cam_initialize, cam_status, cam_configure, cam_take_images, cam_stop, \
     cam_cycle_power, cam_reinitialize_synchronised, cam_start_synchronised, cam_stop_synchronised

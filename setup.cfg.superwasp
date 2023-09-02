@@ -11,5 +11,5 @@ install_requires =
     rockit.lmount
     rockit.operations
     rockit.pipeline
-    warwick.observatory.camera.qhy
+    rockit.camera.qhy
     warwick.observatory.dome

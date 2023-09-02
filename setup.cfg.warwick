@@ -10,8 +10,8 @@ packages =
 install_requires =
     rockit.ashdome
     rockit.atlas
+    rockit.camera.qhy
     rockit.cfw
     rockit.meade
     rockit.operations
     rockit.pipeline
-    warwick.observatory.camera.qhy
