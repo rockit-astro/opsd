@@ -5,7 +5,7 @@ version = file: VERSION
 [options]
 packages =
   rockit.operations.actions.halfmetre
-  rockit.operations.dome.astrohaven
+  rockit.operations.dome.halfmetre
 
 install_requires =
     rockit.camera.qhy
