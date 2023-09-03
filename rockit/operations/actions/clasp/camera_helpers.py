@@ -28,11 +28,11 @@ from rockit.camera.qhy import (
     CameraStatus as QHYStatus,
     CommandStatus as QHYCommandStatus,
     CoolerMode as QHYCoolerMode)
-from rockit.common import daemons, log
-from warwick.observatory.camera.raptor import (
+from rockit.camera.raptor import (
     CameraStatus as SWIRStatus,
     CommandStatus as SWIRCommandStatus,
     CoolerMode as SWIRCoolerMode)
+from rockit.common import daemons, log
 
 cameras = {
     'cam1': daemons.clasp_camera_1,

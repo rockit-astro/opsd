@@ -9,9 +9,9 @@ packages =
 
 install_requires =
     rockit.camera.qhy
+    rockit.camera.raptor
     rockit.lmount
     rockit.focuser
     rockit.operations
     rockit.pipeline
-    warwick.observatory.camera.raptor
     warwick.observatory.dome
