@@ -1,18 +1,18 @@
 #
-# This file is part of opsd.
+# This file is part of the Robotic Observatory Control Kit (rockit)
 #
-# opsd is free software: you can redistribute it and/or modify
+# rockit is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation, either version 3 of the License, or
 # (at your option) any later version.
 #
-# opsd is distributed in the hope that it will be useful,
+# rockit is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License
-# along with opsd.  If not, see <http://www.gnu.org/licenses/>.
+# along with rockit.  If not, see <http://www.gnu.org/licenses/>.
 
 """Interface to allow the dome controller to operate an Ash dome via ashdomed"""
 
