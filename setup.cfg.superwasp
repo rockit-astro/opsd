@@ -8,8 +8,8 @@ packages =
   rockit.operations.dome.astrohaven
 
 install_requires =
+    rockit.dome
     rockit.lmount
     rockit.operations
     rockit.pipeline
     rockit.camera.qhy
-    warwick.observatory.dome

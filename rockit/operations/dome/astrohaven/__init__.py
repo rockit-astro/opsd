@@ -16,7 +16,7 @@
 
 """Interface to allow the dome controller to operate an Astrohaven dome via domed"""
 
-from warwick.observatory.dome import (
+from rockit.dome import (
     CommandStatus as DomeCommandStatus,
     DomeShutterStatus,
     DomeHeartbeatStatus)
