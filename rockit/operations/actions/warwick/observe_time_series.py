@@ -31,7 +31,7 @@ from rockit.common import log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .action_helpers import CameraWrapper, CameraWrapperStatus, FieldAcquisitionHelper, PIDController, cross_correlate
 from .mount_helpers import mount_offset_radec, mount_stop
-from .pipeline_helpers import configure_pipeline
+from .pipeline_helpers import configure_pipeline, pipeline_add_operations_headers
 from .schema_helpers import camera_science_schema, pipeline_science_schema
 
 # Amount of time to wait between camera status checks while observing
@@ -68,7 +68,10 @@ class ObserveTimeSeries(TelescopeAction):
 
         self._observation_status = ObservationStatus.PositionLost
         self._is_guiding = False
+        self._guide_filename = None
         self._guide_profiles = None
+        self._guide_accumulated_ra = 0
+        self._guide_accumulated_dec = 0
 
         self._camera = CameraWrapper(self)
         self._acquisition_helper = FieldAcquisitionHelper(self)
@@ -265,14 +268,42 @@ class ObserveTimeSeries(TelescopeAction):
 
         if self._guide_profiles is None:
             print('ObserveTimeSeries: set reference guide profiles')
+            self._guide_filename = headers.get('FILENAME', None)
             self._guide_profiles = profile_x, profile_y
+            self._guide_accumulated_ra = 0
+            self._guide_accumulated_dec = 0
             return
+
+        correction_applied = False
+        if self._guide_filename:
+            guide_headers = [{
+                "keyword": "AGREFIMG",
+                "value": self._guide_filename,
+                "comment": "filename of autoguider reference image"
+            }]
+        else:
+            guide_headers = [{
+                "keyword": "COMMENT",
+                "value": " AGREFIMG not available",
+            }]
 
         try:
             # Measure image offset
             dx = cross_correlate(profile_x, self._guide_profiles[0])
             dy = cross_correlate(profile_y, self._guide_profiles[1])
             print(f'ObserveTimeSeries: measured guide offsets {dx:.2f} {dy:.2f} px')
+
+            guide_headers.append({
+                "keyword": "AG_ERRX",
+                "value": dx,
+                "comment": "[px] autoguider measured x-axis offset"
+            })
+
+            guide_headers.append({
+                "keyword": "AG_ERRY",
+                "value": dy,
+                "comment": "[px] autoguider measured y-axis offset"
+            })
 
             # Ignore suspiciously big shifts
             if abs(dx) > GUIDE_MAX_PIXEL_ERROR or abs(dy) > GUIDE_MAX_PIXEL_ERROR:
@@ -298,18 +329,75 @@ class ObserveTimeSeries(TelescopeAction):
             corr_dy = -self._guide_pid_y.update(dy)
             print(f'ObserveTimeSeries: post-PID corrections {corr_dx:.2f} {corr_dy:.2f} px')
 
+            guide_headers.append({
+                "keyword": "AG_CORRX",
+                "value": corr_dx,
+                "comment": "[px] autoguider x-axis correction"
+            })
+
+            guide_headers.append({
+                "keyword": "AG_CORRY",
+                "value": corr_dy,
+                "comment": "[px] autoguider y-axis correction"
+            })
+
             pixels_to_degrees = self._acquisition_helper.wcs_derivatives
             corr_dra = pixels_to_degrees[0, 0] * corr_dx + pixels_to_degrees[0, 1] * corr_dy
             corr_ddec = pixels_to_degrees[1, 0] * corr_dx + pixels_to_degrees[1, 1] * corr_dy
             print(f'ObserveTimeSeries: post-PID corrections {corr_dra * 3600:.2f} {corr_ddec * 3600:.2f} arcsec')
 
+            self._guide_accumulated_ra += corr_dra
+            self._guide_accumulated_dec += corr_ddec
+
+            guide_headers.append({
+                "keyword": "AG_CORRR",
+                "value": corr_dra,
+                "comment": "[arcsec] autoguider ra correction"
+            })
+
+            guide_headers.append({
+                "keyword": "AG_CORRD",
+                "value": corr_ddec,
+                "comment": "[arcsec] autoguider dec correction"
+            })
+
+            guide_headers.append({
+                "keyword": "AG_DELTR",
+                "value": self._guide_accumulated_ra,
+                "comment": "[arcsec] autoguider accumulated ra correction"
+            })
+
+            guide_headers.append({
+                "keyword": "AG_DELTD",
+                "value": self._guide_accumulated_dec,
+                "comment": "[arcsec] autoguider accumulated dec correction"
+            })
+
             # TODO: reacquire using WCS (self._is_guiding = False) if we detect things have gone wrong
 
             # Apply correction
+            correction_applied = True
             mount_offset_radec(self.log_name, corr_dra, corr_ddec)
         except Exception:
             traceback.print_exc(file=sys.stdout)
             self._is_guiding = False
+        finally:
+            filename = headers.get('FILENAME', None)
+            if filename:
+                if len(guide_headers) == 3:
+                    for key in ['AG_CORRX', 'AG_CORRY', 'AG_CORRR', 'AG_CORRD', 'AG_DELTR', 'AG_DELTD']:
+                        guide_headers.append({
+                            "keyword": "COMMENT",
+                            "value": f" {key} not available",
+                        })
+
+                guide_headers.append({
+                    "keyword": "AG_APPLY",
+                    "value": correction_applied,
+                    "comment": "autoguider correction applied"
+                })
+
+                pipeline_add_operations_headers(self.log_name, filename, guide_headers)
 
     @classmethod
     def validate_config(cls, config_json):
