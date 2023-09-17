@@ -502,11 +502,11 @@ CAMERA_CONFIG = {
     },
     'cam2': {
         # The slope (in hfd / step) on the inside edge of the v-curve
-        'inside_focus_slope': -0.05376,
+        'inside_focus_slope': -0.0415,
 
         # The HFD value where the two v-curve edges cross
         # This is a more convenient way of representing the position intercept difference
-        'crossing_hfd': 0,
+        'crossing_hfd': 2.7,
 
         # Number of objects that are required to consider MEDHFD valid
         'minimum_object_count': 20,
