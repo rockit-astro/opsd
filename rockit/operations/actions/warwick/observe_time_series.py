@@ -31,7 +31,7 @@ from rockit.common import log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .action_helpers import CameraWrapper, CameraWrapperStatus, FieldAcquisitionHelper, PIDController, cross_correlate
 from .mount_helpers import mount_offset_radec, mount_stop
-from .pipeline_helpers import configure_pipeline, pipeline_add_operations_headers
+from .pipeline_helpers import configure_pipeline
 from .schema_helpers import camera_science_schema, pipeline_science_schema
 
 # Amount of time to wait between camera status checks while observing
