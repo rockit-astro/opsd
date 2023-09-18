@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with rockit.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Telescope action to observe a sidereally tracked field"""
+"""Telescope action to observe a sidereally tracked field with autoguiding"""
 
 # pylint: disable=too-many-return-statements
 # pylint: disable=too-many-branches
@@ -37,7 +37,7 @@ from scipy.fftpack import fft, ifft
 from rockit.camera.qhy import CameraStatus
 from rockit.common import log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from .camera_helpers import cam_status, cam_take_images, cam_stop
+from .camera_helpers import cameras, cam_status, cam_take_images, cam_stop
 from .mount_helpers import mount_slew_radec, mount_offset_radec, mount_stop
 from .pipeline_helpers import configure_pipeline
 from .schema_helpers import camera_science_schema, pipeline_science_schema
@@ -87,13 +87,18 @@ class ObserveTimeSeries(TelescopeAction):
         self._wcs_derivatives = None
 
         self._observation_status = ObservationStatus.PositionLost
+        self._guide_camera = config['guide_camera']
         self._is_guiding = False
         self._guide_filename = None
         self._guide_profiles = None
         self._guide_accumulated_ra = 0
         self._guide_accumulated_dec = 0
 
-        self._camera = CameraWrapper(self.config.get('camera', None), self.log_name)
+        self._cameras = {}
+        for camera_id in cameras:
+            self._cameras[camera_id] = CameraWrapper(camera_id,
+                                                     self.config.get(camera_id, None),
+                                                     self.log_name)
 
         self._guide_buff_x = deque(maxlen=GUIDE_BUFFER_LENGTH)
         self._guide_buff_y = deque(maxlen=GUIDE_BUFFER_LENGTH)
@@ -144,9 +149,10 @@ class ObserveTimeSeries(TelescopeAction):
             return ObservationStatus.Error
 
         cam_config = {}
-        cam_config.update(self.config.get('camera', {}))
+        cam_config.update(self.config.get(self._guide_camera, {}))
         cam_config.update({
-            'exposure': WCS_EXPOSURE_TIME.to(u.second).value
+            'exposure': WCS_EXPOSURE_TIME.to(u.second).value,
+            'stream': False
         })
 
         # Converge on requested position
@@ -162,9 +168,9 @@ class ObserveTimeSeries(TelescopeAction):
             self._wcs_status = WCSStatus.WaitingForWCS
 
             print('ObserveTimeSeries: taking test image')
-            while not cam_take_images(self.log_name, 1, cam_config, quiet=True):
+            while not cam_take_images(self.log_name, self._guide_camera, 1, cam_config, quiet=True):
                 # Try stopping the camera, waiting a bit, then try again
-                cam_stop(self.log_name)
+                cam_stop(self.log_name, self._guide_camera)
                 self.wait_until_time_or_aborted(Time.now() + CAM_ERROR_RETRY_DELAY, self._wait_condition)
                 if self.aborted or not self.dome_is_open:
                     break
@@ -256,17 +262,19 @@ class ObserveTimeSeries(TelescopeAction):
     def __observe_field(self):
         # Start science observations
         pipeline_config = self.config['pipeline'].copy()
-        pipeline_config['guide'] = 'HALFMETRE'
+        pipeline_config['guide'] = self._guide_camera.upper()
         pipeline_config['type'] = 'SCIENCE'
-        pipeline_config['archive'] = ['HALFMETRE']
+        if 'archive' not in pipeline_config:
+            pipeline_config['archive'] = [camera_id.upper() for camera_id in self._cameras]
 
         if not configure_pipeline(self.log_name, pipeline_config):
             return ObservationStatus.Error
 
         # Mark cameras idle so they will be started by camera.update() below
         print('ObserveTimeSeries: starting science observations')
-        if self._camera.status == CameraWrapperStatus.Stopped:
-            self._camera.status = CameraWrapperStatus.Idle
+        for camera in self._cameras.values():
+            if camera.status == CameraWrapperStatus.Stopped:
+                camera.status = CameraWrapperStatus.Idle
 
         self._is_guiding = True
 
@@ -287,23 +295,27 @@ class ObserveTimeSeries(TelescopeAction):
                 return_status = ObservationStatus.PositionLost
                 break
 
-            self._camera.update()
-            if self._camera.status == CameraWrapperStatus.Error:
-                return_status = ObservationStatus.Error
-                break
+            for camera in self._cameras.values():
+                camera.update()
+                if camera.status == CameraWrapperStatus.Error:
+                    return_status = ObservationStatus.Error
+                    break
 
             self.wait_until_time_or_aborted(Time.now() + CAM_CHECK_STATUS_DELAY, self._wait_condition)
 
         # Wait for all cameras to stop before returning to the main loop
         print('ObserveTimeSeries: stopping science observations')
         self._is_guiding = False
-        self._camera.stop()
+        for camera in self._cameras.values():
+            camera.stop()
 
         while True:
-            if self._camera.status in [CameraWrapperStatus.Error, CameraWrapperStatus.Stopped]:
+            if all(camera.status in [CameraWrapperStatus.Error, CameraWrapperStatus.Stopped]
+                   for camera in self._cameras.values()):
                 break
 
-            self._camera.update()
+            for camera in self._cameras.values():
+                camera.update()
 
             with self._wait_condition:
                 self._wait_condition.wait(CAM_CHECK_STATUS_DELAY.to_value(u.s))
@@ -369,7 +381,11 @@ class ObserveTimeSeries(TelescopeAction):
 
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
-        self._camera.received_frame(headers)
+        camera_id = headers.get('CAMID', '').lower()
+        if camera_id in self._cameras:
+            self._cameras[camera_id].received_frame(headers)
+        else:
+            print('AutoFocus: Ignoring unknown frame')
 
         with self._wait_condition:
             if self._wcs_status == WCSStatus.WaitingForWCS:
@@ -400,7 +416,7 @@ class ObserveTimeSeries(TelescopeAction):
     def received_guide_profile(self, headers, profile_x, profile_y):
         """Notification called when a guide profile has been calculated by the data pipeline"""
         if not self._is_guiding:
-            return
+            return None
 
         if self._guide_profiles is None:
             print('ObserveTimeSeries: set reference guide profiles')
@@ -408,7 +424,7 @@ class ObserveTimeSeries(TelescopeAction):
             self._guide_profiles = profile_x, profile_y
             self._guide_accumulated_ra = 0
             self._guide_accumulated_dec = 0
-            return
+            return None
 
         correction_applied = False
         if self._guide_filename:
@@ -445,7 +461,7 @@ class ObserveTimeSeries(TelescopeAction):
             if abs(dx) > GUIDE_MAX_PIXEL_ERROR or abs(dy) > GUIDE_MAX_PIXEL_ERROR:
                 print(f'ObserveTimeSeries: Offset larger than max allowed pixel shift: x: {dx} y:{dy}')
                 print('ObserveTimeSeries: Skipping this correction')
-                return
+                return None
 
             # Store the pre-pid values in the buffer
             self._guide_buff_x.append(dx)
@@ -458,7 +474,7 @@ class ObserveTimeSeries(TelescopeAction):
                         abs(dy) > GUIDE_BUFFER_REJECTION_SIGMA * np.std(self._guide_buff_y):
                     print(f'ObserveTimeSeries: Guide correction(s) too large x:{dx:.2f} y:{dy:.2f}')
                     print('ObserveTimeSeries: Skipping this correction but adding to stats buffer')
-                    return
+                    return None
 
             # Generate the corrections from the PID controllers
             corr_dx = -self._guide_pid_x.update(dx)
@@ -538,7 +554,7 @@ class ObserveTimeSeries(TelescopeAction):
         schema = {
             'type': 'object',
             'additionalProperties': False,
-            'required': ['start', 'end', 'ra', 'dec', 'pipeline', 'camera'],
+            'required': ['start', 'end', 'ra', 'dec', 'pipeline'],
             'properties': {
                 'type': {'type': 'string'},
                 'start': {
@@ -565,10 +581,16 @@ class ObserveTimeSeries(TelescopeAction):
                 'blind_offset_ddec': {
                     'type': 'number'
                 },
+                'guide_camera': {
+                    'type': 'string',
+                    'enum': list(cameras.keys())
+                },
                 'pipeline': pipeline_science_schema(),
-                'camera': camera_science_schema()
             }
         }
+
+        for camera_id in cameras:
+            schema['properties'][camera_id] = camera_science_schema(camera_id)
 
         return validation.validation_errors(config_json, schema)
 
@@ -649,7 +671,8 @@ class CameraWrapperStatus:
 
 class CameraWrapper:
     """Holds camera-specific flat state"""
-    def __init__(self, camera_config, log_name):
+    def __init__(self, camera_id, camera_config, log_name):
+        self.camera_id = camera_id
         self.status = CameraWrapperStatus.Stopped if camera_config is not None else CameraWrapperStatus.Skipped
         self._log_name = log_name
         self._config = camera_config or {}
@@ -661,7 +684,7 @@ class CameraWrapper:
             self.status = CameraWrapperStatus.Stopped
         elif self.status == CameraWrapperStatus.Active:
             self.status = CameraWrapperStatus.Stopping
-            cam_stop(self._log_name)
+            cam_stop(self._log_name, self.camera_id)
 
     # pylint: disable=unused-argument
     def received_frame(self, headers):
@@ -676,7 +699,7 @@ class CameraWrapper:
 
         # Start exposure sequence on first update
         if self.status == CameraWrapperStatus.Idle:
-            if cam_take_images(self._log_name, 0, self._config):
+            if cam_take_images(self._log_name, self.camera_id, 0, self._config):
                 self._start_attempts = 0
                 self._last_frame_time = Time.now()
                 self.status = CameraWrapperStatus.Active
@@ -684,19 +707,19 @@ class CameraWrapper:
 
             # Something went wrong - see if we can recover
             self._start_attempts += 1
-            log.error(self._log_name, f'Failed to start exposures (attempt {self._start_attempts} of 5)')
+            log.error(self._log_name, f'Failed to start {self.camera_id} exposures (attempt {self._start_attempts} of 5)')
 
             if self._start_attempts >= 5:
-                log.error(self._log_name, 'Too many start attempts: aborting')
+                log.error(self._log_name, f'Too many {self.camera_id} start attempts: aborting')
                 self.status = CameraWrapperStatus.Error
                 return
 
             # Try stopping the camera and see if we can recover on the next update loop
-            cam_stop(self._log_name)
+            cam_stop(self._log_name, self.camera_id)
             return
 
         if self.status == CameraWrapperStatus.Stopping:
-            if cam_status(self._log_name).get('state', CameraStatus.Idle) == CameraStatus.Idle:
+            if cam_status(self._log_name, self.camera_id).get('state', CameraStatus.Idle) == CameraStatus.Idle:
                 self.status = CameraWrapperStatus.Stopped
                 return
 
@@ -705,21 +728,21 @@ class CameraWrapper:
             return
 
         # Exposure has timed out: lets find out why
-        status = cam_status(self._log_name).get('state', None)
+        status = cam_status(self._log_name, self.camera_id).get('state', None)
 
         # Lost communication with camera daemon, this is assumed to be unrecoverable
         if status is None:
-            log.error(self._log_name, 'Lost communication with camera')
+            log.error(self._log_name, f'Lost communication with {self.camera_id} camera')
             self.status = CameraWrapperStatus.Error
             return
 
         # Camera may be idle if the pipeline blocked for too long
         if status is CameraStatus.Idle:
-            log.warning(self._log_name, 'Recovering idle camera')
+            log.warning(self._log_name, f'Recovering idle {self.camera_id} camera')
             self.status = CameraWrapperStatus.Idle
             self.update()
             return
 
         # Try stopping the camera and see if we can recover on the next update loop
-        log.warning(self._log_name, f'Camera has timed out in state {CameraStatus.label(status)}, stopping camera')
-        cam_stop(self._log_name)
+        log.warning(self._log_name, f'Camera {self.camera_id} has timed out in state {CameraStatus.label(status)}, stopping camera')
+        cam_stop(self._log_name, self.camera_id)
