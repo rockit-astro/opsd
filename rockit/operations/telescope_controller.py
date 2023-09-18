@@ -182,24 +182,31 @@ class TelescopeController:
 
     def notify_processed_frame(self, headers):
         """
-        Called by the pipeline daemon to notify that a new frame has completed processing
-        headers is a dictionary holding the key-value pairs from the fits header
+        Called by the pipeline daemon to notify that a new frame has completed processing.
+        headers is a dictionary holding the key-value pairs from the fits header.
+
+        Returns a list of additional header card definitions that are included in saved images.
         """
         with self._action_lock:
             if self._active_action:
                 if self._active_action.status == TelescopeActionStatus.Incomplete:
-                    self._active_action.received_frame(headers)
+                    return self._active_action.received_frame(headers)
+            return None
 
     def notify_guide_profile(self, headers, profile_x, profile_y):
         """
         Called by the pipeline daemon to notify that a new guide profile has been calculated
-        headers is a dictionary holding the key-value pairs from the fits header
-        profile_x and profile_y are numpy arrays holding the collapsed profiles
+        headers is a dictionary holding the key-value pairs from the fits header.
+
+        profile_x and profile_y are numpy arrays holding the collapsed profiles.
+
+        Returns a list of additional header card definitions that are included in saved images.
         """
         with self._action_lock:
             if self._active_action:
                 if self._active_action.status == TelescopeActionStatus.Incomplete:
-                    self._active_action.received_guide_profile(headers, profile_x, profile_y)
+                    return self._active_action.received_guide_profile(headers, profile_x, profile_y)
+            return None
 
     def abort(self):
         """Placeholder logic to cancel the active telescope task"""

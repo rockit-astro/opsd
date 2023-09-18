@@ -138,22 +138,30 @@ class OperationsDaemon:
     @Pyro4.expose
     def notify_processed_frame(self, headers):
         """Called by the pipeline daemon to notify that a new frame has completed processing
-           headers is a dictionary holding the key-value pairs from the fits header"""
-        if not pyro_client_matches(self._config.pipeline_ips):
-            return
+           headers is a dictionary holding the key-value pairs from the fits header.
 
-        self._telescope.notify_processed_frame(headers)
+           Returns a list of additional header card definitions that are included in saved images.
+           """
+        if not pyro_client_matches(self._config.pipeline_ips):
+            return None
+
+        return self._telescope.notify_processed_frame(headers)
 
     @Pyro4.expose
     def notify_guide_profiles(self, headers, profile_x, profile_y):
         """Called by the pipeline daemon to notify that a new guide profile has been calculated
-           headers is a dictionary holding the key-value pairs from the fits header
-           profile_x and profile_y are python (not numpy) arrays holding the collapsed profiles"""
+           headers is a dictionary holding the key-value pairs from the fits header.
+
+           profile_x and profile_y are python (not numpy) arrays holding the collapsed profiles.
+
+           Returns a list of additional header card definitions that are included in saved images.
+
+           """
         if not pyro_client_matches(self._config.pipeline_ips):
-            return
+            return None
 
         # Pyro doesn't support numpy arrays, so convert from the built-in array type
-        self._telescope.notify_guide_profile(headers, np.array(profile_x), np.array(profile_y))
+        return self._telescope.notify_guide_profile(headers, np.array(profile_x), np.array(profile_y))
 
     @Pyro4.expose
     def stop_telescope(self):

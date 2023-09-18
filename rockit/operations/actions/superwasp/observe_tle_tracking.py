@@ -120,12 +120,6 @@ class ObserveTLETracking(TelescopeAction):
         if 'archive' not in pipeline_science_config:
             pipeline_science_config['archive'] = [camera_id.upper() for camera_id in self._camera_ids]
 
-        # The leading line number is omitted to keep the string within the 68 character fits limit
-        pipeline_science_config['headers'] = [
-            {'keyword': 'MNTTLE1', 'value': self.config['tle'][1][2:]},
-            {'keyword': 'MNTTLE2', 'value': self.config['tle'][2][2:]},
-        ]
-
         if not configure_pipeline(self.log_name, pipeline_science_config, quiet=True):
             self.status = TelescopeActionStatus.Error
             return
@@ -216,6 +210,14 @@ class ObserveTLETracking(TelescopeAction):
                 cam_stop(self.log_name, camera_id)
 
         self.status = TelescopeActionStatus.Complete
+
+    def received_frame(self, headers):
+        """Notification called when a frame has been processed by the data pipeline"""
+        # The leading line number is omitted to keep the string within the 68 character fits limit
+        return [
+            {'keyword': 'MNTTLE1', 'value': self.config['tle'][1][2:]},
+            {'keyword': 'MNTTLE2', 'value': self.config['tle'][2][2:]},
+        ]
 
     def abort(self):
         """Notification called when the telescope is stopped by the user"""

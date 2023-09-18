@@ -382,22 +382,20 @@ class ObserveTimeSeries(TelescopeAction):
             traceback.print_exc(file=sys.stdout)
             self._is_guiding = False
         finally:
-            filename = headers.get('FILENAME', None)
-            if filename:
-                if len(guide_headers) == 3:
-                    for key in ['AG_CORRX', 'AG_CORRY', 'AG_CORRR', 'AG_CORRD', 'AG_DELTR', 'AG_DELTD']:
-                        guide_headers.append({
-                            "keyword": "COMMENT",
-                            "value": f" {key} not available",
-                        })
+            if len(guide_headers) == 3:
+                for key in ['AG_CORRX', 'AG_CORRY', 'AG_CORRR', 'AG_CORRD', 'AG_DELTR', 'AG_DELTD']:
+                    guide_headers.append({
+                        "keyword": "COMMENT",
+                        "value": f" {key} not available",
+                    })
 
-                guide_headers.append({
-                    "keyword": "AG_APPLY",
-                    "value": correction_applied,
-                    "comment": "autoguider correction applied"
-                })
+            guide_headers.append({
+                "keyword": "AG_APPLY",
+                "value": correction_applied,
+                "comment": "autoguider correction applied"
+            })
 
-                pipeline_add_operations_headers(self.log_name, filename, guide_headers)
+            return guide_headers
 
     @classmethod
     def validate_config(cls, config_json):

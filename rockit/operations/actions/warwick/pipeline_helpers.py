@@ -49,15 +49,3 @@ def configure_pipeline(log_name, config, quiet=False):
         log.error(log_name, 'Unknown error while configuring pipeline')
         traceback.print_exc(file=sys.stdout)
         return False
-
-
-def pipeline_add_operations_headers(log_name, filename, headers):
-    """Add additional headers to an already-saved frame"""
-    try:
-        with daemons.warwick_pipeline.connect() as pipeline:
-            pipeline.notify_additional_operations_headers('QHY600M', filename, headers)
-    except Pyro4.errors.CommunicationError:
-        log.error(log_name, 'Failed to communicate with pipeline daemon')
-    except Exception:
-        log.error(log_name, 'Unknown error while notifying additional operations headers')
-        traceback.print_exc(file=sys.stdout)

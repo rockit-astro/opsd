@@ -39,7 +39,7 @@ from rockit.common import log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cam_status, cam_take_images, cam_stop
 from .mount_helpers import mount_slew_radec, mount_offset_radec, mount_stop
-from .pipeline_helpers import configure_pipeline, pipeline_add_operations_headers
+from .pipeline_helpers import configure_pipeline
 from .schema_helpers import camera_science_schema, pipeline_science_schema
 
 # Amount of time to allow for readout + object detection + wcs solution
@@ -518,22 +518,20 @@ class ObserveField(TelescopeAction):
             traceback.print_exc(file=sys.stdout)
             self._is_guiding = False
         finally:
-            filename = headers.get('FILENAME', None)
-            if filename:
-                if len(guide_headers) == 3:
-                    for key in ['AG_CORRX', 'AG_CORRY', 'AG_CORRR', 'AG_CORRD', 'AG_DELTR', 'AG_DELTD']:
-                        guide_headers.append({
-                            "keyword": "COMMENT",
-                            "value": f" {key} not available",
-                        })
+            if len(guide_headers) == 3:
+                for key in ['AG_CORRX', 'AG_CORRY', 'AG_CORRR', 'AG_CORRD', 'AG_DELTR', 'AG_DELTD']:
+                    guide_headers.append({
+                        "keyword": "COMMENT",
+                        "value": f" {key} not available",
+                    })
 
-                guide_headers.append({
-                    "keyword": "AG_APPLY",
-                    "value": correction_applied,
-                    "comment": "autoguider correction applied"
-                })
+            guide_headers.append({
+                "keyword": "AG_APPLY",
+                "value": correction_applied,
+                "comment": "autoguider correction applied"
+            })
 
-                pipeline_add_operations_headers(self.log_name, filename, guide_headers)
+            return guide_headers
 
     @classmethod
     def validate_config(cls, config_json):
