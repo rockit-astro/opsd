@@ -447,13 +447,13 @@ class ObserveTimeSeries(TelescopeAction):
 
             guide_headers.append({
                 "keyword": "AG_ERRX",
-                "value": dx,
+                "value": round(dx, 2),
                 "comment": "[px] autoguider measured x-axis offset"
             })
 
             guide_headers.append({
                 "keyword": "AG_ERRY",
-                "value": dy,
+                "value": round(dy, 2),
                 "comment": "[px] autoguider measured y-axis offset"
             })
 
@@ -483,13 +483,13 @@ class ObserveTimeSeries(TelescopeAction):
 
             guide_headers.append({
                 "keyword": "AG_CORRX",
-                "value": corr_dx,
+                "value": round(corr_dx, 2),
                 "comment": "[px] autoguider x-axis correction"
             })
 
             guide_headers.append({
                 "keyword": "AG_CORRY",
-                "value": corr_dy,
+                "value": round(corr_dy, 2),
                 "comment": "[px] autoguider y-axis correction"
             })
 
@@ -502,25 +502,25 @@ class ObserveTimeSeries(TelescopeAction):
 
             guide_headers.append({
                 "keyword": "AG_CORRR",
-                "value": corr_dra,
+                "value": round(3600 * corr_dra, 2),
                 "comment": "[arcsec] autoguider ra correction"
             })
 
             guide_headers.append({
                 "keyword": "AG_CORRD",
-                "value": corr_ddec,
+                "value": round(3600 * corr_ddec, 2),
                 "comment": "[arcsec] autoguider dec correction"
             })
 
             guide_headers.append({
                 "keyword": "AG_DELTR",
-                "value": self._guide_accumulated_ra,
+                "value": round(3600 * self._guide_accumulated_ra, 2),
                 "comment": "[arcsec] autoguider accumulated ra correction"
             })
 
             guide_headers.append({
                 "keyword": "AG_DELTD",
-                "value": self._guide_accumulated_dec,
+                "value": round(3600 * self._guide_accumulated_dec, 2),
                 "comment": "[arcsec] autoguider accumulated dec correction"
             })
 
