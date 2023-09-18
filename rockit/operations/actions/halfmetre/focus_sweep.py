@@ -120,7 +120,7 @@ class FocusSweep(TelescopeAction):
 
         pipeline_config = self.config['pipeline'].copy()
         if 'archive' not in pipeline_config:
-            pipeline_config['archive'] = ['QHY600M']
+            pipeline_config['archive'] = ['HALFMETRE']
 
         pipeline_config.update({
             'type': 'SCIENCE',
