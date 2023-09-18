@@ -20,7 +20,7 @@ from .park_telescope import ParkTelescope
 from .autofocus import AutoFocus
 from .initialize_camera import InitializeCamera
 from .focus_sweep import FocusSweep
-from .observe_field import ObserveField
+from .observe_time_series import ObserveTimeSeries
 from .pointing_model_pointing import PointingModelPointing
 from .shutdown_camera import ShutdownCamera
 from .skyflats import SkyFlats

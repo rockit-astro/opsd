@@ -71,10 +71,10 @@ class Progress:
     Waiting, Acquiring, Observing = range(3)
 
 
-class ObserveField(TelescopeAction):
-    """Telescope action to observe a sidereally tracked field"""
+class ObserveTimeSeries(TelescopeAction):
+    """Telescope action to observe a sidereally tracked field with autoguiding"""
     def __init__(self, log_name, config):
-        super().__init__('Observe Field', log_name, config)
+        super().__init__('Observe Time Series', log_name, config)
         self._wait_condition = threading.Condition()
 
         self._start_date = Time(config['start'])
@@ -125,7 +125,7 @@ class ObserveField(TelescopeAction):
 
         # Point to the requested location
         acquire_start = Time.now()
-        print('ObserveField: slewing to target field')
+        print('ObserveTimeSeries: slewing to target field')
         blind_offset_dra = self.config.get('blind_offset_dra', 0)
         blind_offset_ddec = self.config.get('blind_offset_ddec', 0)
         acquisition_ra = self.config['ra'] + blind_offset_dra
@@ -161,7 +161,7 @@ class ObserveField(TelescopeAction):
             self._wcs = None
             self._wcs_status = WCSStatus.WaitingForWCS
 
-            print('ObserveField: taking test image')
+            print('ObserveTimeSeries: taking test image')
             while not cam_take_images(self.log_name, 1, cam_config, quiet=True):
                 # Try stopping the camera, waiting a bit, then try again
                 cam_stop(self.log_name)
@@ -196,9 +196,9 @@ class ObserveField(TelescopeAction):
 
             if failed or timeout:
                 if failed:
-                    print('ObserveField: WCS failed for attempt', attempt)
+                    print('ObserveTimeSeries: WCS failed for attempt', attempt)
                 else:
-                    print('ObserveField: WCS timed out for attempt', attempt)
+                    print('ObserveTimeSeries: WCS timed out for attempt', attempt)
 
                 attempt += 1
                 if attempt == 6:
@@ -210,16 +210,16 @@ class ObserveField(TelescopeAction):
             actual = SkyCoord(self._wcs_field_center.ra, self._wcs_field_center.dec, frame='icrs')
             offset_ra, offset_dec = actual.spherical_offsets_to(target)
 
-            print(f'ObserveField: offset is {offset_ra.to_value(u.arcsecond):.1f}, ' +
+            print(f'ObserveTimeSeries: offset is {offset_ra.to_value(u.arcsecond):.1f}, ' +
                   f'{offset_dec.to_value(u.arcsecond):.1f}')
 
             # Close enough!
             # TODO: Unhardcode the pointing threshold
             if abs(offset_ra) < 5 * u.arcsecond and abs(offset_dec) < 5 * u.arcsecond:
                 dt = (Time.now() - acquire_start).to(u.s).value
-                print(f'ObserveField: Acquired field in {dt:.1f} seconds')
+                print(f'ObserveTimeSeries: Acquired field in {dt:.1f} seconds')
                 if blind_offset_dra != 0 or blind_offset_ddec != 0:
-                    print('ObserveField: Offsetting to target')
+                    print('ObserveTimeSeries: Offsetting to target')
                     if not mount_offset_radec(self.log_name, -blind_offset_dra, -blind_offset_ddec):
                         return ObservationStatus.Error
 
@@ -264,7 +264,7 @@ class ObserveField(TelescopeAction):
             return ObservationStatus.Error
 
         # Mark cameras idle so they will be started by camera.update() below
-        print('ObserveField: starting science observations')
+        print('ObserveTimeSeries: starting science observations')
         if self._camera.status == CameraWrapperStatus.Stopped:
             self._camera.status = CameraWrapperStatus.Idle
 
@@ -295,7 +295,7 @@ class ObserveField(TelescopeAction):
             self.wait_until_time_or_aborted(Time.now() + CAM_CHECK_STATUS_DELAY, self._wait_condition)
 
         # Wait for all cameras to stop before returning to the main loop
-        print('ObserveField: stopping science observations')
+        print('ObserveTimeSeries: stopping science observations')
         self._is_guiding = False
         self._camera.stop()
 
@@ -308,7 +308,7 @@ class ObserveField(TelescopeAction):
             with self._wait_condition:
                 self._wait_condition.wait(CAM_CHECK_STATUS_DELAY.to_value(u.s))
 
-        print('ObserveField: cameras have stopped')
+        print('ObserveTimeSeries: camera has stopped')
         return return_status
 
     def run_thread(self):
@@ -327,23 +327,23 @@ class ObserveField(TelescopeAction):
         # Each method call blocks, returning only when it is ready to exit or switch to a different state
         while True:
             if self._observation_status == ObservationStatus.Error:
-                print('ObserveField: status is now Error')
+                print('ObserveTimeSeries: status is now Error')
                 break
 
             if self._observation_status == ObservationStatus.Complete:
-                print('ObserveField: status is now Complete')
+                print('ObserveTimeSeries: status is now Complete')
                 break
 
             if self._observation_status == ObservationStatus.OnTarget:
-                print('ObserveField: status is now OnTarget')
+                print('ObserveTimeSeries: status is now OnTarget')
                 self._observation_status = self.__observe_field()
 
             if self._observation_status == ObservationStatus.PositionLost:
-                print('ObserveField: status is now PositionLost')
+                print('ObserveTimeSeries: status is now PositionLost')
                 self._observation_status = self.__acquire_field()
 
             if self._observation_status == ObservationStatus.DomeClosed:
-                print('ObserveField: status is now DomeClosed')
+                print('ObserveTimeSeries: status is now DomeClosed')
                 self._observation_status = self.__wait_for_dome()
 
         mount_stop(self.log_name)
@@ -369,7 +369,6 @@ class ObserveField(TelescopeAction):
 
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
-        print('Got frame')
         self._camera.received_frame(headers)
 
         with self._wait_condition:
@@ -404,7 +403,7 @@ class ObserveField(TelescopeAction):
             return
 
         if self._guide_profiles is None:
-            print('ObserveField: set reference guide profiles')
+            print('ObserveTimeSeries: set reference guide profiles')
             self._guide_filename = headers.get('FILENAME', None)
             self._guide_profiles = profile_x, profile_y
             self._guide_accumulated_ra = 0
@@ -444,8 +443,8 @@ class ObserveField(TelescopeAction):
 
             # Ignore suspiciously big shifts
             if abs(dx) > GUIDE_MAX_PIXEL_ERROR or abs(dy) > GUIDE_MAX_PIXEL_ERROR:
-                print(f'ObserveField: Offset larger than max allowed pixel shift: x: {dx} y:{dy}')
-                print('ObserveField: Skipping this correction')
+                print(f'ObserveTimeSeries: Offset larger than max allowed pixel shift: x: {dx} y:{dy}')
+                print('ObserveTimeSeries: Skipping this correction')
                 return
 
             # Store the pre-pid values in the buffer
@@ -457,14 +456,14 @@ class ObserveField(TelescopeAction):
             if len(self._guide_buff_x) == self._guide_buff_x.maxlen:
                 if abs(dx) > GUIDE_BUFFER_REJECTION_SIGMA * np.std(self._guide_buff_x) or \
                         abs(dy) > GUIDE_BUFFER_REJECTION_SIGMA * np.std(self._guide_buff_y):
-                    print(f'ObserveField: Guide correction(s) too large x:{dx:.2f} y:{dy:.2f}')
-                    print('ObserveField: Skipping this correction but adding to stats buffer')
+                    print(f'ObserveTimeSeries: Guide correction(s) too large x:{dx:.2f} y:{dy:.2f}')
+                    print('ObserveTimeSeries: Skipping this correction but adding to stats buffer')
                     return
 
             # Generate the corrections from the PID controllers
             corr_dx = -self._guide_pid_x.update(dx)
             corr_dy = -self._guide_pid_y.update(dy)
-            print(f'ObserveField: post-PID corrections {corr_dx:.2f} {corr_dy:.2f} px')
+            print(f'ObserveTimeSeries: post-PID corrections {corr_dx:.2f} {corr_dy:.2f} px')
 
             guide_headers.append({
                 "keyword": "AG_CORRX",
@@ -480,7 +479,7 @@ class ObserveField(TelescopeAction):
 
             corr_dra = self._wcs_derivatives[0, 0] * corr_dx + self._wcs_derivatives[0, 1] * corr_dy
             corr_ddec = self._wcs_derivatives[1, 0] * corr_dx + self._wcs_derivatives[1, 1] * corr_dy
-            print(f'ObserveField: post-PID corrections {corr_dra * 3600:.2f} {corr_ddec * 3600:.2f} arcsec')
+            print(f'ObserveTimeSeries: post-PID corrections {corr_dra * 3600:.2f} {corr_ddec * 3600:.2f} arcsec')
 
             self._guide_accumulated_ra += corr_dra
             self._guide_accumulated_dec += corr_ddec
@@ -609,6 +608,7 @@ def cross_correlate(check, reference):
     if peak <= len(corr) / 2:
         return -(-coeffs[1] / (2 * coeffs[0]))
     return len(corr) + (coeffs[1] / (2 * coeffs[0]))
+
 
 class PIDController:
     """
