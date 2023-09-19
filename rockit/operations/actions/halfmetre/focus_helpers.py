@@ -30,7 +30,7 @@ def focus_get(log_name):
        Requires focuser to be idle
     """
     try:
-        with daemons.clasp_focus.connect() as focusd:
+        with daemons.halfmetre_focuser.connect() as focusd:
             status = focusd.report_status()
             if status['status'] != FocuserStatus.Active:
                 log.error(log_name, 'Focuser is offline')
@@ -51,7 +51,7 @@ def focus_get(log_name):
 def focus_set(log_name, position, timeout=FOCUS_TIMEOUT):
     """Set the given focuser channel to the given position"""
     try:
-        with daemons.clasp_focus.connect(timeout=timeout) as focusd:
+        with daemons.halfmetre_focuser.connect(timeout=timeout) as focusd:
             print(f'moving focus to {position}')
             status = focusd.set_focus(1, position)
             if status != FocCommandStatus.Succeeded:
@@ -70,7 +70,7 @@ def focus_set(log_name, position, timeout=FOCUS_TIMEOUT):
 def focus_stop(log_name):
     """Stop the focuser movement"""
     try:
-        with daemons.clasp_focus.connect() as focusd:
+        with daemons.halfmetre_focuser.connect() as focusd:
             focusd.stop_channel(1)
         return True
     except Pyro4.errors.CommunicationError:

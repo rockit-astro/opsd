@@ -373,20 +373,21 @@ class AutoFocus(TelescopeAction):
 
         return validation.validation_errors(config_json, schema)
 
+
 CONFIG = {
     # The slope (in hfd / step) on the inside edge of the v-curve
-    'inside_focus_slope': -0.0002066390041493774,
+    'inside_focus_slope': -0.033,
 
     # The HFD value where the two v-curve edges cross
     # This is a more convenient way of representing the position intercept difference
-    'crossing_hfd': 1.5394,
+    'crossing_hfd': 1.504,
 
     # Threshold HFD that is used to filter junk
     # Real stars should never be smaller than this
     'minimum_hfd': 1.2,
 
     # Number of objects that are required to consider MEDHFD valid
-    'minimum_object_count': 15,
+    'minimum_object_count': 25,
 
     # Aim to reach this HFD on the inside edge of the v-curve
     # before offsetting to the final focus
@@ -399,7 +400,7 @@ CONFIG = {
     'fine_measure_repeats': 7,
 
     # Number of focuser steps to move when searching for the target HFD
-    'focus_step_size': 5000,
+    'focus_step_size': 50,
 
     # Number of seconds to add to the exposure time to account for readout + object detection
     # Consider the frame lost if this is exceeded
