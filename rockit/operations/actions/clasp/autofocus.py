@@ -404,8 +404,8 @@ class CameraWrapper:
 
             if self.state == AutoFocusState.FindPositionOnVCurve:
                 # Step inwards until we are well defocused on the inside edge of the v curve
-                if self._best_hfd is not None and current_hfd > 2 * self._best_hfd and \
-                        current_hfd > self._config['target_hfd']:
+                if self._best_hfd is not None and current_hfd > self._best_hfd + self._config['search_hfd_increase'] \
+                        and current_hfd > self._config['target_hfd']:
                     log.info(self._log_name, f'AutoFocus: camera {self.camera_id} found position on v-curve')
                     self.state = AutoFocusState.FindTargetHFD
                 else:
@@ -485,7 +485,11 @@ CONFIG = {
 
     # Number of seconds to add to the exposure time to account for readout + object detection
     # Consider the frame lost if this is exceeded
-    'max_processing_time': 20
+    'max_processing_time': 20,
+
+    # Keep moving focus until the HFD increases by this many arcseconds above the best measured value
+    # when searching for the initial position on the V curve
+    'search_hfd_increase': 3
 }
 
 CAMERA_CONFIG = {
