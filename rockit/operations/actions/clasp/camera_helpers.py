@@ -39,30 +39,62 @@ cameras = {
     'cam2': daemons.clasp_camera_2,
 }
 
+COMMAND_SUCCESS = {
+    'cam1': QHYCommandStatus.Succeeded,
+    'cam2': SWIRCommandStatus.Succeeded
+}
+
+COMMAND_NOT_INITIALIZED = {
+    'cam1': QHYCommandStatus.CameraNotInitialized,
+    'cam2': SWIRCommandStatus.CameraNotInitialized
+}
+
+COMMAND_NOT_UNINITIALIZED = {
+    'cam1': QHYCommandStatus.CameraNotUninitialized,
+    'cam2': SWIRCommandStatus.CameraNotUninitialized
+}
+
+STATUS_DISABLED = {
+    'cam1': QHYStatus.Disabled,
+    'cam2': SWIRStatus.Disabled
+}
+
+STATUS_IDLE = {
+    'cam1': QHYStatus.Idle,
+    'cam2': SWIRStatus.Idle
+}
+
+STATUS_ACQUIRING = {
+    'cam1': QHYStatus.Acquiring,
+    'cam2': SWIRStatus.Acquiring
+}
+
+STATUS_READING = {
+    'cam1': QHYStatus.Reading,
+    'cam2': SWIRStatus.Reading
+}
+
+COOLER_WARM = {
+    'cam1': QHYCoolerMode.Warm,
+    'cam2': SWIRCoolerMode.Off
+}
+
 
 def cam_configure(log_name, camera_id, config, quiet=False):
     """Set camera configuration
        config is assumed to contain a dictionary of camera
        configuration that has been validated by the camera schema.
     """
+
     try:
         with cameras[camera_id].connect() as cam:
-            if camera_id == 'cam2':
-                status = cam.configure(config, quiet=quiet)
-                if status == SWIRCommandStatus.Succeeded:
-                    return True
+            status = cam.configure(config, quiet=quiet)
+            if status == COMMAND_SUCCESS[camera_id]:
+                return True
 
-                if status == SWIRCommandStatus.CameraNotInitialized:
-                    log.error(log_name, f'Camera {camera_id} is not initialized')
-                    return False
-            else:
-                status = cam.configure(config, quiet=quiet)
-                if status == QHYCommandStatus.Succeeded:
-                    return True
-
-                if status == QHYCommandStatus.CameraNotInitialized:
-                    log.error(log_name, f'Camera {camera_id} is not initialized')
-                    return False
+            if status == COMMAND_NOT_INITIALIZED[camera_id]:
+                log.error(log_name, f'Camera {camera_id} is not initialized')
+                return False
 
             log.error(log_name, f'Failed to configure camera {camera_id} with status {status}')
     except Pyro4.errors.CommunicationError:
@@ -83,42 +115,23 @@ def cam_take_images(log_name, camera_id, count=1, config=None, quiet=False):
     """
     try:
         with cameras[camera_id].connect() as cam:
-            if camera_id == 'cam2':
-                if config:
-                    status = cam.configure(config, quiet=quiet)
-                    if status == SWIRCommandStatus.CameraNotInitialized:
-                        log.error(log_name, f'Camera {camera_id} is not initialized')
-                        return False
-
-                    if status != SWIRCommandStatus.Succeeded:
-                        log.error(log_name, f'Failed to configure camera {camera_id} with status {status}')
-                        return False
-
-                status = cam.start_sequence(count, quiet=quiet)
-                if status == SWIRCommandStatus.Succeeded:
-                    return True
-
-                if status == SWIRCommandStatus.CameraNotInitialized:
+            if config:
+                status = cam.configure(config, quiet=quiet)
+                if status == COMMAND_NOT_INITIALIZED[camera_id]:
                     log.error(log_name, f'Camera {camera_id} is not initialized')
                     return False
-            else:
-                if config:
-                    status = cam.configure(config, quiet=quiet)
-                    if status == QHYCommandStatus.CameraNotInitialized:
-                        log.error(log_name, f'Camera {camera_id} is not initialized')
-                        return False
 
-                    if status != QHYCommandStatus.Succeeded:
-                        log.error(log_name, f'Failed to configure camera {camera_id} with status {status}')
-                        return False
-
-                status = cam.start_sequence(count, quiet=quiet)
-                if status == QHYCommandStatus.Succeeded:
-                    return True
-
-                if status == QHYCommandStatus.CameraNotInitialized:
-                    log.error(log_name, f'Camera {camera_id} is not initialized')
+                if status != COMMAND_SUCCESS[camera_id]:
+                    log.error(log_name, f'Failed to configure camera {camera_id} with status {status}')
                     return False
+
+            status = cam.start_sequence(count, quiet=quiet)
+            if status == COMMAND_SUCCESS[camera_id]:
+                return True
+
+            if status == COMMAND_NOT_INITIALIZED[camera_id]:
+                log.error(log_name, f'Camera {camera_id} is not initialized')
+                return False
 
             log.error(log_name, f'Failed to start exposures on camera {camera_id} with status {status}')
     except Pyro4.errors.CommunicationError:
@@ -148,46 +161,27 @@ def cam_stop(log_name, camera_id, timeout=-1):
        camera to return to Idle (or Disabled) status before returning
     """
     try:
-        if camera_id == 'cam2':
-            with cameras[camera_id].connect() as camd:
-                status = camd.stop_sequence()
+        with cameras[camera_id].connect() as camd:
+            status = camd.stop_sequence()
 
-            if status != SWIRCommandStatus.Succeeded:
-                return False
+        if status != COMMAND_SUCCESS[camera_id]:
+            return False
 
-            if timeout > 0:
-                timeout_end = Time.now() + timeout * u.second
-                while True:
-                    with cameras[camera_id].connect() as camd:
-                        data = camd.report_status()
-                        if data.get('state', SWIRStatus.Idle) in [SWIRStatus.Idle, SWIRStatus.Disabled]:
-                            return True
+        if timeout > 0:
+            timeout_end = Time.now() + timeout * u.second
+            while True:
+                with cameras[camera_id].connect() as camd:
+                    data = camd.report_status()
+                    if data.get('state', STATUS_IDLE[camera_id]) in \
+                            [STATUS_IDLE[camera_id], STATUS_DISABLED[camera_id]]:
+                        return True
 
-                    wait = min(1, (timeout_end - Time.now()).to(u.second).value)
-                    if wait <= 0:
-                        return False
+                wait = min(1, (timeout_end - Time.now()).to(u.second).value)
+                if wait <= 0:
+                    return False
 
-                    time.sleep(wait)
-        else:
-            with cameras[camera_id].connect() as camd:
-                status = camd.stop_sequence()
+                time.sleep(wait)
 
-            if status != QHYCommandStatus.Succeeded:
-                return False
-
-            if timeout > 0:
-                timeout_end = Time.now() + timeout * u.second
-                while True:
-                    with cameras[camera_id].connect() as camd:
-                        data = camd.report_status()
-                        if data.get('state', QHYStatus.Idle) in [QHYStatus.Idle, QHYStatus.Disabled]:
-                            return True
-
-                    wait = min(1, (timeout_end - Time.now()).to(u.second).value)
-                    if wait <= 0:
-                        return False
-
-                    time.sleep(wait)
         return True
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with camera ' + camera_id)
@@ -201,26 +195,15 @@ def cam_initialize(log_name, camera_id, timeout=20):
     """Initializes a given camera and resets configuration"""
     try:
         with cameras[camera_id].connect(timeout=timeout) as cam:
-            if camera_id == 'cam2':
-                status = cam.initialize()
-                if status not in [SWIRCommandStatus.Succeeded,
-                                  SWIRCommandStatus.CameraNotUninitialized]:
-                    log.error(log_name, 'Failed to initialize camera ' + camera_id)
-                    return False
+            status = cam.initialize()
+            if status not in [COMMAND_SUCCESS[camera_id], COMMAND_NOT_UNINITIALIZED[camera_id]]:
+                log.error(log_name, 'Failed to initialize camera ' + camera_id)
+                return False
 
-                if cam.configure({}, quiet=True) != SWIRCommandStatus.Succeeded:
-                    log.error(log_name, 'Failed to reset camera ' + camera_id + ' to defaults')
-                    return False
-            else:
-                status = cam.initialize()
-                if status not in [QHYCommandStatus.Succeeded,
-                                  QHYCommandStatus.CameraNotUninitialized]:
-                    log.error(log_name, 'Failed to initialize camera ' + camera_id)
-                    return False
+            if cam.configure({}, quiet=True) != COMMAND_SUCCESS[camera_id]:
+                log.error(log_name, f'Failed to reset camera {camera_id} to defaults')
+                return False
 
-                if cam.configure({}, quiet=True) != QHYCommandStatus.Succeeded:
-                    log.error(log_name, 'Failed to reset camera ' + camera_id + ' to defaults')
-                    return False
             return True
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with camera ' + camera_id)
@@ -247,39 +230,21 @@ def cam_shutdown(log_name, camera_id):
 
 
 def cam_is_active(log_name, camera_id, status):
-    if camera_id == 'cam2':
-        return status['state'] in [SWIRStatus.Acquiring, SWIRStatus.Reading]
-
-    # cam1
-    return status['state'] in [QHYStatus.Acquiring, QHYStatus.Reading]
+    return status['state'] in [STATUS_ACQUIRING[camera_id], STATUS_READING[camera_id]]
 
 
 def cam_is_idle(log_name, camera_id, status):
-    if camera_id == 'cam2':
-        return status['state'] == SWIRStatus.Idle
+    return status['state'] == STATUS_IDLE[camera_id]
 
-    # cam1
-    return status['state'] == QHYStatus.Idle
 # pylint: enable=unused-argument
 
 
 def cam_is_warm(log_name, camera_id, status):
-    if camera_id == 'cam2':
-        if status['state'] == SWIRStatus.Disabled:
-            return True
-
-        if 'cooler_mode' not in status:
-            log.error(log_name, 'Failed to check temperature on camera ' + camera_id)
-            return True
-
-        return status['cooler_mode'] == SWIRCoolerMode.Off
-
-    # cam1
-    if status['state'] == QHYStatus.Disabled:
+    if status['state'] == STATUS_DISABLED[camera_id]:
         return True
 
     if 'cooler_mode' not in status:
         log.error(log_name, 'Failed to check temperature on camera ' + camera_id)
         return True
 
-    return status['cooler_mode'] == QHYCoolerMode.Warm
+    return status['cooler_mode'] == COOLER_WARM[camera_id]
