@@ -22,8 +22,8 @@ import traceback
 from astropy.time import Time
 import astropy.units as u
 import Pyro4
+from rockit.camera.andor2 import CameraStatus, CommandStatus as CamCommandStatus
 from rockit.common import daemons, log
-from warwick.observatory.camera.andor import CameraStatus, CommandStatus as CamCommandStatus
 
 cameras = {
     'blue': daemons.onemetre_blue_camera,

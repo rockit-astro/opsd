@@ -18,7 +18,7 @@
 
 import jsonschema
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from warwick.observatory.talon import TelState
+from rockit.talon import TelState
 from .mount_helpers import mount_status, mount_stop, mount_park
 
 

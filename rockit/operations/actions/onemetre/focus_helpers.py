@@ -20,7 +20,7 @@ import sys
 import traceback
 import Pyro4
 from rockit.common import daemons, log
-from warwick.observatory.talon import CommandStatus as TelCommandStatus, FocusState
+from rockit.talon import CommandStatus as TelCommandStatus, FocusState
 
 FOCUS_TIMEOUT = 300
 
