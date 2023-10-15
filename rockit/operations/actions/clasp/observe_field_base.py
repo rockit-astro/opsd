@@ -79,8 +79,6 @@ class ObserveFieldBase(TelescopeAction):
 
         return tasks
 
-        return tasks
-
     def slew_to_field(self):
         """
         Implemented by subclasses to move the mount to the target

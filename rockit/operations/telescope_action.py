@@ -112,6 +112,7 @@ class TelescopeAction:
         """Notification called when the dome is fully open or fully closed"""
         self.dome_is_open = dome_is_open
 
+    # pylint: disable=unused-argument
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
         return None
@@ -119,6 +120,7 @@ class TelescopeAction:
     def received_guide_profile(self, headers, profile_x, profile_y):
         """Notification called when a guide profile has been calculated by the data pipeline"""
         return None
+    # pylint: enable=unused-argument
 
     def task_labels(self):
         """Returns list of tasks to be displayed in the schedule table"""

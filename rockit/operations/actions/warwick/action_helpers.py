@@ -16,6 +16,9 @@
 
 """Helper functions for acquiring a field using WCS"""
 
+# pylint: disable=too-many-return-statements
+# pylint: disable=too-many-branches
+
 import re
 import threading
 import time

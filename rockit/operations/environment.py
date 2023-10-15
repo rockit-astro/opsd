@@ -74,8 +74,8 @@ class ConditionType:
         for s in self._sensors:
             s.update(data)
 
-        all_unknown = all([s.status == ConditionStatus.Unknown for s in self._sensors])
-        any_unsafe = any([s.status == ConditionStatus.Unsafe for s in self._sensors])
+        all_unknown = all(s.status == ConditionStatus.Unknown for s in self._sensors)
+        any_unsafe = any(s.status == ConditionStatus.Unsafe for s in self._sensors)
         return not (all_unknown or any_unsafe)
 
     def status(self):

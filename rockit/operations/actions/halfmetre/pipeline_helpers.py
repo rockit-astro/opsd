@@ -49,4 +49,3 @@ def configure_pipeline(log_name, config, quiet=False):
         log.error(log_name, 'Unknown error while configuring pipeline')
         traceback.print_exc(file=sys.stdout)
         return False
-

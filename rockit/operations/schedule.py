@@ -16,6 +16,8 @@
 
 """Helper functions for validating and parsing schedule JSON objects into actions"""
 
+# pylint: disable=too-many-branches
+
 import sys
 import traceback
 import jsonschema

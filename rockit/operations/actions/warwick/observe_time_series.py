@@ -265,7 +265,7 @@ class ObserveTimeSeries(TelescopeAction):
     def received_guide_profile(self, headers, profile_x, profile_y):
         """Notification called when a guide profile has been calculated by the data pipeline"""
         if not self._is_guiding:
-            return
+            return None
 
         if self._guide_profiles is None:
             print('ObserveTimeSeries: set reference guide profiles')
@@ -273,7 +273,7 @@ class ObserveTimeSeries(TelescopeAction):
             self._guide_profiles = profile_x, profile_y
             self._guide_accumulated_ra = 0
             self._guide_accumulated_dec = 0
-            return
+            return None
 
         # Status flags:
         #    0x01: Image started exposing before the last guide correction was applied
@@ -383,7 +383,7 @@ class ObserveTimeSeries(TelescopeAction):
 
             # Apply correction
             if not mount_offset_radec(self.log_name, corr_dra, corr_ddec):
-                print(f'ObserveTimeSeries: Mount offset failed')
+                print('ObserveTimeSeries: Mount offset failed')
                 guide_flags += 0x08
 
             self._guide_last_updated = Time.now()

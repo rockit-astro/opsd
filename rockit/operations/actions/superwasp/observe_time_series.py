@@ -728,7 +728,8 @@ class CameraWrapper:
 
             # Something went wrong - see if we can recover
             self._start_attempts += 1
-            log.error(self._log_name, f'Failed to start {self.camera_id} exposures (attempt {self._start_attempts} of 5)')
+            log.error(self._log_name,
+                      f'Failed to start {self.camera_id} exposures (attempt {self._start_attempts} of 5)')
 
             if self._start_attempts >= 5:
                 log.error(self._log_name, f'Too many {self.camera_id} start attempts: aborting')
@@ -765,5 +766,6 @@ class CameraWrapper:
             return
 
         # Try stopping the camera and see if we can recover on the next update loop
-        log.warning(self._log_name, f'Camera {self.camera_id} has timed out in state {CameraStatus.label(status)}, stopping camera')
+        log.warning(self._log_name,
+                    f'Camera {self.camera_id} has timed out in state {CameraStatus.label(status)}, stopping camera')
         cam_stop(self._log_name, self.camera_id)
