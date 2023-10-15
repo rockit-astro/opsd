@@ -149,14 +149,14 @@ def cam_status(log_name):
     """Returns the status dictionary for the camera"""
     try:
         with daemons.warwick_camera.connect() as camd:
-            return camd.report_status()
+            return camd.report_status() or {}
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with camera')
-        return None
+        return {}
     except Exception:
         log.error(log_name, 'Unknown error with camera')
         traceback.print_exc(file=sys.stdout)
-        return None
+        return {}
 
 
 def cam_stop(log_name, timeout=-1):
@@ -175,7 +175,7 @@ def cam_stop(log_name, timeout=-1):
             timeout_end = Time.now() + timeout * u.second
             while True:
                 with daemons.warwick_camera.connect() as camd:
-                    data = camd.report_status()
+                    data = camd.report_status() or {}
                     if data.get('state', CameraStatus.Idle) in [CameraStatus.Idle, CameraStatus.Disabled]:
                         return True
 

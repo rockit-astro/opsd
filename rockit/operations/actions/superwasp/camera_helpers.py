@@ -113,7 +113,7 @@ def cam_stop_synchronised(log_name, camera_ids, timeout=0, quiet=False):
                 if not complete[camera_id]:
                     try:
                         with cameras[camera_id].connect() as camd:
-                            data = camd.report_status()
+                            data = camd.report_status() or {}
                             complete[camera_id] = data.get('state', CameraStatus.Idle) in \
                                 [CameraStatus.Idle, CameraStatus.Disabled]
                     except Pyro4.errors.CommunicationError:
@@ -229,14 +229,14 @@ def cam_status(log_name, camera_id):
     """Returns the status dictionary for the camera"""
     try:
         with cameras[camera_id].connect() as camd:
-            return camd.report_status()
+            return camd.report_status() or {}
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with camera ' + camera_id)
-        return None
+        return {}
     except Exception:
         log.error(log_name, 'Unknown error with camera ' + camera_id)
         traceback.print_exc(file=sys.stdout)
-        return None
+        return {}
 
 
 def cam_stop(log_name, camera_id, timeout=-1):
@@ -255,7 +255,7 @@ def cam_stop(log_name, camera_id, timeout=-1):
             timeout_end = Time.now() + timeout * u.second
             while True:
                 with cameras[camera_id].connect() as camd:
-                    data = camd.report_status()
+                    data = camd.report_status() or {}
                     if data.get('state', CameraStatus.Idle) in [CameraStatus.Idle, CameraStatus.Disabled]:
                         return True
 

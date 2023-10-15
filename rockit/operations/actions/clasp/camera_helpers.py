@@ -146,13 +146,13 @@ def cam_status(log_name, camera_id):
     """Returns the status dictionary for the camera"""
     try:
         with cameras[camera_id].connect() as camd:
-            return camd.report_status()
+            return camd.report_status() or {}
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with camera ' + camera_id)
     except Exception:
         log.error(log_name, 'Unknown error with camera ' + camera_id)
         traceback.print_exc(file=sys.stdout)
-    return None
+    return {}
 
 
 def cam_stop(log_name, camera_id, timeout=-1):
@@ -171,7 +171,7 @@ def cam_stop(log_name, camera_id, timeout=-1):
             timeout_end = Time.now() + timeout * u.second
             while True:
                 with cameras[camera_id].connect() as camd:
-                    data = camd.report_status()
+                    data = camd.report_status() or {}
                     if data.get('state', STATUS_IDLE[camera_id]) in \
                             [STATUS_IDLE[camera_id], STATUS_DISABLED[camera_id]]:
                         return True
@@ -230,21 +230,21 @@ def cam_shutdown(log_name, camera_id):
 
 
 def cam_is_active(log_name, camera_id, status):
-    return status['state'] in [STATUS_ACQUIRING[camera_id], STATUS_READING[camera_id]]
+    return status.get('state', STATUS_ACQUIRING[camera_id]) in [STATUS_ACQUIRING[camera_id], STATUS_READING[camera_id]]
 
 
 def cam_is_idle(log_name, camera_id, status):
-    return status['state'] == STATUS_IDLE[camera_id]
+    return status.get('state', STATUS_IDLE[camera_id]) == STATUS_IDLE[camera_id]
 
 # pylint: enable=unused-argument
 
 
 def cam_is_warm(log_name, camera_id, status):
-    if status['state'] == STATUS_DISABLED[camera_id]:
+    if 'state' not in status or 'cooler_mode' not in status:
+        log.error(log_name, 'Failed to check temperature on camera ' + camera_id)
         return True
 
-    if 'cooler_mode' not in status:
-        log.error(log_name, 'Failed to check temperature on camera ' + camera_id)
+    if status['state'] == STATUS_DISABLED[camera_id]:
         return True
 
     return status['cooler_mode'] == COOLER_WARM[camera_id]

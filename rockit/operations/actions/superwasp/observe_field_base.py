@@ -254,18 +254,18 @@ class ObserveFieldBase(TelescopeAction):
 
         # Lost communication with camera daemon, this is assumed to be unrecoverable
         # We can return here and let the error be handled when restarting the observation
-        if status is None:
+        if not status:
             log.error(self.log_name, 'Lost communication with camera ' + camera_id)
             return False
 
         # Camera may be idle if the pipeline blocked for too long
-        state = status.get('state', None)
-        if state is CameraStatus.Idle:
-            log.warning(self.log_name, f'Found idle camera {camera_id}; restarting')
+        if status['state'] is CameraStatus.Idle:
+            log.warning(self.log_name, f'Found idle camera {status["state"]}; restarting')
             return False
 
         # Power cycling the camera fixes most other errors
-        log.warning(self.log_name, f'Camera has timed out in state {CameraStatus.label(state)}; power cycling')
+        log.warning(self.log_name,
+                    f'Camera has timed out in state {CameraStatus.label(status["state"])}; power cycling')
         cam_cycle_power(self.log_name, camera_id)
 
         time.sleep(5)

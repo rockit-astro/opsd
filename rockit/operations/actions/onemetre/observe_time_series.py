@@ -547,7 +547,7 @@ class CameraWrapper:
         status = cam_status(self._log_name, self.camera_id).get('state', None)
 
         # Lost communication with camera daemon, this is assumed to be unrecoverable
-        if status is None:
+        if not status:
             log.error(self._log_name, 'Lost communication with camera ' + self.camera_id)
             self.status = CameraWrapperStatus.Error
             return

@@ -122,13 +122,12 @@ class ShutdownCameras(TelescopeAction):
                     continue
 
                 status = cam_status(self.log_name, camera_id)
-                if status['state'] == CameraStatus.Disabled:
-                    warm[camera_id] = True
-                elif 'cooler_mode' not in status:
+                if 'state' not in status or 'cooler_mode' not in status:
                     log.error(self.log_name, 'Failed to check temperature on camera ' + camera_id)
                     warm[camera_id] = True
                 else:
-                    warm[camera_id] = status['cooler_mode'] == CoolerMode.Warm
+                    warm[camera_id] = status['state'] == CameraStatus.Disabled or \
+                                      status['cooler_mode'] == CoolerMode.Warm
 
             if all(warm[k] for k in warm):
                 break

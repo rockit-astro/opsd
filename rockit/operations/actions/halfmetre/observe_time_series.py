@@ -729,13 +729,13 @@ class CameraWrapper:
         status = cam_status(self._log_name).get('state', None)
 
         # Lost communication with camera daemon, this is assumed to be unrecoverable
-        if status is None:
+        if not status:
             log.error(self._log_name, 'Lost communication with camera')
             self.status = CameraWrapperStatus.Error
             return
 
         # Camera may be idle if the pipeline blocked for too long
-        if status is CameraStatus.Idle:
+        if status == CameraStatus.Idle:
             log.warning(self._log_name, 'Recovering idle camera')
             self.status = CameraWrapperStatus.Idle
             self.update()

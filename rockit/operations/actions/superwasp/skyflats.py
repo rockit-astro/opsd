@@ -308,7 +308,7 @@ class CameraWrapper:
             # cam4 often crashes when preparing to take the initial bias frame
             # reinitializing and restarting is enough to fix it
             status = cam_status(self._log_name, self.camera_id)
-            if status and status.get('state', CameraStatus.Idle) == CameraStatus.Disabled:
+            if status.get('state', CameraStatus.Idle) == CameraStatus.Disabled:
                 cam_initialize(self._log_name, self.camera_id)
                 self.start()
                 return

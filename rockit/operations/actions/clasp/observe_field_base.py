@@ -119,7 +119,7 @@ class ObserveFieldBase(TelescopeAction):
             active = self.dome_is_open or not self.config.get('onsky', True)
             for camera_id in self._camera_ids:
                 status = cam_status(self.log_name, camera_id)
-                if status is None:
+                if not status:
                     continue
 
                 if cam_is_active(self.log_name, camera_id, status) and not active:
