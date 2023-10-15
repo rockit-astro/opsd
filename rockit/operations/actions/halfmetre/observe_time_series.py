@@ -92,6 +92,7 @@ class ObserveTimeSeries(TelescopeAction):
         self._guide_profiles = None
         self._guide_accumulated_ra = 0
         self._guide_accumulated_dec = 0
+        self._guide_last_updated = None
 
         self._camera = CameraWrapper(self.config.get('camera', None), self.log_name)
 
@@ -410,7 +411,14 @@ class ObserveTimeSeries(TelescopeAction):
             self._guide_accumulated_dec = 0
             return
 
-        correction_applied = False
+        # Status flags:
+        #    0x01: Image started exposing before the last guide correction was applied
+        #    0x02: Pixel offset is larger than the maximum allowed value
+        #    0x04: Pixel offset is more than 10 sigma away from the previous offset history
+        #    0x08: Mount offset failed
+        # A value of 0 means that the correction was valid and applied
+        guide_flags = 0
+
         if self._guide_filename:
             guide_headers = [{
                 "keyword": "AGREFIMG",
@@ -441,10 +449,19 @@ class ObserveTimeSeries(TelescopeAction):
                 "comment": "[px] autoguider measured y-axis offset"
             })
 
+            guide_date = headers.get('DATE-OBS', None)
+
+            if self._guide_last_updated and guide_date and Time(guide_date) < self._guide_last_updated:
+                print(f'ObserveTimeSeries: {guide_date} < last offset date ({self._guide_last_updated.isot})')
+                print('ObserveTimeSeries: Skipping this correction')
+                guide_flags += 0x01
+                return None
+
             # Ignore suspiciously big shifts
             if abs(dx) > GUIDE_MAX_PIXEL_ERROR or abs(dy) > GUIDE_MAX_PIXEL_ERROR:
                 print(f'ObserveTimeSeries: Offset larger than max allowed pixel shift: x: {dx} y:{dy}')
                 print('ObserveTimeSeries: Skipping this correction')
+                guide_flags += 0x02
                 return
 
             # Store the pre-pid values in the buffer
@@ -458,6 +475,7 @@ class ObserveTimeSeries(TelescopeAction):
                         abs(dy) > GUIDE_BUFFER_REJECTION_SIGMA * np.std(self._guide_buff_y):
                     print(f'ObserveTimeSeries: Guide correction(s) too large x:{dx:.2f} y:{dy:.2f}')
                     print('ObserveTimeSeries: Skipping this correction but adding to stats buffer')
+                    guide_flags += 0x04
                     return
 
             # Generate the corrections from the PID controllers
@@ -496,6 +514,25 @@ class ObserveTimeSeries(TelescopeAction):
                 "comment": "[arcsec] autoguider dec correction"
             })
 
+            # TODO: reacquire using WCS (self._is_guiding = False) if we detect things have gone wrong
+
+            # Apply correction
+            if not mount_offset_radec(self.log_name, corr_dra, corr_ddec):
+                print(f'ObserveTimeSeries: Mount offset failed')
+                guide_flags += 0x08
+
+            self._guide_last_updated = Time.now()
+        except Exception:
+            traceback.print_exc(file=sys.stdout)
+            self._is_guiding = False
+        finally:
+            if len(guide_headers) == 3:
+                for key in ['AG_CORRX', 'AG_CORRY', 'AG_CORRR', 'AG_CORRD']:
+                    guide_headers.append({
+                        "keyword": "COMMENT",
+                        "value": f" {key} not available",
+                    })
+
             guide_headers.append({
                 "keyword": "AG_DELTR",
                 "value": round(3600 * self._guide_accumulated_ra, 2),
@@ -508,26 +545,10 @@ class ObserveTimeSeries(TelescopeAction):
                 "comment": "[arcsec] autoguider accumulated dec correction"
             })
 
-            # TODO: reacquire using WCS (self._is_guiding = False) if we detect things have gone wrong
-
-            # Apply correction
-            correction_applied = True
-            mount_offset_radec(self.log_name, corr_dra, corr_ddec)
-        except Exception:
-            traceback.print_exc(file=sys.stdout)
-            self._is_guiding = False
-        finally:
-            if len(guide_headers) == 3:
-                for key in ['AG_CORRX', 'AG_CORRY', 'AG_CORRR', 'AG_CORRD', 'AG_DELTR', 'AG_DELTD']:
-                    guide_headers.append({
-                        "keyword": "COMMENT",
-                        "value": f" {key} not available",
-                    })
-
             guide_headers.append({
-                "keyword": "AG_APPLY",
-                "value": correction_applied,
-                "comment": "autoguider correction applied"
+                "keyword": "AG_FLAGS",
+                "value": guide_flags,
+                "comment": "autoguider status flags"
             })
 
             return guide_headers
