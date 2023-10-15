@@ -75,7 +75,7 @@ def dome_control(config, args):
             with config.daemon.connect() as ops:
                 return ops.dome_control(args[0] == 'auto')
 
-    print('usage: {} dome (auto|manual|clear)'.format(SCRIPT_NAME))
+    print(f'usage: {SCRIPT_NAME} dome (auto|manual|clear)')
     return -1
 
 
@@ -90,14 +90,14 @@ def tel_control(config, args):
             with config.daemon.connect() as ops:
                 return ops.tel_control(args[0] == 'auto')
 
-    print('usage: {} tel (auto|manual|stop)'.format(SCRIPT_NAME))
+    print(f'usage: {SCRIPT_NAME} tel (auto|manual|stop)')
     return -1
 
 
 def validate_schedule_json(config, args):
     """checks a schedule file for errors"""
     if len(args) != 1:
-        print('usage: {} schedule <observation json>'.format(SCRIPT_NAME))
+        print(f'usage: {SCRIPT_NAME} schedule <observation json>')
         return -1
 
     try:
@@ -123,7 +123,7 @@ def validate_schedule_json(config, args):
 def schedule(config, args):
     """Schedule observations for a nights observing"""
     if len(args) != 1:
-        print('usage: {} schedule <observation json>'.format(SCRIPT_NAME))
+        print(f'usage: {SCRIPT_NAME} schedule <observation json>')
         return -1
 
     try:
@@ -169,7 +169,7 @@ def print_status(config, _):
     print(env_status)
 
     for label, sensors in status['environment']['conditions'].items():
-        line = '{:>17}'.format(label) + ': '
+        line = f'{label:>17}: '
         line += ', '.join([ConditionStatus.format_label(s, label) for label, s in sensors.items()])
         print(line)
     print()
@@ -243,7 +243,7 @@ def print_json(config, _):
 
 def print_usage():
     """Prints the utility help"""
-    print('Usage: {} <command>'.format(SCRIPT_NAME))
+    print(f'usage: {SCRIPT_NAME} <command>')
     print()
     print('   json         print a machine-readable summary of the operations status')
     print('   status       print a human-readable summary of the operations status')

@@ -67,14 +67,13 @@ def __validate_dome(block, config, night):
             try:
                 date = Time.strptime(instance, '%Y-%m-%dT%H:%M:%SZ')
             except Exception:
-                yield jsonschema.ValidationError('{} is not a valid datetime'.format(instance))
+                yield jsonschema.ValidationError(f'{instance} is not a valid datetime')
                 return
 
             if value and (date < night_start or date > night_end):
                 start_str = night_start.strftime('%Y-%m-%dT%H:%M:%SZ')
                 end_str = night_end.strftime('%Y-%m-%dT%H:%M:%SZ')
-                yield jsonschema.ValidationError("{} is not auto or between {} and {}".format(
-                    instance, start_str, end_str))
+                yield jsonschema.ValidationError(f'{instance} is not auto or between {start_str} and {end_str}')
 
         # pylint: enable=unused-argument
 
@@ -141,7 +140,7 @@ def validate_schedule(json, config, require_tonight):
         try:
             schedule_night = Time.strptime(json['night'], '%Y-%m-%d') + 12 * u.hour
         except ValueError:
-            errors.append('night: {} is not a valid date'.format(json['night']))
+            errors.append(f'night: {json["night"]} is not a valid date')
 
     # Errors with 'night' are fatal
     if errors:
@@ -169,15 +168,13 @@ def validate_schedule(json, config, require_tonight):
     is_valid = len(errors) == 0
 
     if current_night != schedule_night:
+        schedule_str = schedule_night.strftime('%Y-%m-%d')
+        current_str = current_night.strftime('%Y-%m-%d')
         if require_tonight:
             is_valid = False
-            errors.insert(0, 'night: {} is not tonight ({})'.format(
-                schedule_night.strftime('%Y-%m-%d'),
-                current_night.strftime('%Y-%m-%d')))
+            errors.insert(0, f'night: {schedule_str} is not tonight ({current_str})')
         else:
-            errors.insert(0, 'info: night {} is not tonight ({})'.format(
-                schedule_night.strftime('%Y-%m-%d'),
-                current_night.strftime('%Y-%m-%d')))
+            errors.insert(0, f'info: night {schedule_str} is not tonight ({current_str})')
     return is_valid, errors
 
 

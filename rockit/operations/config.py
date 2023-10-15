@@ -134,16 +134,14 @@ class Config:
             """Validate a string as an importable python module containing the required telescope actions"""
             try:
                 if not importlib.util.find_spec(instance):
-                    yield jsonschema.ValidationError('{} is not a valid python module'.format(instance))
+                    yield jsonschema.ValidationError(f'{instance} is not a valid python module')
 
                 module = import_module(instance)
                 park_action = getattr(module, 'ParkTelescope', None)
                 if not isclass(park_action) or not issubclass(park_action, TelescopeAction):
-                    yield jsonschema.ValidationError(
-                        '{} does not define the required ParkTelescope action'.format(instance))
+                    yield jsonschema.ValidationError(f'{instance} does not define the required ParkTelescope action')
             except Exception as e:
-                yield jsonschema.ValidationError(
-                    '{} exception during import: {}'.format(instance, e))
+                yield jsonschema.ValidationError(f'{instance} exception during import: {e}')
 
         def __dome_validator(validator, value, instance, schema):
             """Validate a string as an importable python module containing a dome interface"""
@@ -153,7 +151,7 @@ class Config:
                     return
 
                 if not importlib.util.find_spec(instance['module']):
-                    yield jsonschema.ValidationError('{} is not a valid python module'.format(instance['module']))
+                    yield jsonschema.ValidationError(f'{instance["module"]} is not a valid python module')
                     return
 
                 module = import_module(instance['module'])
@@ -161,12 +159,11 @@ class Config:
                     for e in module.validate_config(instance):
                         yield e
                 else:
-                    yield jsonschema.ValidationError(
-                        '{} does not define a DomeInterface class'.format(instance['module']))
+                    yield jsonschema.ValidationError(f'{instance["module"]} does not define a DomeInterface class')
 
             except Exception as e:
                 traceback.print_exc(file=sys.stdout)
-                yield jsonschema.ValidationError('{} exception during import: {}'.format(instance, e))
+                yield jsonschema.ValidationError(f'{instance} exception during import: {e}')
         # pylint: enable=unused-argument
 
         # Will throw on schema violations
