@@ -209,7 +209,7 @@ def parse_dome_window(json, config):
         if json['dome']['open'] != 'auto':
             open_date = Time.strptime(json['dome']['open'], '%Y-%m-%dT%H:%M:%SZ')
 
-        if json['dome']['open'] != 'auto':
+        if json['dome']['close'] != 'auto':
             close_date = Time.strptime(json['dome']['close'], '%Y-%m-%dT%H:%M:%SZ')
 
         return open_date, close_date
