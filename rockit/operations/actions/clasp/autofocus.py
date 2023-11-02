@@ -485,7 +485,7 @@ CONFIG = {
 
     # Number of seconds to add to the exposure time to account for readout + object detection
     # Consider the frame lost if this is exceeded
-    'max_processing_time': 20,
+    'max_processing_time': 60,
 
     # Keep moving focus until the HFD increases by this many arcseconds above the best measured value
     # when searching for the initial position on the V curve
