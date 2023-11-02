@@ -96,7 +96,12 @@ class ObserveTLETracking(TelescopeAction):
                     label += f' (expires {self._end_date.strftime("%H:%M:%S")})'
             tasks.append(label)
 
-        target_name = self.config["pipeline"]["object"]
+        target_name = self.config["pipeline"].get("object", None)
+        if target_name is None:
+            target_name = self.config['tle'][0]
+            if target_name.startswith('0 '):
+                target_name = target_name[2:]
+
         if self._progress == Progress.Acquiring:
             tasks.append(f'Acquire target {target_name}')
             tasks.append(f'Observe until {self._end_date.strftime("%H:%M:%S")}')
