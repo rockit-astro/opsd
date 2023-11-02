@@ -26,7 +26,7 @@ from skyfield.api import Loader, Topos
 from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .mount_helpers import mount_track_tle, mount_stop, mount_status
-from .camera_helpers import cameras, cam_take_images, cam_stop
+from .camera_helpers import cameras, cam_configure, cam_reinitialize_synchronised, cam_start_synchronised, cam_stop_synchronised
 from .pipeline_helpers import configure_pipeline
 from .schema_helpers import pipeline_science_schema, camera_science_schema
 
@@ -75,7 +75,6 @@ class ObserveTLETracking(TelescopeAction):
         self._progress = Progress.Waiting
 
         self._camera_ids = [c for c in cameras if c in self.config]
-
 
     def task_labels(self):
         """Returns list of tasks to be displayed in the schedule table"""
@@ -191,9 +190,18 @@ class ObserveTLETracking(TelescopeAction):
             return
 
         # Start science observations
-        for camera_id in cameras:
-            if camera_id in self.config:
-                cam_take_images(self.log_name, camera_id, 0, self.config[camera_id])
+        success = cam_reinitialize_synchronised(self.log_name, self._camera_ids)
+        for camera_id in self._camera_ids:
+            success = success and cam_configure(self.log_name, camera_id, self.config[camera_id], quiet=True)
+
+        success = success and cam_start_synchronised(self.log_name, self._camera_ids)
+        if not success:
+            print('failed to start exposures')
+            if self.aborted:
+                self.status = TelescopeActionStatus.Complete
+            else:
+                self.status = TelescopeActionStatus.Error
+            return
 
         self._progress = Progress.Tracking
 
@@ -210,9 +218,9 @@ class ObserveTLETracking(TelescopeAction):
                 self._wait_condition.wait(LOOP_INTERVAL)
 
         mount_stop(self.log_name)
-        for camera_id in cameras:
-            if camera_id in self.config:
-                cam_stop(self.log_name, camera_id)
+
+        # Wait for all cameras to stop before returning to the main loop
+        cam_stop_synchronised(self.log_name, self._camera_ids)
 
         self.status = TelescopeActionStatus.Complete
 
