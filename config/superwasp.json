@@ -2,7 +2,7 @@
   "daemon": "superwasp_operations",
   "log_name": "opsd@superwasp",
   "control_machines": ["SWASPTCS"],
-  "pipeline_machines": ["SWASPCameraPi1", "SWASPCameraPi2", "SWASPCameraPi3", "SWASPCameraPi4"],
+  "pipeline_machines": ["SWASPDAS1", "SWASPDAS2"],
   "actions_module": "rockit.operations.actions.superwasp",
   "loop_delay": 10,
   "site_latitude": "28.76022 N",
@@ -176,22 +176,12 @@
       "sensors": [
         {
           "label": "DAS1",
-          "sensor": "superwasp_diskspace_cam1",
+          "sensor": "superwasp_diskspace_das1",
           "parameter": "data_fs_available_bytes"
         },
         {
           "label": "DAS2",
-          "sensor": "superwasp_diskspace_cam2",
-          "parameter": "data_fs_available_bytes"
-        },
-        {
-          "label": "DAS3",
-          "sensor": "superwasp_diskspace_cam3",
-          "parameter": "data_fs_available_bytes"
-        },
-        {
-          "label": "DAS4",
-          "sensor": "superwasp_diskspace_cam4",
+          "sensor": "superwasp_diskspace_das2",
           "parameter": "data_fs_available_bytes"
         }
       ]

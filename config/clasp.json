@@ -160,8 +160,13 @@
       "label": "Disk Space",
       "sensors": [
         {
-          "label": "DAS",
-          "sensor": "clasp_diskspace",
+          "label": "CAM1",
+          "sensor": "clasp_diskspace_cam1",
+          "parameter": "data_fs_available_bytes"
+        },
+        {
+          "label": "CAM2",
+          "sensor": "clasp_diskspace_cam2",
           "parameter": "data_fs_available_bytes"
         }
       ]
