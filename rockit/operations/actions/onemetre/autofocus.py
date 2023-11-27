@@ -36,7 +36,7 @@ LOOP_INTERVAL = 5
 
 
 class Progress:
-    Waiting, Slewing, Blue, Red = range(3)
+    Waiting, Slewing, Blue, Red = range(4)
 
 
 class AutoFocus(TelescopeAction):

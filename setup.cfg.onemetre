@@ -13,3 +13,4 @@ install_requires =
     rockit.operations
     rockit.pipeline
     rockit.talon
+    scipy
