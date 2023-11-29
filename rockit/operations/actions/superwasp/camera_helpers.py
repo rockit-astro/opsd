@@ -36,7 +36,7 @@ cameras = {
 }
 
 
-def _cam_run_synchronised(log_name, camera_ids, func):
+def _cam_run_synchronised(log_name, camera_ids, func, timeout=5):
     """Run a function simultaneously on multiple cameras"""
     threads = []
     success = []
@@ -47,7 +47,7 @@ def _cam_run_synchronised(log_name, camera_ids, func):
         with sync_condition:
             sync_condition.wait()
         try:
-            with cameras[camera_id].connect() as cam:
+            with cameras[camera_id].connect(timeout=timeout) as cam:
                 status = func(cam)
             if status == CamCommandStatus.Succeeded:
                 ret = True
@@ -88,7 +88,7 @@ def cam_reinitialize_synchronised(log_name, camera_ids):
             return False
 
     time.sleep(5)
-    return _cam_run_synchronised(log_name, camera_ids, lambda c: c.initialize())
+    return _cam_run_synchronised(log_name, camera_ids, lambda c: c.initialize(), timeout=10)
 
 
 def cam_start_synchronised(log_name, camera_ids, count=0, quiet=False):
