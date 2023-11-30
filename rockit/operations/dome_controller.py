@@ -191,6 +191,9 @@ class DomeController:
         Sets the datetimes that the dome should open and close
         These dates will be cleared automatically if a weather alert triggers
         """
+        if self._mode != OperationsMode.Automatic:
+            return False
+
         if not dates or len(dates) < 2:
             return False
 
