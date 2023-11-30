@@ -106,6 +106,16 @@
           "parameter": "data_fs_available_bytes"
         }
       ]
+    },
+    {
+      "label": "Sun",
+      "sensors": [
+        {
+          "label": "Altitude",
+          "sensor": "ephem",
+          "parameter": "sun_alt"
+        }
+      ]
     }
   ]
 }

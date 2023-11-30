@@ -23,6 +23,7 @@ import os
 import sys
 import Pyro4
 from astropy.time import Time
+import astropy.units as u
 from rockit.common import TFmt
 from rockit.operations import (
     Config,
@@ -32,6 +33,7 @@ from rockit.operations import (
     OperationsMode,
     validate_schedule
 )
+from rockit.operations.schedule import night_start_end
 
 SCRIPT_NAME = os.path.basename(sys.argv[0])
 
@@ -66,16 +68,30 @@ def run_command(command, args):
 
 def dome_control(config, args):
     """Changes the dome between automatic and manual control and cancels automated observing"""
-    if args:
-        if args[0] == 'clear':
-            with config.daemon.connect() as ops:
+    if args and args[0] in ['open', 'close', 'auto', 'manual']:
+        with config.daemon.connect() as ops:
+            if args[0] == 'close':
                 return ops.clear_dome_window()
 
-        if args[0] in ['auto', 'manual']:
-            with config.daemon.connect() as ops:
-                return ops.dome_control(args[0] == 'auto')
+            if args[0] == 'open':
+                current_night = Time.now()
+                if current_night.to_datetime().hour < 12:
+                    current_night -= 1 * u.day
+                current_night = current_night.strftime('%Y-%m-%d')
 
-    print(f'usage: {SCRIPT_NAME} dome (auto|manual|clear)')
+                open_start, open_end = night_start_end(current_night, config.site_location, config.sun_altitude_limit)
+                if open_start < Time.now() < open_end:
+                    return ops.schedule_observations({
+                        'night': current_night,
+                        'dome': {
+                            'open': open_start.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                            'close': open_end.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                        }
+                    })
+                return CommandStatus.EnvironmentNotSafe
+            return ops.dome_control(args[0] == 'auto')
+
+    print(f'usage: {SCRIPT_NAME} dome (open|close|auto|manual)')
     return -1
 
 
@@ -247,7 +263,7 @@ def print_usage():
     print()
     print('   json         print a machine-readable summary of the operations status')
     print('   status       print a human-readable summary of the operations status')
-    print('   dome         toggle dome between manual and automatic control or clear schedule')
+    print('   dome         toggle dome between manual and automatic control and request open or closed')
     print('   tel          toggle telescope between manual and automatic control or cancel actions')
     print('   validate     checks a schedule file for errors')
     print('   schedule     schedule observations for the night')

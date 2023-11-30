@@ -29,12 +29,12 @@ class CommandStatus:
     InvalidControlIP = 10
 
     CameraActive = 11
-    CoordinateSolutionFailed = 12
     TelescopeSlewFailed = 13
 
     InvalidSchedule = 21
     DomeNotAutomatic = 22
-    TelescopeNotAutomatic = 23
+    DomeNotClosed = 23
+    TelescopeNotAutomatic = 24
     EnvironmentNotSafe = 25
 
     _messages = {
@@ -45,12 +45,12 @@ class CommandStatus:
         10: 'error: command not accepted from this IP',
 
         11: 'error: camera is not idle',
-        12: 'error: acquisition image WCS solution failed',
         13: 'error: telescope slew failed',
 
         21: 'error: invalid schedule definition',
         22: 'error: dome is not in automatic mode',
-        23: 'error: telescope is not in automatic mode',
+        23: 'error: dome is not closed',
+        24: 'error: telescope is not in automatic mode',
         25: 'error: environment is not safe',
 
         -100: 'error: terminated by user',

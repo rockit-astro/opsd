@@ -8,7 +8,7 @@ _ops()
 
     case "${prev}" in
         dome)
-            opts="auto manual clear"
+            opts="open close auto manual"
             ;;
         tel)
             opts="auto manual stop"
