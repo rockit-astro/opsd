@@ -162,8 +162,6 @@ def validate_schedule(json, config, require_tonight):
                 errors.extend(__validate_action(i, action, config.actions))
         else:
             errors.append('actions: must be a list')
-    else:
-        errors.append('missing key \'actions\'')
 
     # A night mismatch is the only non-fatal warning, so handle it here
     # and insert the warning message at the start of the list
@@ -187,7 +185,7 @@ def parse_schedule_actions(config, json):
     """
     actions = []
     try:
-        for action in json['actions']:
+        for action in json.get('actions', []):
             actions.append(config.actions[action['type']](config.log_name, action))
     except Exception:
         print('exception while parsing schedule')

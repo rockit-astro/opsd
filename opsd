@@ -200,7 +200,7 @@ class OperationsDaemon:
             return CommandStatus.DomeNotAutomatic
 
         actions = parse_schedule_actions(self._config, schedule)
-        if not self._telescope.queue_actions(actions):
+        if actions and not self._telescope.queue_actions(actions):
             return CommandStatus.TelescopeNotAutomatic
 
         self.__shortcut_loop_wait()
