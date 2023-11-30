@@ -35,6 +35,7 @@ class CommandStatus:
     InvalidSchedule = 21
     DomeNotAutomatic = 22
     TelescopeNotAutomatic = 23
+    EnvironmentNotSafe = 25
 
     _messages = {
         # General error codes
@@ -50,6 +51,7 @@ class CommandStatus:
         21: 'error: invalid schedule definition',
         22: 'error: dome is not in automatic mode',
         23: 'error: telescope is not in automatic mode',
+        25: 'error: environment is not safe',
 
         -100: 'error: terminated by user',
         -101: 'error: unable to communicate with operations daemon'
