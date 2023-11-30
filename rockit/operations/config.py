@@ -32,8 +32,8 @@ CONFIG_SCHEMA = {
     'additionalProperties': False,
     'required': [
         'daemon', 'log_name', 'control_machines', 'pipeline_machines', 'loop_delay',
-        'site_latitude', 'site_longitude', 'site_elevation', 'actions_module', 'dome',
-        'environment_daemon', 'environment_conditions'
+        'site_latitude', 'site_longitude', 'site_elevation', 'sun_altitude_limit',
+        'actions_module', 'dome', 'environment_daemon', 'environment_conditions'
     ],
     'properties': {
         'daemon': {
@@ -68,6 +68,9 @@ CONFIG_SCHEMA = {
             'type': 'string',
         },
         'site_elevation': {
+            'type': 'number',
+        },
+        'sun_altitude_limit': {
             'type': 'number',
         },
         'actions_module': {
@@ -181,6 +184,7 @@ class Config:
         self.loop_delay = config_json['loop_delay']
         self.site_location = Topos(config_json['site_latitude'], config_json['site_longitude'],
                                    elevation_m=config_json['site_elevation'])
+        self.sun_altitude_limit = config_json['sun_altitude_limit']
 
         # Import all TelescopeAction subclasses defined in actions_module
         actions_module = import_module(config_json['actions_module'])

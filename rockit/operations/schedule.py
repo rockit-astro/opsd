@@ -38,25 +38,46 @@ def __format_errors(errors):
             yield error.message
 
 
-def night_start_end(night, config):
+def night_start_end(night, site_location, horizon_degrees=-34.0/60.0):
     loader = Loader('/var/tmp/')
     ts = loader.timescale()
     eph = loader('de421.bsp')
 
-    sun_above_horizon = almanac.risings_and_settings(eph, eph['Sun'], config.site_location)
+    sun_above_horizon = almanac.risings_and_settings(eph, eph['Sun'], site_location,
+                                                     horizon_degrees=horizon_degrees)
 
     # Search for sunset/sunrise between midday on 'night' and midday the following day
     night = Time.strptime(night, '%Y-%m-%d') + 12 * u.hour
     night_search_start = ts.from_astropy(night)
     night_search_end = ts.from_astropy(night + 1 * u.day)
     events, _ = almanac.find_discrete(night_search_start, night_search_end, sun_above_horizon)
-    return events[0].to_astropy(), events[1].to_astropy()
+
+    start = night_search_start.to_astropy()
+    end = night_search_end.to_astropy()
+    if len(events) >= 2:
+        if sun_above_horizon(night_search_start):
+            start = events[0].to_astropy()
+            end = events[1].to_astropy()
+        else:
+            start = events[1].to_astropy()
+            end = events[2].to_astropy()
+    if len(events) == 1:
+        if sun_above_horizon(night_search_start):
+            start = events[0].to_astropy()
+            end = night_search_end.to_astropy()
+        else:
+            start = night_search_start.to_astropy()
+            end = events[0].to_astropy()
+
+    # Truncate to second precision
+    return (Time.strptime(start.strftime('%Y-%m-%dT%H:%M:%SZ'), '%Y-%m-%dT%H:%M:%SZ'),
+            Time.strptime(end.strftime('%Y-%m-%dT%H:%M:%SZ'), '%Y-%m-%dT%H:%M:%SZ'))
 
 
 def __validate_dome(block, config, night):
     """Returns a list of error messages that stop json from defining a valid dome schedule"""
     try:
-        night_start, night_end = night_start_end(night, config)
+        night_start, night_end = night_start_end(night, config.site_location, config.sun_altitude_limit)
 
         # pylint: disable=unused-argument
         def require_night(validator, value, instance, schema):
@@ -203,7 +224,7 @@ def parse_dome_window(json, config):
     if 'dome' in json and 'open' in json['dome'] and 'close' in json['dome']:
         open_date = close_date = None
         if json['dome']['open'] == 'auto' or json['dome']['close'] == 'auto':
-            open_date, close_date = night_start_end(json['night'], config)
+            open_date, close_date = night_start_end(json['night'], config.site_location)
 
         # These dates have already been validated by __validate_dome
         if json['dome']['open'] != 'auto':
