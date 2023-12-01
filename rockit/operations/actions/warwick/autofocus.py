@@ -403,5 +403,5 @@ CONFIG = {
 
     # Number of seconds to add to the exposure time to account for readout + object detection
     # Consider the frame lost if this is exceeded
-    'max_processing_time': 20
+    'max_processing_time': 10
 }

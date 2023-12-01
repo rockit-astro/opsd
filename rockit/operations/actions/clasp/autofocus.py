@@ -513,6 +513,6 @@ CAMERA_CONFIG = {
         'crossing_hfd': 2.7,
 
         # Number of objects that are required to consider MEDHFD valid
-        'minimum_object_count': 20,
+        'minimum_object_count': 10,
     },
 }
