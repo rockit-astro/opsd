@@ -25,6 +25,7 @@ mkdir -p %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/onemetre.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/superwasp.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/warwick.json %{buildroot}%{_sysconfdir}/opsd
+%{__install} %{_sourcedir}/config/ngts.json %{buildroot}%{_sysconfdir}/opsd
 
 %package server
 Summary:  Operations server
@@ -98,5 +99,15 @@ Requires: python3-rockit-operations-warwick
 %files data-warwick
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/warwick.json
+
+%package data-ngts
+Summary: Operations data for NGTS
+Group:   Unspecified
+Requires: python3-rockit-operations-ngts
+%description data-ngts
+
+%files data-ngts
+%defattr(0644,root,root,-)
+%{_sysconfdir}/opsd/ngts.json
 
 %changelog

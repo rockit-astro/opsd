@@ -27,4 +27,7 @@ all:
 	rm -rf build/*
 	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope warwick" --define "_label Windmill Hill" -ba python3-rockit-operations.spec
 	mv build/noarch/*.rpm .
+	rm -rf build/*
+	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope ngts" --define "_label NGTS M06" -ba python3-rockit-operations.spec
+	mv build/noarch/*.rpm .
 	rm -rf build VERSION

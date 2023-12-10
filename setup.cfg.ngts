@@ -1,0 +1,15 @@
+[metadata]
+name = rockit.operations.ngts
+version = file: VERSION
+
+[options]
+packages =
+  rockit.operations.actions.ngts
+  rockit.operations.dome.simulated
+
+install_requires =
+    rockit.camera.andor3
+    rockit.focuser.ok3z
+    rockit.talon
+    rockit.operations
+    rockit.pipeline

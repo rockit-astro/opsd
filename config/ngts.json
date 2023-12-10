@@ -1,0 +1,19 @@
+{
+  "daemon": "ngts_m06_operations",
+  "log_name": "opsd@ngts_m06",
+  "control_machines": ["NGTSDASNUC"],
+  "pipeline_machines": ["NGTSDASNUC"],
+  "actions_module": "rockit.operations.actions.ngts",
+  "loop_delay": 10,
+  "site_latitude": "24.615662 N",
+  "site_longitude": "70.391809 W",
+  "site_elevation": 2433,
+  "sun_altitude_limit": 5,
+  "dome": {
+    "module": "rockit.operations.dome.simulated",
+    "open_delay": 0,
+    "close_delay": 0
+  },
+  "environment_daemon": "ngts_environment",
+  "environment_conditions": []
+}
