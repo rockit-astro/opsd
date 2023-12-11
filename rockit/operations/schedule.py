@@ -77,6 +77,9 @@ def night_start_end(night, site_location, horizon_degrees=-34.0/60.0):
 def __validate_dome(block, config, night):
     """Returns a list of error messages that stop json from defining a valid dome schedule"""
     try:
+        if config.dome_json is None:
+            return ['dome: not supported for this telescope']
+
         night_start, night_end = night_start_end(night, config.site_location, config.sun_altitude_limit)
 
         # pylint: disable=unused-argument

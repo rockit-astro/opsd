@@ -68,6 +68,10 @@ def run_command(command, args):
 
 def dome_control(config, args):
     """Changes the dome between automatic and manual control and cancels automated observing"""
+    if config.dome_json is None:
+        print(f'error: dome not supported for this telescope')
+        return -1
+
     if args and args[0] in ['open', 'close', 'auto', 'manual']:
         with config.daemon.connect() as ops:
             if args[0] == 'close':
@@ -190,28 +194,29 @@ def print_status(config, _):
         print(line)
     print()
 
-    dome = status['dome']
-    dome_date = Time.strptime(dome['status_updated'], '%Y-%m-%dT%H:%M:%SZ')
-    print('Dome status at ' + TFmt.Bold + dome_date.strftime('%H:%M:%S') + TFmt.Clear + ':')
+    if 'dome' in status:
+        dome = status['dome']
+        dome_date = Time.strptime(dome['status_updated'], '%Y-%m-%dT%H:%M:%SZ')
+        print('Dome status at ' + TFmt.Bold + dome_date.strftime('%H:%M:%S') + TFmt.Clear + ':')
 
-    dome_mode = '    Control: ' + OperationsMode.label(dome['mode'], True)
-    if dome['mode'] != dome['requested_mode']:
-        dome_mode += ' (' + OperationsMode.label(dome['requested_mode'], True) + ' queued)'
-    print(dome_mode)
+        dome_mode = '    Control: ' + OperationsMode.label(dome['mode'], True)
+        if dome['mode'] != dome['requested_mode']:
+            dome_mode += ' (' + OperationsMode.label(dome['requested_mode'], True) + ' queued)'
+        print(dome_mode)
 
-    if dome['mode'] == OperationsMode.Automatic:
-        open_str = TFmt.Yellow + 'Not Scheduled'
-        if dome['requested_open_date']:
-            open_str = dome['requested_open_date']
-        print('     Opening: ' + TFmt.Bold + open_str + TFmt.Clear)
+        if dome['mode'] == OperationsMode.Automatic:
+            open_str = TFmt.Yellow + 'Not Scheduled'
+            if dome['requested_open_date']:
+                open_str = dome['requested_open_date']
+            print('     Opening: ' + TFmt.Bold + open_str + TFmt.Clear)
 
-        close_str = TFmt.Yellow + 'Not Scheduled'
-        if dome['requested_close_date']:
-            close_str = dome['requested_close_date']
-        print('     Closing: ' + TFmt.Bold + close_str + TFmt.Clear)
+            close_str = TFmt.Yellow + 'Not Scheduled'
+            if dome['requested_close_date']:
+                close_str = dome['requested_close_date']
+            print('     Closing: ' + TFmt.Bold + close_str + TFmt.Clear)
 
-        dome_status = '    Shutters: ' + DomeStatus.label(dome['status'], True)
-        print(dome_status)
+            dome_status = '    Shutters: ' + DomeStatus.label(dome['status'], True)
+            print(dome_status)
 
     tel = status['telescope']
     tel_date = Time.strptime(tel['status_updated'], '%Y-%m-%dT%H:%M:%SZ')

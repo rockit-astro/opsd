@@ -56,8 +56,12 @@ class OperationsDaemon:
         self._config = config
 
         self._environment = EnvironmentWatcher(self._config)
-        self._dome = DomeController(self._config)
-        self._telescope = TelescopeController(self._config, self._dome)
+        if self._config.dome_json is not None:
+            self._dome = DomeController(self._config)
+        else:
+            self._dome = None
+
+        self._telescope = TelescopeController(self._config, self._dome, self._environment)
 
         runloop = threading.Thread(target=self.__ops_loop)
         runloop.daemon = True
@@ -71,7 +75,8 @@ class OperationsDaemon:
         """
         while True:
             self._environment.update()
-            self._dome.notify_environment_status(self._environment.safe)
+            if self._dome:
+                self._dome.notify_environment_status(self._environment.safe)
 
             # Wait for the next loop period, unless woken up early by __shortcut_loop_wait
             with self._wait_condition:
@@ -87,6 +92,9 @@ class OperationsDaemon:
         """Switch the dome between manual (observer) and automatic (opsd) control"""
         if not pyro_client_matches(self._config.control_ips):
             return CommandStatus.InvalidControlIP
+
+        if self._dome is None:
+            return CommandStatus.Failed
 
         with TryLock(self._command_lock) as success:
             if not success:
@@ -132,11 +140,15 @@ class OperationsDaemon:
     @Pyro4.expose
     def status(self):
         """Query the latest status."""
-        return {
-            'dome': self._dome.status(),
+        ret = {
             'telescope': self._telescope.status(),
-            'environment': self._environment.status(),
+            'environment': self._environment.status()
         }
+
+        if self._dome is not None:
+            ret['dome'] = self._dome.status(),
+
+        return ret
 
     @Pyro4.expose
     def notify_processed_frame(self, headers):
@@ -181,6 +193,9 @@ class OperationsDaemon:
         if not pyro_client_matches(self._config.control_ips):
             return CommandStatus.InvalidControlIP
 
+        if self._dome is None:
+            return CommandStatus.Failed
+
         self._dome.clear_open_window()
         return CommandStatus.Succeeded
 
@@ -190,20 +205,22 @@ class OperationsDaemon:
         if not pyro_client_matches(self._config.control_ips):
             return CommandStatus.InvalidControlIP
 
-        dome_status = self._dome.status()
-        if dome_status['mode'] == OperationsMode.Error:
-            return CommandStatus.InErrorState
+        if self._dome is not None:
+            dome_status = self._dome.status()
+            if dome_status['mode'] == OperationsMode.Error:
+                return CommandStatus.InErrorState
 
         valid, _ = validate_schedule(schedule, self._config, True)
         if not valid:
             return CommandStatus.InvalidSchedule
 
-        dome_window = parse_dome_window(schedule, self._config)
-        if dome_window:
-            if dome_window[0] <= Time.now() < dome_window[1] and not self._environment.safe:
-                return CommandStatus.EnvironmentNotSafe
-            if not self._dome.set_open_window(dome_window):
-                return CommandStatus.DomeNotAutomatic
+        if self._dome is not None:
+            dome_window = parse_dome_window(schedule, self._config)
+            if dome_window:
+                if dome_window[0] <= Time.now() < dome_window[1] and not self._environment.safe:
+                    return CommandStatus.EnvironmentNotSafe
+                if not self._dome.set_open_window(dome_window):
+                    return CommandStatus.DomeNotAutomatic
 
         actions = parse_schedule_actions(self._config, schedule)
         if actions and not self._telescope.queue_actions(actions):

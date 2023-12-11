@@ -9,11 +9,17 @@
   "site_longitude": "70.391809 W",
   "site_elevation": 2433,
   "sun_altitude_limit": 5,
-  "dome": {
-    "module": "rockit.operations.dome.simulated",
-    "open_delay": 0,
-    "close_delay": 0
-  },
   "environment_daemon": "ngts_environment",
-  "environment_conditions": []
+  "environment_conditions": [
+    {
+      "label": "Roof",
+      "sensors": [
+        {
+          "label": "NGTS",
+          "sensor": "sentinel",
+          "parameter": "roof_closed"
+        }
+      ]
+    }
+  ]
 }

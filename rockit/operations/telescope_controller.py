@@ -29,7 +29,7 @@ from .constants import OperationsMode
 
 class TelescopeController:
     """Class managing automatic telescope control for the operations daemon"""
-    def __init__(self, config, dome_controller):
+    def __init__(self, config, dome_controller, environment):
         self._config = config
         self._wait_condition = threading.Condition()
         self._park_action = config.actions['ParkTelescope']
@@ -46,6 +46,7 @@ class TelescopeController:
         self._requested_mode = OperationsMode.Manual
 
         self._dome_controller = dome_controller
+        self._environment = environment
         self._dome_was_open = False
 
         self._run_thread = threading.Thread(target=self.__run)
@@ -54,9 +55,12 @@ class TelescopeController:
 
     def __run(self):
         while True:
-            # Assume the dome is correctly set if it is in manual mode
-            dome_status = self._dome_controller.status()
-            dome_is_open = dome_status['status'] == DomeStatus.Open or dome_status['mode'] == OperationsMode.Manual
+            if self._dome_controller is not None:
+                dome_status = self._dome_controller.status()
+                # Assume the dome is correctly set if it is in manual mode
+                dome_is_open = dome_status['status'] == DomeStatus.Open or dome_status['mode'] == OperationsMode.Manual
+            else:
+                dome_is_open = self._environment.safe
 
             with self._action_lock:
                 auto_failure = self._mode == OperationsMode.Error and \

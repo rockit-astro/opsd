@@ -33,7 +33,7 @@ CONFIG_SCHEMA = {
     'required': [
         'daemon', 'log_name', 'control_machines', 'pipeline_machines', 'loop_delay',
         'site_latitude', 'site_longitude', 'site_elevation', 'sun_altitude_limit',
-        'actions_module', 'dome', 'environment_daemon', 'environment_conditions'
+        'actions_module', 'environment_daemon', 'environment_conditions'
     ],
     'properties': {
         'daemon': {
@@ -194,7 +194,11 @@ class Config:
             if isclass(action) and issubclass(action, TelescopeAction):
                 self.actions[name] = action
 
-        self.dome_json = config_json['dome']
-        self.dome_interface_type = getattr(import_module(config_json['dome']['module']), 'DomeInterface', None)
+        if 'dome' in config_json:
+            self.dome_json = config_json['dome']
+            self.dome_interface_type = getattr(import_module(config_json['dome']['module']), 'DomeInterface', None)
+        else:
+            self.dome_json = None
+
         self.environment_daemon = getattr(daemons, config_json['environment_daemon'])
         self.environment_conditions = config_json['environment_conditions']
