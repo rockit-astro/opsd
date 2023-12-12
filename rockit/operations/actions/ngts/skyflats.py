@@ -253,6 +253,8 @@ class CameraWrapper:
         self._start_time = None
         self._exposure_count = 0
         self._bias_level = 0
+        self._target_counts = 0
+        self._min_save_counts = 0
 
     def start(self):
         """Starts the flat sequence for this camera"""
@@ -303,6 +305,12 @@ class CameraWrapper:
 
         if self.state == AutoFlatState.Bias:
             self._bias_level = headers['MEDCNTS']
+
+            count_range = 4096 if headers['ENCODING'] == 'MONO12' else 65535
+
+            self._target_counts = int(CONFIG['target_count_fraction'] * count_range)
+            self._min_save_counts = int(CONFIG['min_save_count_fraction'] * count_range)
+
             log.info(self._log_name, f'AutoFlat: bias is {self._bias_level:.0f} ADU')
 
             if 'window' in self._camera_config:
@@ -332,7 +340,7 @@ class CameraWrapper:
 
             # If the count rate is too low then we scale the exposure by the maximum amount
             if counts > 0:
-                new_exposure = self._scale * exposure * CONFIG['target_counts'] / counts
+                new_exposure = self._scale * exposure * self._target_counts / counts
             else:
                 new_exposure = exposure * CONFIG['max_exposure_delta']
 
@@ -346,16 +354,16 @@ class CameraWrapper:
                   f'-> {clamped_exposure:.2f}s' + clamped_desc)
 
             if self._is_evening:
-                if clamped_exposure == CONFIG['max_exposure'] and counts < CONFIG['min_save_counts']:
+                if clamped_exposure == CONFIG['max_exposure'] and counts < self._min_save_counts:
                     self.state = AutoFlatState.Complete
-                elif self.state == AutoFlatState.Waiting and counts > CONFIG['min_save_counts'] \
+                elif self.state == AutoFlatState.Waiting and counts > self._min_save_counts \
                         and new_exposure > CONFIG['min_save_exposure']:
                     self.state = AutoFlatState.Saving
             else:
                 # Sky is increasing in brightness
                 if clamped_exposure < CONFIG['min_save_exposure']:
                     self.state = AutoFlatState.Complete
-                elif self.state == AutoFlatState.Waiting and counts > CONFIG['min_save_counts']:
+                elif self.state == AutoFlatState.Waiting and counts > self._min_save_counts:
                     self.state = AutoFlatState.Saving
 
             if self.state != last_state:
@@ -405,9 +413,9 @@ CONFIG = {
 
     'min_save_exposure': 1.0,
 
-    # Exposures with less counts than this lack the signal to noise ratio that we desire
-    'min_save_counts': 15000,
+    # Target flat counts to aim for as a fraction of the full image range (12 or 16 bit)
+    'target_count_fraction': 0.5,
 
-    # Target flat counts to aim for
-    'target_counts': 30000,
+    # Exposures with less counts than this full-range fraction lack the signal to noise ratio that we desire
+    'min_save_count_fraction': 0.25,
 }

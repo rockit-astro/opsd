@@ -99,6 +99,10 @@ def camera_science_schema():
                 'type': 'number',
                 'minimum': 1,
                 'maximum': 2048,
+            },
+            'mode': {
+                'type': 'string',
+                'enum': ['hdr', 'ffr', 'hdrnc', 'ffrnc', 'lg', 'hg']
             }
         }
     }
