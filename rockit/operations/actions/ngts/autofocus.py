@@ -205,7 +205,7 @@ class AutoFocus(TelescopeAction):
                 while current_hfd > 2 * CONFIG['target_hfd']:
                     log.info(self.log_name, f'AutoFocus: Stepping towards HFD {CONFIG["target_hfd"]}')
 
-                    current_focus -= int(current_hfd / (2 * CONFIG['inside_focus_slope']))
+                    current_focus -= round(current_hfd / (2 * CONFIG['inside_focus_slope']), 3)
                     if not focus_set(self.log_name, current_focus):
                         failed = True
                         break
@@ -222,7 +222,7 @@ class AutoFocus(TelescopeAction):
                     continue
 
                 # Do a final move to (approximately) the target HFD
-                current_focus += int((CONFIG['target_hfd'] - current_hfd) / CONFIG['inside_focus_slope'])
+                current_focus += round((CONFIG['target_hfd'] - current_hfd) / CONFIG['inside_focus_slope'], 3)
                 if not focus_set(self.log_name, current_focus):
                     continue
 
@@ -236,8 +236,7 @@ class AutoFocus(TelescopeAction):
                          f'{current_hfd:.1f}" ({CONFIG["fine_measure_repeats"]} samples)')
 
                 # Jump to target focus using calibrated parameters
-                current_focus += int((CONFIG['crossing_hfd'] - current_hfd) / CONFIG['inside_focus_slope'])
-
+                current_focus += round((CONFIG['crossing_hfd'] - current_hfd) / CONFIG['inside_focus_slope'], 3)
                 if not focus_set(self.log_name, current_focus):
                     continue
 
