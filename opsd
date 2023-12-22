@@ -146,7 +146,7 @@ class OperationsDaemon:
         }
 
         if self._dome is not None:
-            ret['dome'] = self._dome.status(),
+            ret['dome'] = self._dome.status()
 
         return ret
 
