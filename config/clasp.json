@@ -2,7 +2,7 @@
   "daemon": "clasp_operations",
   "log_name": "opsd@clasp",
   "control_machines": ["CLASPTCS"],
-  "pipeline_machines": ["CLASPDAS", "CLASPTCS"],
+  "pipeline_machines": ["CLASPCMOSVM", "CLASPTCS"],
   "actions_module": "rockit.operations.actions.clasp",
   "loop_delay": 10,
   "site_latitude": "28.76022 N",

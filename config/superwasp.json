@@ -2,7 +2,7 @@
   "daemon": "superwasp_operations",
   "log_name": "opsd@superwasp",
   "control_machines": ["SWASPTCS"],
-  "pipeline_machines": ["SWASPDAS1", "SWASPDAS2"],
+  "pipeline_machines": ["SWASPCameraVM1", "SWASPCameraVM2", "SWASPCameraVM3", "SWASPCameraVM4"],
   "actions_module": "rockit.operations.actions.superwasp",
   "loop_delay": 10,
   "site_latitude": "28.76022 N",
