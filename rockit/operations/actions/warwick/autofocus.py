@@ -26,7 +26,7 @@ from astropy.time import Time
 import astropy.units as u
 from rockit.common import log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from .camera_helpers import cam_take_images
+from .camera_helpers import cam_take_images, cam_set_filter
 from .focus_helpers import focus_get, focus_set
 from .mount_helpers import mount_slew_radec, mount_status, mount_stop
 from .pipeline_helpers import configure_pipeline
@@ -154,6 +154,10 @@ class AutoFocus(TelescopeAction):
         if not mount_slew_radec(self.log_name, ra, dec, True):
             self.status = TelescopeActionStatus.Error
             return
+
+        # Set desired filter before measuring the initial focus position.
+        # Otherwise the camera configuration will change it!
+        cam_set_filter(self.log_name, self.config['camera'].get('filter', 'NONE'))
 
         for _ in range(1):
             start_time = Time.now()

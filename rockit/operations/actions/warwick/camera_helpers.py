@@ -111,8 +111,10 @@ def cam_take_images(log_name, count=1, config=None, quiet=False):
        validated by the camera schema, which is applied
        before starting the sequence.
     """
-    if config and not cam_set_filter(log_name, config.pop('filter', 'NONE')):
-        return False
+    if config:
+        config = config.copy()
+        if not cam_set_filter(log_name, config.pop('filter', 'NONE')):
+            return False
 
     try:
         with daemons.warwick_camera.connect() as cam:
