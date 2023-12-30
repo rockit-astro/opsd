@@ -4,6 +4,7 @@
   "control_machines": ["SWASPTCS"],
   "pipeline_machines": ["SWASPCameraVM1", "SWASPCameraVM2", "SWASPCameraVM3", "SWASPCameraVM4"],
   "actions_module": "rockit.operations.actions.superwasp",
+  "scripts_module": "rockit.operations.scripts.superwasp",
   "loop_delay": 10,
   "site_latitude": "28.76022 N",
   "site_longitude": "17.87928 W",

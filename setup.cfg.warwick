@@ -5,6 +5,7 @@ version = file: VERSION
 [options]
 packages =
   rockit.operations.actions.warwick
+  rockit.operations.scripts.warwick
   rockit.operations.dome.ash
 
 install_requires =

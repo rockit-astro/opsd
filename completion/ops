@@ -4,7 +4,7 @@ _ops()
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
     prev="${COMP_WORDS[COMP_CWORD-1]}"
-    opts="status json dome tel validate schedule"
+    opts="status json dome tel validate schedule script"
 
     case "${prev}" in
         dome)
@@ -12,6 +12,9 @@ _ops()
             ;;
         tel)
             opts="auto manual stop"
+            ;;
+        script)
+            opts="$(ops script-completion ${COMP_LINE})"
             ;;
         schedule|validate)
             # Fall back to readline completion for files (from the -o default)

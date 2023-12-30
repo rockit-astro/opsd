@@ -5,6 +5,7 @@ version = file: VERSION
 [options]
 packages =
   rockit.operations.actions.clasp
+  rockit.operations.scripts.clasp
   rockit.operations.dome.astrohaven
 
 install_requires =

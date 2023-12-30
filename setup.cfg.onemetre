@@ -5,6 +5,7 @@ version = file: VERSION
 [options]
 packages =
   rockit.operations.actions.onemetre
+  rockit.operations.scripts.onemetre
   rockit.operations.dome.astrohaven
 
 install_requires =

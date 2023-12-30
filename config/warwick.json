@@ -4,6 +4,7 @@
   "control_machines": ["WarwickTCS", "WarwickDome"],
   "pipeline_machines": ["WarwickTCS"],
   "actions_module": "rockit.operations.actions.warwick",
+  "scripts_module": "rockit.operations.scripts.warwick",
   "loop_delay": 10,
   "site_latitude": "52.376861 N",
   "site_longitude": "1.583861 W",

@@ -5,6 +5,7 @@ version = file: VERSION
 [options]
 packages =
   rockit.operations.actions.ngts
+  rockit.operations.scripts.ngts
   rockit.operations.dome.simulated
 
 install_requires =

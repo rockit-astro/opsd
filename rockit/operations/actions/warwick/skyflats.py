@@ -48,6 +48,8 @@ class SkyFlats(TelescopeAction):
     {
         "type": "SkyFlats",
         "evening": true,
+        "filters": ['I', 'R', 'V', 'B', 'NONE'] # Optional: defaults will be used if not specified
+        "count": 21,
         "camera": { # Optional: defaults will be used if not specified
             "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
             # Also supports optional temperature, gain, offset (advanced options)

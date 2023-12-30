@@ -262,6 +262,28 @@ def print_json(config, _):
     return 0
 
 
+def script(config, args):
+    if len(args) > 0 and args[0] in config.scripts:
+        config.scripts[args[0]](f'{SCRIPT_NAME} script {args[0]}', args[1:])
+        return 0
+
+    print(f'usage: {SCRIPT_NAME} script <script name> [script arguments]')
+    print()
+
+    max_name_length = max(len(name) for name in config.scripts)
+    for script_name, script_func in config.scripts.items():
+        padding = ' ' * (3 + max_name_length - len(script_name))
+        print('   ' + script_name + padding + script_func.description)
+    print()
+
+    return -1
+
+
+def script_completion(config, _):
+    print(' '.join(config.scripts))
+    return 0
+
+
 def print_usage():
     """Prints the utility help"""
     print(f'usage: {SCRIPT_NAME} <command>')
@@ -272,6 +294,7 @@ def print_usage():
     print('   tel          toggle telescope between manual and automatic control or cancel actions')
     print('   validate     checks a schedule file for errors')
     print('   schedule     schedule observations for the night')
+    print('   script       execute an operations script')
     print()
 
     return 1
@@ -284,7 +307,9 @@ if __name__ == '__main__':
         'dome': dome_control,
         'tel': tel_control,
         'validate': validate_schedule_json,
-        'schedule': schedule
+        'schedule': schedule,
+        'script': script,
+        'script-completion': script_completion
     }
 
     if len(sys.argv) >= 2 and sys.argv[1] in commands:

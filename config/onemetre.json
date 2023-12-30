@@ -4,6 +4,7 @@
   "control_machines": ["OneMetreDome", "OneMetreTCS"],
   "pipeline_machines": ["OneMetreTCS"],
   "actions_module": "rockit.operations.actions.onemetre",
+  "scripts_module": "rockit.operations.scripts.onemetre",
   "loop_delay": 10,
   "site_latitude": "28.7603135 N",
   "site_longitude": "17.8796168 W",

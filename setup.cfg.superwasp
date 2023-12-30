@@ -5,6 +5,7 @@ version = file: VERSION
 [options]
 packages =
   rockit.operations.actions.superwasp
+  rockit.operations.scripts.superwasp
   rockit.operations.dome.astrohaven
 
 install_requires =

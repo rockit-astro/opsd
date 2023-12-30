@@ -5,6 +5,7 @@ version = file: VERSION
 [options]
 packages =
   rockit.operations.actions.halfmetre
+  rockit.operations.scripts.halfmetre
   rockit.operations.dome.halfmetre
 
 install_requires =

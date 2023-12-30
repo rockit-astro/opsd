@@ -18,7 +18,7 @@
 
 from importlib import import_module
 import importlib.util
-from inspect import isclass
+from inspect import getdoc, isclass, isfunction
 import json
 import sys
 import traceback
@@ -33,7 +33,7 @@ CONFIG_SCHEMA = {
     'required': [
         'daemon', 'log_name', 'control_machines', 'pipeline_machines', 'loop_delay',
         'site_latitude', 'site_longitude', 'site_elevation', 'sun_altitude_limit',
-        'actions_module', 'environment_daemon', 'environment_conditions'
+        'actions_module', 'scripts_module', 'environment_daemon', 'environment_conditions'
     ],
     'properties': {
         'daemon': {
@@ -76,6 +76,10 @@ CONFIG_SCHEMA = {
         'actions_module': {
             'type': 'string',
             'actions_module': True
+        },
+        'scripts_module': {
+            'type': 'string',
+            'scripts_module': True
         },
         'dome': {
             'dome': True
@@ -146,6 +150,14 @@ class Config:
             except Exception as e:
                 yield jsonschema.ValidationError(f'{instance} exception during import: {e}')
 
+        def __scripts_module_validator(validator, value, instance, schema):
+            """Validate a string as an importable python module"""
+            try:
+                if not importlib.util.find_spec(instance):
+                    yield jsonschema.ValidationError(f'{instance} is not a valid python module')
+            except Exception as e:
+                yield jsonschema.ValidationError(f'{instance} exception during import: {e}')
+
         def __dome_validator(validator, value, instance, schema):
             """Validate a string as an importable python module containing a dome interface"""
             try:
@@ -174,6 +186,7 @@ class Config:
             'daemon_name': validation.daemon_name_validator,
             'machine_name': validation.machine_name_validator,
             'actions_module': __actions_module_validator,
+            'scripts_module': __scripts_module_validator,
             'dome': __dome_validator
         }, print_exception=True)
 
@@ -193,6 +206,14 @@ class Config:
             action = getattr(actions_module, name)
             if isclass(action) and issubclass(action, TelescopeAction):
                 self.actions[name] = action
+
+        scripts_module = import_module(config_json['scripts_module'])
+        self.scripts = {}
+        for name in dir(scripts_module):
+            script = getattr(scripts_module, name)
+            if isfunction(script):
+                script.description = getdoc(script) or '<description not provided>'
+                self.scripts[name] = script
 
         if 'dome' in config_json:
             self.dome_json = config_json['dome']
