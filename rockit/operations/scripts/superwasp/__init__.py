@@ -17,3 +17,5 @@
 """Client-side scripts that can be run for semi-automated behaviours"""
 
 from .run_skyflats import run_skyflats
+from .initialize_cameras import initialize_cameras
+from .shutdown_cameras import shutdown_cameras
