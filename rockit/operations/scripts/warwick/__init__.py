@@ -18,3 +18,7 @@
 
 from .run_autofocus import run_autofocus
 from .run_skyflats import run_skyflats
+from .run_sync_pointing import run_sync_pointing
+from .shutdown import shutdown
+from .startup import startup
+

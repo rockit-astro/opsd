@@ -25,6 +25,9 @@ from rockit.common import daemons
 from rockit.operations import CommandStatus
 
 
+power_switches = ['cam', 'filter', 'focus', 'tel']
+
+
 def schedule_action(action):
     night = Time.now()
     if night.to_datetime().hour < 12:

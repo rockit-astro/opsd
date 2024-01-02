@@ -24,3 +24,4 @@ from .observe_time_series import ObserveTimeSeries
 from .park_telescope import ParkTelescope
 from .shutdown_camera import ShutdownCamera
 from .skyflats import SkyFlats
+from .sync_pointing import SyncPointing
