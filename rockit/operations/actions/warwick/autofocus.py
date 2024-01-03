@@ -271,9 +271,6 @@ class AutoFocus(TelescopeAction):
         requested = exposures
         failed = 0
 
-        cam_config = self.config["camera"].copy()
-        cam_config['stream'] = False
-
         # Handle exposures individually
         # This adds a few seconds of overhead when we want to take
         # multiple samples, but this is the simpler/safer option
@@ -287,10 +284,10 @@ class AutoFocus(TelescopeAction):
                 log.error(self.log_name, 'AutoFocus: Aborting because 5 HFD samples failed')
                 return None
 
-            if not cam_take_images(self.log_name, 1, cam_config, quiet=True):
+            if not cam_take_images(self.log_name, 1, self.config["camera"], quiet=True):
                 return None
 
-            expected_complete = Time.now() + (cam_config['exposure'] + CONFIG['max_processing_time']) * u.s
+            expected_complete = Time.now() + (self.config["camera"]['exposure'] + CONFIG['max_processing_time']) * u.s
 
             while True:
                 if not self.dome_is_open:

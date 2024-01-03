@@ -184,10 +184,6 @@ class SkyFlats(TelescopeAction):
         with daemons.warwick_camera.connect() as cam:
             config = self.config.get('camera', {}).copy()
 
-            # The current QHY firmware adds an extra exposure time's delay
-            # before returning the first frame. Use the single frame mode instead!
-            config['stream'] = False
-
             # Start by taking a full-frame image to measure the bias level,
             # as the actual flat frames may window away the overscan
             config.pop('window', None)

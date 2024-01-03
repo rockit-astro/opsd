@@ -102,7 +102,6 @@ class FieldAcquisitionHelper:
             print('FieldAcquisitionHelper: taking test image')
             camera_config = {
                 'exposure': 5,
-                'stream': False
             }
 
             while not cam_take_images(self._parent_action.log_name, config=camera_config, quiet=True):

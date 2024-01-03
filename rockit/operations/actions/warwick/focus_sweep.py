@@ -185,10 +185,6 @@ class FocusSweep(TelescopeAction):
         # Configure the camera then take the first exposure to start the process
         camera_config = self.config["camera"].copy()
 
-        # The current QHY firmware adds an extra exposure time's delay
-        # before returning the first frame. Use the single frame mode instead!
-        camera_config['stream'] = False
-
         if not cam_take_images(self.log_name, 1, camera_config):
             mount_stop(self.log_name)
             self.status = TelescopeActionStatus.Error

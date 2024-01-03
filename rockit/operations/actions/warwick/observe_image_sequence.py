@@ -156,10 +156,6 @@ class ObserveImageSequence(TelescopeAction):
         def camera_start_args():
             camera_config = self.config['sequence'][self._sequence_index].copy()
             count = camera_config.pop('count')
-
-            # Disable streaming by default
-            if 'stream' not in camera_config:
-                camera_config['stream'] = False
             return camera_config, count
 
         print('ObserveImageSequence: starting science observations')
