@@ -88,6 +88,7 @@ class ObserveTimeSeries(TelescopeAction):
 
         self._observation_status = ObservationStatus.PositionLost
         self._is_guiding = False
+        self._guide_reference_expcount = None
         self._guide_filename = None
         self._guide_profiles = None
         self._guide_accumulated_ra = 0
@@ -372,6 +373,12 @@ class ObserveTimeSeries(TelescopeAction):
         """Notification called when a frame has been processed by the data pipeline"""
         self._camera.received_frame(headers)
 
+        # The FILENAME header key is not available when received_guide_profile is called
+        # so we instead save the exposure count number to match against filename here
+        if self._guide_reference_expcount is not None and self._guide_filename is None:
+            if headers.get('EXPCNT', None) == self._guide_reference_expcount:
+                self._guide_filename = headers.get('FILENAME', None)
+
         with self._wait_condition:
             if self._wcs_status == WCSStatus.WaitingForWCS:
                 if 'CRVAL1' in headers and 'IMAG-RGN' in headers and 'SITELAT' in headers:
@@ -405,7 +412,7 @@ class ObserveTimeSeries(TelescopeAction):
 
         if self._guide_profiles is None:
             print('ObserveTimeSeries: set reference guide profiles')
-            self._guide_filename = headers.get('FILENAME', None)
+            self._guide_reference_expcount = headers.get('EXPCNT', None)
             self._guide_profiles = profile_x, profile_y
             self._guide_accumulated_ra = 0
             self._guide_accumulated_dec = 0
