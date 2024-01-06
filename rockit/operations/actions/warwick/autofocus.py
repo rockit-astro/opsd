@@ -394,10 +394,10 @@ CONFIG = {
     'target_hfd': 4,
 
     # Number of measurements to take when moving in to find the target HFD
-    'coarse_measure_repeats': 3,
+    'coarse_measure_repeats': 5,
 
     # Number of measurements to take when sampling the target and final HFDs
-    'fine_measure_repeats': 7,
+    'fine_measure_repeats': 10,
 
     # Number of focuser steps to move when searching for the target HFD
     'focus_step_size': 5000,
