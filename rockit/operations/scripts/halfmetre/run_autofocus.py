@@ -45,7 +45,4 @@ def run_autofocus(prefix, args):
     if args.dec:
         action['dec'] = args.dec
 
-    if args.filter:
-        action['camera']['filter'] = args.filter
-
     schedule_action(action)
