@@ -16,6 +16,7 @@
 
 """Client-side scripts that can be run for semi-automated behaviours"""
 
+from .add_headers import add_headers
 from .run_autofocus import run_autofocus
 from .run_skyflats import run_skyflats
 from .run_sync_pointing import run_sync_pointing
