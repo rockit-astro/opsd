@@ -11,6 +11,6 @@ packages =
 install_requires =
     rockit.camera.andor3
     rockit.focuser.ok3z
-    rockit.talon
+    rockit.mount.talon
     rockit.operations
     rockit.pipeline

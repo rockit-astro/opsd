@@ -18,7 +18,7 @@
 
 from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from rockit.talon import TelState
+from rockit.mount.talon import TelState
 from .mount_helpers import mount_status, mount_stop, mount_park
 
 

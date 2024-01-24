@@ -13,5 +13,5 @@ install_requires =
     rockit.dome
     rockit.operations
     rockit.pipeline
-    rockit.talon
+    rockit.mount.talon
     scipy
