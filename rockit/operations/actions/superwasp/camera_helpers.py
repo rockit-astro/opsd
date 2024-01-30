@@ -71,24 +71,31 @@ def _cam_run_synchronised(log_name, camera_ids, func, timeout=5):
     return all(success)
 
 
-def cam_reinitialize_synchronised(log_name, camera_ids):
+def cam_reinitialize_synchronised(log_name, camera_ids, attempts=1):
     """Initialize multiple cameras simultaneously to
        synchronise their internal polling loops
     """
-    for camera_id in camera_ids:
-        try:
-            with cameras[camera_id].connect() as cam:
-                cam.shutdown()
-        except Pyro4.errors.CommunicationError:
-            log.error(log_name, 'Failed to communicate with camera ' + camera_id)
-            return False
-        except Exception:
-            log.error(log_name, 'Unknown error with camera ' + camera_id)
-            traceback.print_exc(file=sys.stdout)
-            return False
+    for _ in range(attempts):
+        for camera_id in camera_ids:
+            try:
+                with cameras[camera_id].connect() as cam:
+                    cam.shutdown()
+            except Pyro4.errors.CommunicationError:
+                log.error(log_name, 'Failed to communicate with camera ' + camera_id)
+                return False
+            except Exception:
+                log.error(log_name, 'Unknown error with camera ' + camera_id)
+                traceback.print_exc(file=sys.stdout)
+                return False
 
-    time.sleep(5)
-    return _cam_run_synchronised(log_name, camera_ids, lambda c: c.initialize(), timeout=10)
+        time.sleep(5)
+
+        # Initialisation may sporadically take longer than 10 seconds, so wait and retry if needed
+        if _cam_run_synchronised(log_name, camera_ids, lambda c: c.initialize(), timeout=10):
+            return True
+
+        time.sleep(30)
+    return False
 
 
 def cam_start_synchronised(log_name, camera_ids, count=0, quiet=False):

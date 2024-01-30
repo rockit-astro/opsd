@@ -234,7 +234,7 @@ class ObserveFieldBase(TelescopeAction):
                 self._wait_condition.wait(10)
 
     def __start_exposures(self):
-        success = cam_reinitialize_synchronised(self.log_name, self._camera_ids)
+        success = cam_reinitialize_synchronised(self.log_name, self._camera_ids, attempts=3)
         for camera_id in self._camera_ids:
             success = success and cam_configure(self.log_name, camera_id, self.config.get(camera_id, None), quiet=True)
 
