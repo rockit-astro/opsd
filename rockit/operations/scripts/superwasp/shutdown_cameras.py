@@ -21,7 +21,7 @@ import sys
 import time
 from rockit.camera.qhy import CameraStatus, CommandStatus, CoolerMode
 from rockit.common import daemons, TFmt
-from rockit.operations.actions.superwasp.camera_helpers import cameras
+from rockit.operations.actions.superwasp.camera_helpers import cameras, das_machines
 
 
 def shutdown_cameras(prefix, args):
@@ -97,6 +97,25 @@ def shutdown_cameras(prefix, args):
             print(f'\r\033[KShutting down cameras {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
         else:
             print(f'\r\033[KShutting down cameras {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+
+        sys.stdout.write('Shutting down camera VMs...')
+        sys.stdout.flush()
+
+        failed = False
+        for das_info in das_machines.values():
+            if all(camera_id in args.cameras for camera_id in das_info['cameras']):
+                try:
+                    with das_info['daemon'].connect(timeout=40) as camvirtd:
+                        camvirtd.shutdown()
+                except Exception:
+                    failed = True
+                    continue
+
+        if failed:
+            print(f'\r\033[KShutting down camera VMs {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+        else:
+            print(f'\r\033[KShutting down camera VMs {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+
     finally:
         # Restore cursor
         sys.stdout.write('\033[?25h')

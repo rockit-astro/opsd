@@ -21,7 +21,7 @@ import sys
 import time
 from rockit.camera.qhy import CommandStatus
 from rockit.common import daemons, TFmt
-from rockit.operations.actions.superwasp.camera_helpers import cameras
+from rockit.operations.actions.superwasp.camera_helpers import cameras, das_machines
 
 
 def initialize_cameras(prefix, args):
@@ -35,6 +35,25 @@ def initialize_cameras(prefix, args):
     try:
         # Disable terminal cursor
         sys.stdout.write('\033[?25l')
+
+        sys.stdout.write('Initializing camera VMs...')
+        sys.stdout.flush()
+
+        failed = False
+        for das_info in das_machines.values():
+            if any(camera_id in args.cameras for camera_id in das_info['cameras']):
+                try:
+                    with das_info['daemon'].connect(timeout=70) as camvirtd:
+                        camvirtd.initialize()
+                except Exception:
+                    failed = True
+                    continue
+
+        if failed:
+            print(f'\r\033[KInitializing camera VMs {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            return
+        else:
+            print(f'\r\033[KInitializing camera VMs {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
 
         sys.stdout.write('Powering on cameras...')
         sys.stdout.flush()
