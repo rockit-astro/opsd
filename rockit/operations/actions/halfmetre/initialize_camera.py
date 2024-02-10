@@ -68,7 +68,7 @@ class InitializeCamera(TelescopeAction):
             tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
 
         if self._progress <= Progress.Initalizing:
-            tasks.append(f'Initialize cameras ({", ".join(self.config["cameras"])})')
+            tasks.append('Initialize camera')
 
         if self._progress <= Progress.Cooling:
             tasks.append('Wait for temperature lock')
@@ -143,7 +143,7 @@ class InitializeCamera(TelescopeAction):
             traceback.print_exc(file=sys.stdout)
 
         if switched:
-            # Wait for cameras to power up
+            # Wait for camera to power up
             with self._wait_condition:
                 self._wait_condition.wait(CAMERA_POWERON_DELAY)
 
