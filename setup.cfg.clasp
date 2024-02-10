@@ -12,7 +12,7 @@ install_requires =
     rockit.camera.qhy
     rockit.camera.raptor
     rockit.dome
-    rockit.lmount
+    rockit.mount.planewave
     rockit.focuser
     rockit.operations
     rockit.pipeline

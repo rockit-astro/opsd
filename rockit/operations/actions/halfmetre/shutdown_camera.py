@@ -25,7 +25,7 @@ import Pyro4
 from astropy.time import Time
 from rockit.camera.qhy import CameraStatus, CoolerMode
 from rockit.common import daemons, log, validation
-from rockit.lmount import MountState
+from rockit.mount.planewave import MountState
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cam_configure, cam_status, cam_stop
 from .mount_helpers import mount_status, mount_park

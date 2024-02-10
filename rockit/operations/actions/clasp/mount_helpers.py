@@ -20,7 +20,7 @@ import sys
 import traceback
 import Pyro4
 from rockit.common import daemons, log
-from rockit.lmount import CommandStatus as TelCommandStatus
+from rockit.mount.planewave import CommandStatus as TelCommandStatus
 
 PARK_POSITION = 'stow'
 PARK_TIMEOUT = 30

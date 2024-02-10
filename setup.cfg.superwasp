@@ -10,7 +10,7 @@ packages =
 
 install_requires =
     rockit.dome
-    rockit.lmount
+    rockit.mount.planewave
     rockit.operations
     rockit.pipeline
     rockit.camera.qhy
