@@ -14,9 +14,9 @@
 # You should have received a copy of the GNU General Public License
 # along with rockit.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Telescope action to park the mount"""
+"""Telescope action to park the telescope"""
 
-import jsonschema
+from rockit.common import validation
 from rockit.lmount import MountState
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .mount_helpers import mount_status, mount_stop, mount_park
@@ -25,16 +25,15 @@ from .mount_helpers import mount_status, mount_stop, mount_park
 class ParkTelescope(TelescopeAction):
     """
     Internal action to park the telescope once the actions queue is empty.
-    Should not be scheduled manually.
+    Can also be manually scheduled.
     """
-    def __init__(self, log_name):
+    def __init__(self, log_name, _=None):
         super().__init__('Park Telescope', log_name, {})
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
-
         status = mount_status(self.log_name)
-        if status and 'state' in status and status['state'] not in [MountState.Disabled, MountState.Parked]:
+        if status and 'state' in status and status['state'] != MountState.Disabled:
             if not mount_stop(self.log_name):
                 self.status = TelescopeActionStatus.Error
                 return
@@ -47,4 +46,13 @@ class ParkTelescope(TelescopeAction):
 
     @classmethod
     def validate_config(cls, config_json):
-        return [jsonschema.exceptions.SchemaError('ParkTelescope cannot be scheduled directly')]
+        """Returns an iterator of schema violations for the given json configuration"""
+        schema = {
+            'type': 'object',
+            'additionalProperties': False,
+            'properties': {
+                'type': {'type': 'string'}
+            }
+        }
+
+        return validation.validation_errors(config_json, schema)

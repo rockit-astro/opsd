@@ -16,7 +16,7 @@
 
 """Telescope action to park the telescope"""
 
-import jsonschema
+from rockit.common import validation
 from rockit.meade import TelescopeState
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .mount_helpers import mount_status, mount_stop, mount_park
@@ -25,9 +25,9 @@ from .mount_helpers import mount_status, mount_stop, mount_park
 class ParkTelescope(TelescopeAction):
     """
     Internal action to park the telescope once the actions queue is empty.
-    Should not be scheduled manually.
+    Can also be manually scheduled.
     """
-    def __init__(self, log_name):
+    def __init__(self, log_name, _=None):
         super().__init__('Park Telescope', log_name, {})
 
     def run_thread(self):
@@ -46,4 +46,13 @@ class ParkTelescope(TelescopeAction):
 
     @classmethod
     def validate_config(cls, config_json):
-        return [jsonschema.exceptions.SchemaError('ParkTelescope cannot be scheduled directly')]
+        """Returns an iterator of schema violations for the given json configuration"""
+        schema = {
+            'type': 'object',
+            'additionalProperties': False,
+            'properties': {
+                'type': {'type': 'string'}
+            }
+        }
+
+        return validation.validation_errors(config_json, schema)
