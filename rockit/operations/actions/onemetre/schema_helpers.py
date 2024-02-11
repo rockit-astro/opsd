@@ -105,7 +105,7 @@ def camera_science_schema(camera_id):
             'readoutindex': {
                 'type': 'integer',
                 'minimum': 0,
-                'maximum': 2
+                'maximum': 3
             },
             'exposure': {
                 'type': 'number',
