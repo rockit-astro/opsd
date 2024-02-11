@@ -22,7 +22,7 @@ import Pyro4
 from rockit.common import daemons, log
 from rockit.mount.talon import CommandStatus as TelCommandStatus
 
-PARK_ALTAZ = (35, 25)
+PARK_ALTAZ = (45, 45)
 PARK_TIMEOUT = 60
 INIT_TIMEOUT = 30
 HOME_TIMEOUT = 300
