@@ -424,11 +424,11 @@ CONFIG = {
         'minimum_hfd': 1.5,
 
         # Number of objects that are required to consider MEDHFD valid
-        'minimum_object_count': 15,
+        'minimum_object_count': 10,
 
         # Aim to reach this HFD on the inside edge of the v-curve
         # before offsetting to the final focus
-        'target_hfd': 6,
+        'target_hfd': 4.5,
 
         # Number of measurements to take when moving in to find the target HFD
         'coarse_measure_repeats': 3,
@@ -437,7 +437,7 @@ CONFIG = {
         'fine_measure_repeats': 7,
 
         # Number of focuser steps to move when searching for the target HFD
-        'focus_step_size': 250,
+        'focus_step_size': 100,
 
         # Number of seconds to add to the exposure time to account for readout + object detection
         # Consider the frame lost if this is exceeded
@@ -457,11 +457,11 @@ CONFIG = {
         'minimum_hfd': 1.5,
 
         # Number of objects that are required to consider MEDHFD valid
-        'minimum_object_count': 15,
+        'minimum_object_count': 10,
 
         # Aim to reach this HFD on the inside edge of the v-curve
         # before offsetting to the final focus
-        'target_hfd': 6,
+        'target_hfd': 4.5,
 
         # Number of measurements to take when moving in to find the target HFD
         'coarse_measure_repeats': 3,
@@ -470,8 +470,7 @@ CONFIG = {
         'fine_measure_repeats': 7,
 
         # Number of focuser steps to move when searching for the target HFD
-        # TODO: Calibrate this!
-        'focus_step_size': 250,
+        'focus_step_size': 100,
 
         # Number of seconds to add to the exposure time to account for readout + object detection
         # Consider the frame lost if this is exceeded
