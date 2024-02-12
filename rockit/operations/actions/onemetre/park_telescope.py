@@ -38,7 +38,7 @@ class ParkTelescope(TelescopeAction):
                 self.status = TelescopeActionStatus.Error
                 return
 
-            if not mount_park(self.log_name):
+            if not mount_park(self.log_name, close_covers=True):
                 self.status = TelescopeActionStatus.Error
                 return
 

@@ -107,7 +107,7 @@ class ObserveTimeSeries(TelescopeAction):
         # Point to the requested location
         acquire_start = Time.now()
         print('ObserveTimeSeries: slewing to target field')
-        if not mount_slew_radec(self.log_name, self.config['ra'], self.config['dec'], True):
+        if not mount_slew_radec(self.log_name, self.config['ra'], self.config['dec'], True, open_covers=True):
             return ObservationStatus.Error
 
         # Take a frame to solve field center

@@ -159,7 +159,7 @@ class SkyFlats(TelescopeAction):
         print('AutoFlat: Sun position is', sun_altaz)
 
         self._progress = Progress.Slewing
-        if not mount_slew_altaz(self.log_name, 75, sun_altaz[1] + 180, False):
+        if not mount_slew_altaz(self.log_name, 75, sun_altaz[1] + 180, False, open_covers=True):
             if not self.aborted:
                 log.error(self.log_name, 'AutoFlat: Failed to slew telescope')
                 self.status = TelescopeActionStatus.Error

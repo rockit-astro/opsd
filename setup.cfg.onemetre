@@ -10,6 +10,7 @@ packages =
 
 install_requires =
     rockit.camera.andor2
+    rockit.covers
     rockit.dome
     rockit.operations
     rockit.pipeline

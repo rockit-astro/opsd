@@ -17,10 +17,14 @@
 """Helper functions for actions to interact with the telescope mount"""
 
 import sys
+import time
 import traceback
 import Pyro4
+from astropy.time import Time
+import astropy.units as u
 from rockit.common import daemons, log
 from rockit.mount.talon import CommandStatus as TelCommandStatus
+from rockit.covers import CommandStatus as CoversCommandStatus, CoversState
 
 PARK_ALTAZ = (45, 45)
 PARK_TIMEOUT = 60
@@ -68,9 +72,54 @@ def tel_home(log_name):
         traceback.print_exc(file=sys.stdout)
         return False
 
-def mount_slew_radec(log_name, ra, dec, tracking, timeout=SLEW_TIMEOUT):
-    """Slew the telescope to a given RA, Dec"""
+
+def _move_covers(log_name, state):
     try:
+        with daemons.onemetre_covers.connect() as coversd:
+            if state == CoversState.Open:
+                return coversd.open_covers(blocking=False) == CoversCommandStatus.Succeeded
+            if state == CoversState.Closed:
+                return coversd.close_covers(blocking=False) == CoversCommandStatus.Succeeded
+            return False
+    except Pyro4.errors.CommunicationError:
+        log.error(log_name, 'Failed to communicate with covers daemon')
+        return False
+    except Exception:
+        log.error(log_name, 'Unknown error while moving covers')
+        traceback.print_exc(file=sys.stdout)
+        return False
+
+
+def _wait_for_covers(log_name, desired_state, timeout=30):
+    moving_state = CoversState.Opening if desired_state == CoversState.Open else CoversState.Closing
+    time.sleep(2)
+    start_time = Time.now()
+    try:
+        while True:
+            time.sleep(1)
+            if Time.now() - start_time > timeout * u.s:
+                return False
+
+            with daemons.onemetre_covers.connect() as coversd:
+                state = (coversd.report_status() or {}).get('state', CoversState.Disabled)
+                if state == desired_state:
+                    return True
+                if state != moving_state:
+                    return False
+    except Pyro4.errors.CommunicationError:
+        log.error(log_name, 'Failed to communicate with covers daemon')
+        return False
+    except Exception:
+        log.error(log_name, 'Unknown error while moving covers')
+        traceback.print_exc(file=sys.stdout)
+        return False
+
+
+def mount_slew_radec(log_name, ra, dec, tracking, open_covers=False, timeout=SLEW_TIMEOUT):
+    try:
+        if open_covers:
+            _move_covers(log_name, CoversState.Open)
+
         with daemons.onemetre_telescope.connect(timeout=timeout) as teld:
             if tracking:
                 status = teld.track_radec(ra, dec)
@@ -80,7 +129,8 @@ def mount_slew_radec(log_name, ra, dec, tracking, timeout=SLEW_TIMEOUT):
             if status != TelCommandStatus.Succeeded:
                 log.error(log_name, 'Failed to slew telescope')
                 return False
-            return True
+
+        return not open_covers or _wait_for_covers(log_name, CoversState.Open)
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with telescope daemon')
         return False
@@ -108,9 +158,12 @@ def mount_offset_radec(log_name, ra, dec, timeout=SLEW_TIMEOUT):
         return False
 
 
-def mount_slew_altaz(log_name, alt, az, tracking, timeout=SLEW_TIMEOUT):
+def mount_slew_altaz(log_name, alt, az, tracking, open_covers=False, timeout=SLEW_TIMEOUT):
     """Slew the telescope to a given Alt, Az"""
     try:
+        if open_covers:
+            _move_covers(log_name, CoversState.Open)
+
         with daemons.onemetre_telescope.connect(timeout=timeout) as teld:
             if tracking:
                 status = teld.track_altaz(alt, az)
@@ -120,7 +173,8 @@ def mount_slew_altaz(log_name, alt, az, tracking, timeout=SLEW_TIMEOUT):
             if status != TelCommandStatus.Succeeded:
                 log.error(log_name, 'Failed to slew telescope')
                 return False
-            return True
+
+        return not open_covers or _wait_for_covers(log_name, CoversState.Open)
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with telescope daemon')
         return False
@@ -130,15 +184,19 @@ def mount_slew_altaz(log_name, alt, az, tracking, timeout=SLEW_TIMEOUT):
         return False
 
 
-def mount_slew_hadec(log_name, ha, dec, timeout=SLEW_TIMEOUT):
+def mount_slew_hadec(log_name, ha, dec, open_covers=False, timeout=SLEW_TIMEOUT):
     """Slew the telescope to a given HA, Dec"""
     try:
+        if open_covers:
+            _move_covers(log_name, CoversState.Open)
+
         with daemons.onemetre_telescope.connect(timeout=timeout) as teld:
             status = teld.slew_hadec(ha, dec)
             if status != TelCommandStatus.Succeeded:
                 log.error(log_name, 'Failed to slew telescope')
                 return False
-            return True
+
+        return not open_covers or _wait_for_covers(log_name, CoversState.Open)
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with telescope daemon')
         return False
@@ -163,6 +221,12 @@ def mount_stop(log_name):
         return False
 
 
-def mount_park(log_name):
+def mount_park(log_name, close_covers=False):
     """Park the telescope pointing at zenith"""
-    return mount_slew_altaz(log_name, PARK_ALTAZ[0], PARK_ALTAZ[1], False, PARK_TIMEOUT)
+    if close_covers:
+        _move_covers(log_name, CoversState.Closed)
+
+    if not mount_slew_altaz(log_name, PARK_ALTAZ[0], PARK_ALTAZ[1], False, timeout=PARK_TIMEOUT) :
+        return False
+
+    return not close_covers or _wait_for_covers(log_name, CoversState.Closed)

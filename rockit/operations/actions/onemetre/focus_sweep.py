@@ -163,7 +163,7 @@ class FocusSweep(TelescopeAction):
                 dec = ms['site_latitude']
 
         self._progress = Progress.Slewing
-        if not mount_slew_radec(self.log_name, ra, dec, True):
+        if not mount_slew_radec(self.log_name, ra, dec, True, open_covers=True):
             self.status = TelescopeActionStatus.Error
             return
 
