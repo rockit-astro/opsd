@@ -440,12 +440,10 @@ CONFIG = {
 
 CAMERA_CONFIG = {
     'cam1': {
-
         # Exposure limits in seconds
         'min_exposure': 0.1,
-        'max_exposure': 20,
-
-        'min_save_exposure': 1.0,
+        'max_exposure': 10,
+        'min_save_exposure': 0.5,
 
         # Exposures with less counts than this lack the signal to noise ratio that we desire
         'min_save_counts': 15000,
@@ -456,8 +454,7 @@ CAMERA_CONFIG = {
     'cam2': {
         # Exposure limits in seconds
         'min_exposure': 0.05,
-        'max_exposure': 2,
-
+        'max_exposure': 1.0,
         'min_save_exposure': 0.1,
 
         # Exposures with less counts than this lack the signal to noise ratio that we desire
