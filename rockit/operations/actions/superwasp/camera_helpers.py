@@ -97,8 +97,8 @@ def cam_reinitialize_synchronised(log_name, camera_ids, attempts=1):
 
         time.sleep(5)
 
-        # Initialisation may sporadically take longer than 10 seconds, so wait and retry if needed
-        if _cam_run_synchronised(log_name, camera_ids, lambda c: c.initialize(), timeout=10):
+        # Initialisation may sporadically take longer, so wait and retry if needed
+        if _cam_run_synchronised(log_name, camera_ids, lambda c: c.initialize(), timeout=30):
             return True
 
         time.sleep(30)
@@ -338,7 +338,7 @@ def cam_cycle_power(log_name, camera_id):
 def cam_initialize_vms(log_name, das_ids):
     def boot_vms(daemon):
         try:
-            with daemon.connect(timeout=70) as camvirtd:
+            with daemon.connect(timeout=100) as camvirtd:
                 camvirtd.initialize()
         except Pyro4.errors.CommunicationError:
             log.error(log_name, 'Failed to communicate with camvirt daemon')

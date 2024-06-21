@@ -191,7 +191,7 @@ def cam_stop(log_name, camera_id, timeout=-1):
     return False
 
 
-def cam_initialize(log_name, camera_id, timeout=20):
+def cam_initialize(log_name, camera_id, timeout=30):
     """Initializes a given camera and resets configuration"""
     try:
         with cameras[camera_id].connect(timeout=timeout) as cam:
