@@ -18,15 +18,13 @@
 
 # pylint: disable=too-many-branches
 
-import sys
 import threading
-import traceback
-import Pyro4
 from astropy.time import Time
-from rockit.common import daemons, log, validation
+from rockit.common import validation
 from rockit.mount.planewave import MountState
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from .camera_helpers import cameras, cam_configure, cam_status, cam_stop, cam_is_warm, cam_shutdown
+from .camera_helpers import (cameras, cam_configure, cam_status, cam_stop, cam_is_warm,
+                             cam_shutdown, cam_switch_power, das_machines, cam_shutdown_vms)
 from .mount_helpers import mount_status, mount_park
 
 CAMERA_SHUTDOWN_TIMEOUT = 10
@@ -37,7 +35,7 @@ CAMERA_CHECK_INTERVAL = 10
 
 
 class Progress:
-    Waiting, Parking, Warming, ShuttingDown = range(4)
+    Waiting, Parking, Warming, ShuttingDown, ShuttingDownVMs = range(5)
 
 
 class ShutdownCameras(TelescopeAction):
@@ -61,8 +59,13 @@ class ShutdownCameras(TelescopeAction):
 
         if 'cameras' in config:
             self._camera_ids = config['cameras']
+            self._das_ids = []
+            for das_id, das_info in das_machines.items():
+                if all(camera_id in self._camera_ids for camera_id in das_info['cameras']):
+                    self._das_ids.append(das_id)
         else:
             self._camera_ids = cameras.keys()
+            self._das_ids = das_machines.keys()
 
         self._wait_condition = threading.Condition()
 
@@ -81,6 +84,9 @@ class ShutdownCameras(TelescopeAction):
         if self._progress <= Progress.ShuttingDown:
             tasks.append(f'Shutdown cameras ({", ".join(self._camera_ids)})')
 
+        if self._progress <= Progress.ShuttingDownVMs:
+            tasks.append(f'Shutdown DAS VMs ({", ".join(self._das_ids)})')
+
         return tasks
 
     def run_thread(self):
@@ -88,9 +94,10 @@ class ShutdownCameras(TelescopeAction):
         if self._start_date is not None and Time.now() < self._start_date:
             self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
 
+        self._progress = Progress.Parking
+
         status = mount_status(self.log_name)
         if status and 'state' in status and status['state'] not in [MountState.Disabled, MountState.Parked]:
-            self._progress = Progress.Parking
             mount_park(self.log_name)
 
         # Warm cameras
@@ -115,22 +122,15 @@ class ShutdownCameras(TelescopeAction):
                 self._wait_condition.wait(CAMERA_CHECK_INTERVAL)
 
         if not self.aborted:
-            # Power cameras off
             self._progress = Progress.ShuttingDown
             for camera_id in self._camera_ids:
                 cam_shutdown(self.log_name, camera_id)
 
-            try:
-                with daemons.clasp_power.connect() as powerd:
-                    p = powerd.last_measurement()
-                    for camera_id in self._camera_ids:
-                        if camera_id in p and p[camera_id]:
-                            powerd.switch(camera_id, False)
-            except Pyro4.errors.CommunicationError:
-                log.error(self.log_name, 'Failed to communicate with power daemon')
-            except Exception:
-                log.error(self.log_name, 'Unknown error with power daemon')
-                traceback.print_exc(file=sys.stdout)
+            cam_switch_power(self.log_name, self._camera_ids, False)
+
+        if not self.aborted:
+            self._progress = Progress.ShuttingDownVMs
+            cam_shutdown_vms(self.log_name, self._das_ids)
 
         self.status = TelescopeActionStatus.Complete
 

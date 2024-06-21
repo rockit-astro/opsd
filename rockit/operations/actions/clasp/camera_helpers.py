@@ -19,6 +19,7 @@
 # pylint: disable=too-many-return-statements
 
 import sys
+import threading
 import time
 import traceback
 from astropy.time import Time
@@ -38,6 +39,13 @@ cameras = {
     'cam1': daemons.clasp_camera_1,
     'cam2': daemons.clasp_camera_2,
 }
+
+das_machines = {
+    'das1': {'daemon': daemons.clasp_camvirt_1, 'cameras': ['cam1']},
+    'das2': {'daemon': daemons.clasp_camvirt_2, 'cameras': ['cam2']},
+}
+
+CAMERA_POWERON_DELAY = 5
 
 COMMAND_SUCCESS = {
     'cam1': QHYCommandStatus.Succeeded,
@@ -248,3 +256,93 @@ def cam_is_warm(log_name, camera_id, status):
         return True
 
     return status['cooler_mode'] == COOLER_WARM[camera_id]
+
+
+def cam_switch_power(log_name, camera_ids, enabled):
+    switched = False
+    try:
+        with daemons.clasp_power.connect() as powerd:
+            p = powerd.last_measurement()
+            for camera_id in camera_ids:
+                if camera_id in p and p[camera_id] != enabled:
+                    switched = True
+                    powerd.switch(camera_id, enabled)
+    except Pyro4.errors.CommunicationError:
+        log.error(log_name, 'Failed to communicate with power daemon')
+    except Exception:
+        log.error(log_name, 'Unknown error with power daemon')
+        traceback.print_exc(file=sys.stdout)
+
+    if enabled and switched:
+        # Wait for cameras to power up
+        time.sleep(CAMERA_POWERON_DELAY)
+
+
+def cam_cycle_power(log_name, camera_id):
+    try:
+        with cameras[camera_id].connect() as cam:
+            cam.shutdown()
+    except Pyro4.errors.CommunicationError:
+        log.error(log_name, 'Failed to communicate with camera ' + camera_id)
+        return False
+    except Exception:
+        log.error(log_name, 'Unknown error with camera ' + camera_id)
+        traceback.print_exc(file=sys.stdout)
+        return False
+
+    try:
+        with daemons.clasp_power.connect() as power:
+            power.switch(camera_id, False)
+            time.sleep(10)
+            power.switch(camera_id, True)
+    except Pyro4.errors.CommunicationError:
+        log.error(log_name, 'Failed to communicate with power daemon')
+        return False
+    except Exception:
+        log.error(log_name, 'Unknown error with power daemon')
+        traceback.print_exc(file=sys.stdout)
+        return False
+
+    return True
+
+
+def cam_initialize_vms(log_name, das_ids):
+    def boot_vms(daemon):
+        try:
+            with daemon.connect(timeout=100) as camvirtd:
+                camvirtd.initialize()
+        except Pyro4.errors.CommunicationError:
+            log.error(log_name, 'Failed to communicate with camvirt daemon')
+        except Exception:
+            log.error(log_name, 'Unknown error with camvirt daemon')
+            traceback.print_exc(file=sys.stdout)
+
+    threads = []
+    for das_id in das_ids:
+        thread = threading.Thread(target=boot_vms, args=(das_machines[das_id]['daemon'],))
+        thread.start()
+        threads.append(thread)
+
+    for thread in threads:
+        thread.join()
+
+
+def cam_shutdown_vms(log_name, das_ids):
+    def shutdown_vms(daemon):
+        try:
+            with daemon.connect(timeout=40) as camvirtd:
+                camvirtd.shutdown()
+        except Pyro4.errors.CommunicationError:
+            log.error(log_name, 'Failed to communicate with camvirt daemon')
+        except Exception:
+            log.error(log_name, 'Unknown error with camvirt daemon')
+            traceback.print_exc(file=sys.stdout)
+
+    threads = []
+    for das_id in das_ids:
+        thread = threading.Thread(target=shutdown_vms, args=(das_machines[das_id]['daemon'],))
+        thread.start()
+        threads.append(thread)
+
+    for thread in threads:
+        thread.join()

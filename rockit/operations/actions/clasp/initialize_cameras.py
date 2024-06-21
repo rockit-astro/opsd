@@ -15,17 +15,13 @@
 # along with rockit.  If not, see <http://www.gnu.org/licenses/>.
 
 """Telescope action to power on and cool the cameras"""
-import sys
 import threading
-import traceback
-import Pyro4
 from astropy.time import Time
 import astropy.units as u
-from rockit.common import daemons, log, validation
+from rockit.common import log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from .camera_helpers import cameras, cam_initialize, cam_status
-
-CAMERA_POWERON_DELAY = 5
+from .camera_helpers import (cameras, cam_switch_power, cam_cycle_power, cam_initialize, cam_status,
+                             das_machines, cam_initialize_vms)
 
 # Interval (in seconds) to poll the camera for temperature lock
 CAMERA_CHECK_INTERVAL = 10
@@ -35,7 +31,7 @@ CAMERA_COOLING_TIMEOUT = 900
 
 
 class Progress:
-    Waiting, Initalizing, Cooling = range(3)
+    Waiting, InitializingVMs, InitializingCameras, Cooling = range(4)
 
 
 class InitializeCameras(TelescopeAction):
@@ -46,17 +42,27 @@ class InitializeCameras(TelescopeAction):
     {
         "type": "InitializeCameras",
         "start": "2022-09-18T22:20:00", # Optional: defaults to immediately
-        "cameras": ["cam1", "cam2"]
+        "cameras": ["cam1", "cam2"] # Optional: defaults to all cameras
     }
     """
     def __init__(self, log_name, config):
         super().__init__('Initialize Cameras', log_name, config)
-
         self._progress = Progress.Waiting
+
         if 'start' in config:
             self._start_date = Time(config['start'])
         else:
             self._start_date = None
+
+        if 'cameras' in config:
+            self._camera_ids = config['cameras']
+            self._das_ids = []
+            for das_id, das_info in das_machines.items():
+                if any(camera_id in self._camera_ids for camera_id in das_info['cameras']):
+                    self._das_ids.append(das_id)
+        else:
+            self._camera_ids = cameras.keys()
+            self._das_ids = das_machines.keys()
 
         self._wait_condition = threading.Condition()
 
@@ -66,8 +72,11 @@ class InitializeCameras(TelescopeAction):
         if self._progress <= Progress.Waiting and self._start_date:
             tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
 
-        if self._progress <= Progress.Initalizing:
-            tasks.append(f'Initialize cameras ({", ".join(self.config["cameras"])})')
+        if self._progress <= Progress.InitializingVMs:
+            tasks.append(f'Initialize DAS VMs ({", ".join(self._das_ids)})')
+
+        if self._progress <= Progress.InitializingCameras:
+            tasks.append(f'Initialize cameras ({", ".join(self._camera_ids)})')
 
         if self._progress <= Progress.Cooling:
             tasks.append('Wait for temperature lock')
@@ -79,14 +88,14 @@ class InitializeCameras(TelescopeAction):
            Returns True on success, False on error
         """
         # Wait for cameras to cool if required
-        locked = {camera_id: False for camera_id in self.config['cameras']}
+        locked = {camera_id: False for camera_id in self._camera_ids}
 
         start = Time.now()
         while not self.aborted:
             if (Time.now() - start) > CAMERA_COOLING_TIMEOUT * u.s:
                 return False
 
-            for camera_id in self.config['cameras']:
+            for camera_id in self._camera_ids:
                 status = cam_status(self.log_name, camera_id)
                 if 'temperature_locked' not in status:
                     log.error(self.log_name, 'Failed to check temperature on camera ' + camera_id)
@@ -108,32 +117,22 @@ class InitializeCameras(TelescopeAction):
                 self.status = TelescopeActionStatus.Complete
                 return
 
-        self._progress = Progress.Initalizing
+        self._progress = Progress.InitializingVMs
+        cam_initialize_vms(self.log_name, self._das_ids)
+
+        self._progress = Progress.InitializingCameras
 
         # Power cameras on if needed
-        switched = False
-        try:
-            with daemons.clasp_power.connect() as powerd:
-                p = powerd.last_measurement()
-                for camera_id in self.config['cameras']:
-                    if camera_id in p and not p[camera_id]:
-                        switched = True
-                        powerd.switch(camera_id, True)
-        except Pyro4.errors.CommunicationError:
-            log.error(self.log_name, 'Failed to communicate with power daemon')
-        except Exception:
-            log.error(self.log_name, 'Unknown error with power daemon')
-            traceback.print_exc(file=sys.stdout)
+        cam_switch_power(self.log_name, self._camera_ids, True)
 
-        if switched:
-            # Wait for cameras to power up
-            with self._wait_condition:
-                self._wait_condition.wait(CAMERA_POWERON_DELAY)
-
-        for camera_id in self.config['cameras']:
+        for camera_id in self._camera_ids:
             if not cam_initialize(self.log_name, camera_id):
-                self.status = TelescopeActionStatus.Error
-                return
+                # Cameras sometimes boot with a bogus device name
+                # This is usually fixed by a power cycle
+                cam_cycle_power(self.log_name, camera_id)
+                if not cam_initialize(self.log_name, camera_id):
+                    self.status = TelescopeActionStatus.Error
+                    return
 
         self._progress = Progress.Cooling
         locked = self.__wait_for_temperature_lock()
@@ -154,10 +153,11 @@ class InitializeCameras(TelescopeAction):
         return validation.validation_errors(config_json, {
             'type': 'object',
             'additionalProperties': False,
-            'required': ['cameras'],
+            'required': [],
             'properties': {
                 'type': {'type': 'string'},
 
+                # Optional
                 'cameras': {
                     'type': 'array',
                     'items': {

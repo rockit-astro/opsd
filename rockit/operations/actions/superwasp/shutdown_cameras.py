@@ -18,17 +18,14 @@
 
 # pylint: disable=too-many-branches
 
-import sys
 import threading
-import traceback
-import Pyro4
 from astropy.time import Time
 from rockit.camera.qhy import CameraStatus, CoolerMode
 from rockit.common import log, validation
 from rockit.mount.planewave import MountState
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from .camera_helpers import (cameras, cam_configure, cam_status, cam_stop,cam_switch_power,
-                             das_machines, cam_shutdown_vms)
+from .camera_helpers import (cameras, cam_configure, cam_status, cam_stop, cam_switch_power,
+                             cam_shutdown, das_machines, cam_shutdown_vms)
 from .mount_helpers import mount_status, mount_park
 
 CAMERA_SHUTDOWN_TIMEOUT = 10
@@ -93,20 +90,6 @@ class ShutdownCameras(TelescopeAction):
 
         return tasks
 
-    def __shutdown_camera(self, camera_id):
-        """Disables a given camera"""
-        try:
-            with cameras[camera_id].connect(timeout=CAMERA_SHUTDOWN_TIMEOUT) as cam:
-                cam.shutdown()
-        except Pyro4.errors.CommunicationError:
-            log.error(self.log_name, 'Failed to communicate with camera ' + camera_id)
-            return False
-        except Exception:
-            log.error(self.log_name, 'Unknown error with camera ' + camera_id)
-            traceback.print_exc(file=sys.stdout)
-            return False
-        return True
-
     def run_thread(self):
         """Thread that runs the hardware actions"""
         if self._start_date is not None and Time.now() < self._start_date:
@@ -147,7 +130,7 @@ class ShutdownCameras(TelescopeAction):
         if not self.aborted:
             self._progress = Progress.ShuttingDown
             for camera_id in self._camera_ids:
-                self.__shutdown_camera(camera_id)
+                cam_shutdown(self.log_name, camera_id)
 
             cam_switch_power(self.log_name, self._camera_ids, False)
 

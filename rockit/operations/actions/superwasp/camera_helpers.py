@@ -287,6 +287,20 @@ def cam_stop(log_name, camera_id, timeout=-1):
     return False
 
 
+def cam_shutdown(log_name, camera_id):
+    """Disables a given camera"""
+    try:
+        with cameras[camera_id].connect() as cam:
+            cam.shutdown()
+            return True
+    except Pyro4.errors.CommunicationError:
+        log.error(log_name, 'Failed to communicate with camera ' + camera_id)
+    except Exception:
+        log.error(log_name, 'Unknown error with camera ' + camera_id)
+        traceback.print_exc(file=sys.stdout)
+    return False
+
+
 def cam_switch_power(log_name, camera_ids, enabled):
     switched = False
     try:
