@@ -25,7 +25,7 @@ from skyfield.sgp4lib import EarthSatellite
 from skyfield.api import Loader, Topos
 from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from .mount_helpers import mount_track_tle, mount_stop, mount_status
+from .mount_helpers import mount_track_tle, mount_stop, mount_status, mount_park
 from .camera_helpers import cameras, cam_take_images, cam_stop
 from .pipeline_helpers import configure_pipeline
 from .schema_helpers import pipeline_science_schema, camera_science_schema
@@ -190,7 +190,12 @@ class ObserveTLETracking(TelescopeAction):
             if self.aborted:
                 self.status = TelescopeActionStatus.Complete
             else:
-                self.status = TelescopeActionStatus.Error
+                # If we're able to park the telescope then its likely just a problem with the TLE.
+                # Skip this action instead of erroring the entire queue
+                if mount_park(self.log_name):
+                    self.status = TelescopeActionStatus.Complete
+                else:
+                    self.status = TelescopeActionStatus.Error
             return
 
         # Start science observations
