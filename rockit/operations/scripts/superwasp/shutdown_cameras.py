@@ -20,7 +20,7 @@ import argparse
 import sys
 import time
 from rockit.camera.qhy import CameraStatus, CommandStatus, CoolerMode
-from rockit.common import daemons, TFmt
+from rockit.common import daemons, print
 from rockit.operations.actions.superwasp.camera_helpers import cameras, das_machines
 
 
@@ -69,13 +69,13 @@ def shutdown_cameras(prefix, args):
 
                 time.sleep(5)
         except Exception:
-            print(f'\r\033[KWarming cameras {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KWarming cameras [b][red]FAILED[/red][/b]')
             return
 
         if failed:
-            print(f'\r\033[KWarming cameras {TFmt.Bold}{TFmt.Yellow}FAILED{TFmt.Clear}')
+            print(f'\r\033[KWarming cameras [b][yellow]FAILED[/yellow][/b]')
         else:
-            print(f'\r\033[KWarming cameras {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+            print(f'\r\033[KWarming cameras [b][green]COMPLETE[/green][/b]')
 
         sys.stdout.write('Shutting down cameras...')
         sys.stdout.flush()
@@ -94,9 +94,9 @@ def shutdown_cameras(prefix, args):
                 continue
 
         if failed:
-            print(f'\r\033[KShutting down cameras {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KShutting down cameras [b][red]FAILED[/red][/b]')
         else:
-            print(f'\r\033[KShutting down cameras {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+            print(f'\r\033[KShutting down cameras [b][green]COMPLETE[/green][/b]')
 
         sys.stdout.write('Shutting down camera VMs...')
         sys.stdout.flush()
@@ -112,9 +112,9 @@ def shutdown_cameras(prefix, args):
                     continue
 
         if failed:
-            print(f'\r\033[KShutting down camera VMs {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KShutting down camera VMs [b][red]FAILED[/red][/b]')
         else:
-            print(f'\r\033[KShutting down camera VMs {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+            print(f'\r\033[KShutting down camera VMs [b][green]COMPLETE[/green][/b]')
 
     finally:
         # Restore cursor

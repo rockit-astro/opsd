@@ -20,7 +20,7 @@ import argparse
 import sys
 import time
 from rockit.camera.qhy import CommandStatus
-from rockit.common import daemons, TFmt
+from rockit.common import daemons, print
 from rockit.operations.actions.superwasp.camera_helpers import cameras, das_machines
 
 
@@ -50,10 +50,10 @@ def initialize_cameras(prefix, args):
                     continue
 
         if failed:
-            print(f'\r\033[KInitializing camera VMs {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KInitializing camera VMs [b][red]FAILED[/red][/b]')
             return
         else:
-            print(f'\r\033[KInitializing camera VMs {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+            print(f'\r\033[KInitializing camera VMs [b][green]COMPLETE[/green][/b]')
 
         sys.stdout.write('Powering on cameras...')
         sys.stdout.flush()
@@ -66,14 +66,14 @@ def initialize_cameras(prefix, args):
                         switched = True
                         powerd.switch(camera_id, True)
         except Exception:
-            print(f'\r\033[KPowering on cameras {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KPowering on cameras [b][red]FAILED[/red][/b]')
             return
 
         # Wait for cameras to power up
         if switched:
             time.sleep(5)
 
-        print(f'\r\033[KPowering on cameras {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+        print(f'\r\033[KPowering on cameras [b][green]COMPLETE[/green][/b]')
 
         class Failed(Exception):
             pass
@@ -91,9 +91,9 @@ def initialize_cameras(prefix, args):
                     if cam.configure({}, quiet=True) != CommandStatus.Succeeded:
                         raise Failed
 
-                    print(f'\r\033[KInitializing {camera_id} {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+                    print(f'\r\033[KInitializing {camera_id} [b][green]COMPLETE[/green][/b]')
             except Exception:
-                print(f'\r\033[KInitializing {camera_id} {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+                print(f'\r\033[KInitializing {camera_id} [b][red]FAILED[/red][/b]')
 
     finally:
         # Restore cursor

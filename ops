@@ -24,7 +24,7 @@ import sys
 import Pyro4
 from astropy.time import Time
 import astropy.units as u
-from rockit.common import TFmt
+from rockit.common import print
 from rockit.operations import (
     Config,
     CommandStatus,
@@ -132,8 +132,8 @@ def validate_schedule_json(config, args):
         return -1
 
     valid, errors = validate_schedule(schedule, config, False)
-    status = TFmt.Green + 'PASSED' if valid else TFmt.Red + 'FAILED'
-    print('Validation ' + TFmt.Bold + status + TFmt.Clear)
+    status = '[green]PASSED[/green]' if valid else '[red]FAILED[/red]'
+    print(f'Validation [b]{status}[/b]')
     for e in errors:
         print('   ' + e)
 
@@ -168,8 +168,6 @@ def schedule(config, args):
     with config.daemon.connect() as ops:
         return ops.schedule_observations(schedule)
 
-    return -1
-
 
 def print_status(config, _):
     """Prints the latest ops data in machine-readable form"""
@@ -181,11 +179,11 @@ def print_status(config, _):
         return 1
 
     env_date = Time.strptime(status['environment']['updated'], '%Y-%m-%dT%H:%M:%SZ')
-    env_status = 'Environment status at ' + TFmt.Bold + env_date.strftime('%H:%M:%S') + TFmt.Clear + ': '
+    env_status = 'Environment status at [b]' + env_date.strftime('%H:%M:%S') + '[/b]: '
     if status['environment']['safe']:
-        env_status += TFmt.Bold + TFmt.Green + 'SAFE' + TFmt.Clear
+        env_status += '[b][green]SAFE[/green][/b]'
     else:
-        env_status += TFmt.Bold + TFmt.Red + 'UNSAFE' + TFmt.Clear
+        env_status += '[b][red]UNSAFE[/red][/b]'
     print(env_status)
 
     for label, sensors in status['environment']['conditions'].items():
@@ -197,7 +195,7 @@ def print_status(config, _):
     if 'dome' in status:
         dome = status['dome']
         dome_date = Time.strptime(dome['status_updated'], '%Y-%m-%dT%H:%M:%SZ')
-        print('Dome status at ' + TFmt.Bold + dome_date.strftime('%H:%M:%S') + TFmt.Clear + ':')
+        print('Dome status at [b]' + dome_date.strftime('%H:%M:%S') + '[/b]:')
 
         dome_mode = '    Control: ' + OperationsMode.label(dome['mode'], True)
         if dome['mode'] != dome['requested_mode']:
@@ -205,26 +203,25 @@ def print_status(config, _):
         print(dome_mode)
 
         if dome['mode'] == OperationsMode.Automatic:
-            open_str = TFmt.Yellow + 'Not Scheduled'
+            open_str = close_str = '[yellow]Not Scheduled[/yellow]'
             if dome['requested_open_date']:
                 open_str = dome['requested_open_date']
-            print('     Opening: ' + TFmt.Bold + open_str + TFmt.Clear)
+            print(f'     Opening: [b]{open_str}[/b]')
 
-            close_str = TFmt.Yellow + 'Not Scheduled'
             if dome['requested_close_date']:
                 close_str = dome['requested_close_date']
-            print('     Closing: ' + TFmt.Bold + close_str + TFmt.Clear)
+            print(f'     Closing: [b]{close_str}[/b]')
 
             dome_status = '    Shutters: ' + DomeStatus.label(dome['status'], True)
             print(dome_status)
 
     tel = status['telescope']
     tel_date = Time.strptime(tel['status_updated'], '%Y-%m-%dT%H:%M:%SZ')
-    print('Telescope status at ' + TFmt.Bold + tel_date.strftime('%H:%M:%S') + TFmt.Clear + ':')
+    print(f'Telescope status at [b]' + tel_date.strftime('%H:%M:%S') + '[/b]:')
 
     tel_mode = '    Control: ' + OperationsMode.label(tel['mode'], True)
     if tel['mode'] != tel['requested_mode']:
-        tel_mode += ' (' + TFmt.Bold + OperationsMode.label(tel['requested_mode'], True) + ' queued)'
+        tel_mode += ' (' + OperationsMode.label(tel['requested_mode'], True) + ' queued)'
 
     print(tel_mode)
 
@@ -232,7 +229,7 @@ def print_status(config, _):
         if 'schedule' in tel and tel['schedule']:
             print('   Schedule:')
             for action in tel['schedule']:
-                label = f'      {TFmt.Bold}{action["name"]}{TFmt.Clear}'
+                label = f'      [b]{action["name"]}[/b]'
                 if action['tasks']:
                     label += ':'
                 print(label)
@@ -243,7 +240,7 @@ def print_status(config, _):
                     else:
                         print(f'       - {task}')
         else:
-            print(f'   Schedule: {TFmt.Bold}{TFmt.Yellow}EMPTY{TFmt.Clear}')
+            print(f'   Schedule: [b][yellow]EMPTY[/yellow][/b]')
 
     return 0
 
@@ -267,7 +264,7 @@ def script(config, args):
         config.scripts[args[0]](f'{SCRIPT_NAME} script {args[0]}', args[1:])
         return 0
 
-    print(f'usage: {SCRIPT_NAME} script <script name> [script arguments]')
+    print(f'usage: {SCRIPT_NAME} script <script name> \\[script arguments]')
     print()
 
     max_name_length = max(len(name) for name in config.scripts)
