@@ -103,6 +103,10 @@ def camera_science_schema():
                 'minimum': 1,
                 'maximum': 9600,
             },
+            'bin_method': {
+                'type': 'string',
+                'enum': ['sum', 'mean']
+            },
             'temperature': {
                 'type': 'number',
                 'minimum': -20,

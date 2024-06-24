@@ -90,7 +90,7 @@ def camera_science_schema(camera_id):
                     'type': 'number',
                     'minimum': -30,
                     'maximum': 30,
-                },
+                }
             }
         }
     # cam1
@@ -134,6 +134,10 @@ def camera_science_schema(camera_id):
                 'type': 'number',
                 'minimum': 1,
                 'maximum': 9600,
+            },
+            'bin_method': {
+                'type': 'string',
+                'enum': ['sum', 'mean']
             },
             'temperature': {
                 'type': 'number',
