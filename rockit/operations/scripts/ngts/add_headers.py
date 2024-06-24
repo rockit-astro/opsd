@@ -24,7 +24,7 @@ import os
 import sys
 from astropy.io import fits
 import sep
-from rockit.common import TFmt
+from rockit.common import print
 
 
 def add_headers(prefix, args):
@@ -63,7 +63,7 @@ def add_headers(prefix, args):
             padding = ' ' * (1 + max_filename_length - len(os.path.basename(path)))
 
             if not os.access(path, os.R_OK | os.W_OK):
-                print(f'Processing {filename}...{padding}{TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear} (not writable)')
+                print(f'Processing {filename}...{padding}[b][red]FAILED[/red][/b] (not writable)')
                 continue
 
             sys.stdout.write(f'Processing {filename}...{padding}')
@@ -71,9 +71,9 @@ def add_headers(prefix, args):
 
             try:
                 process_image(path, pipeline_workerd, pipeline_config, 'hfd' in args.type, 'wcs' in args.type)
-                print(f'\r\033[KProcessing {filename}...{padding}{TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+                print(f'\r\033[KProcessing {filename}...{padding}[b][green]COMPLETE[/green][/b]')
             except Exception:
-                print(f'\r\033[KProcessing {filename}...{padding}{TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+                print(f'\r\033[KProcessing {filename}...{padding}[b][red]FAILED[/red][/b]')
                 sys.stdout.flush()
 
     finally:

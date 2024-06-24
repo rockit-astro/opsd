@@ -22,7 +22,7 @@ from rockit.ashdome import CommandStatus as DomeCommandStatus
 from rockit.atlas import CommandStatus as FocusCommandStatus
 from rockit.camera.qhy import CommandStatus as CamCommandStatus, CameraStatus, CoolerMode
 from rockit.cfw import CommandStatus as FilterCommandStatus
-from rockit.common import daemons, TFmt
+from rockit.common import daemons, print
 from rockit.meade import CommandStatus as TelCommandStatus, TelescopeState
 from rockit.operations import DomeStatus, OperationsMode
 from .helpers import power_switches
@@ -66,9 +66,9 @@ def shutdown(prefix, args):
 
                 if status.get('telescope', {}).get('mode', OperationsMode.Error) != OperationsMode.Manual:
                     ops.tel_control(False)
-                print(f'\r\033[KStopping operations...        {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+                print(f'\r\033[KStopping operations...        [b][green]COMPLETE[/green][/b]')
         except Exception:
-            print(f'\r\033[KStopping operations...        {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KStopping operations...        [b][red]FAILED[/red][/b]')
             return
 
         sys.stdout.write('Warming camera...')
@@ -89,10 +89,10 @@ def shutdown(prefix, args):
                         warm = status['state'] == CameraStatus.Disabled or \
                                status['cooler_mode'] == CoolerMode.Warm
         except Exception:
-            print(f'\r\033[KWarming camera...             {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KWarming camera...             [b][red]FAILED[/red][/b]')
             return
 
-        print(f'\r\033[KWarming camera...             {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+        print(f'\r\033[KWarming camera...             [b][green]COMPLETE[/green][/b]')
 
         sys.stdout.write('Shutting down camera...')
         sys.stdout.flush()
@@ -102,9 +102,9 @@ def shutdown(prefix, args):
                 if status not in [CamCommandStatus.Succeeded, CamCommandStatus.CameraNotInitialized]:
                     raise Failed
 
-                print(f'\r\033[KShutting down camera...       {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+                print(f'\r\033[KShutting down camera...       [b][green]COMPLETE[/green][/b]')
         except Exception:
-            print(f'\r\033[KShutting down camera...       {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KShutting down camera...       [b][red]FAILED[/red][/b]')
             return
 
         sys.stdout.write('Shutting down filter wheel...')
@@ -115,9 +115,9 @@ def shutdown(prefix, args):
                 if status not in [FilterCommandStatus.Succeeded, FilterCommandStatus.NotConnected]:
                     raise Failed
 
-                print(f'\r\033[KShutting down filter wheel... {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+                print(f'\r\033[KShutting down filter wheel... [b][green]COMPLETE[/green][/b]')
         except Exception:
-            print(f'\r\033[KShutting down filter wheel... {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KShutting down filter wheel... [b][red]FAILED[/red][/b]')
             return
 
         sys.stdout.write('Shutting down focuser...')
@@ -128,9 +128,9 @@ def shutdown(prefix, args):
                 if status not in [FocusCommandStatus.Succeeded, FocusCommandStatus.NotConnected]:
                     raise Failed
 
-                print(f'\r\033[KShutting down focuser...      {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+                print(f'\r\033[KShutting down focuser...      [b][green]COMPLETE[/green][/b]')
         except Exception:
-            print(f'\r\033[KShutting down focuser...      {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KShutting down focuser...      [b][red]FAILED[/red][/b]')
 
         sys.stdout.write('Shutting down telescope...')
         sys.stdout.flush()
@@ -150,9 +150,9 @@ def shutdown(prefix, args):
 
                 # Wait for the mount to store its position (and make an audible beep) before powering off!
                 time.sleep(30)
-                print(f'\r\033[KShutting down telescope...    {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+                print(f'\r\033[KShutting down telescope...    [b][green]COMPLETE[/green][/b]')
         except Exception:
-            print(f'\r\033[KShutting down telescope...    {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KShutting down telescope...    [b][red]FAILED[/red][/b]')
             return
 
         sys.stdout.write('Shutting down dome...')
@@ -168,9 +168,9 @@ def shutdown(prefix, args):
                 if status not in [DomeCommandStatus.Succeeded, DomeCommandStatus.NotConnected]:
                     raise Failed
 
-            print(f'\r\033[KShutting down dome...         {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+            print(f'\r\033[KShutting down dome...         [b][green]COMPLETE[/green][/b]')
         except Exception:
-            print(f'\r\033[KShutting down dome...         {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KShutting down dome...         [b][red]FAILED[/red][/b]')
             return
 
         sys.stdout.write('Shutting down power...')
@@ -182,10 +182,10 @@ def shutdown(prefix, args):
                     if status.get(p, False):
                         power.switch(p, False)
         except Exception:
-            print(f'\r\033[KShutting down power...        {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KShutting down power...        [b][red]FAILED[/red][/b]')
             return
 
-        print(f'\r\033[KShutting down power...        {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+        print(f'\r\033[KShutting down power...        [b][green]COMPLETE[/green][/b]')
 
     finally:
         # Restore cursor

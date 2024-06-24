@@ -16,8 +16,6 @@
 
 """Constants and status codes used by opsd"""
 
-from rockit.common import TFmt
-
 
 class CommandStatus:
     """Numeric return codes"""
@@ -75,10 +73,10 @@ class OperationsMode:
         2: 'MANUAL'
     }
 
-    _formats = {
-        0: TFmt.Red + TFmt.Bold,
-        1: TFmt.Green + TFmt.Bold,
-        2: TFmt.Yellow + TFmt.Bold
+    _colors = {
+        0: 'red',
+        1: 'green',
+        2: 'yellow'
     }
 
     @classmethod
@@ -88,9 +86,9 @@ class OperationsMode:
         Set formatting=true to enable terminal formatting characters
         """
         if formatting:
-            if status in cls._formats and status in cls._formats:
-                return cls._formats[status] + cls._labels[status] + TFmt.Clear
-            return TFmt.Red + TFmt.Bold + 'UNKNOWN' + TFmt.Clear
+            if status in cls._labels and status in cls._colors:
+                return f'[b][{cls._colors[status]}]{cls._labels[status]}[/{cls._colors[status]}][/b]'
+            return '[b][red]UNKNOWN[/red][/b]'
 
         if status in cls._labels:
             return cls._labels[status]
@@ -108,11 +106,11 @@ class DomeStatus:
         3: 'TIMEOUT'
     }
 
-    _formats = {
-        0: TFmt.Red + TFmt.Bold,
-        1: TFmt.Green + TFmt.Bold,
-        2: TFmt.Yellow + TFmt.Bold,
-        3: TFmt.Red + TFmt.Bold
+    _colors = {
+        0: 'red',
+        1: 'green',
+        2: 'yellow',
+        3: 'red'
     }
 
     @classmethod
@@ -122,9 +120,9 @@ class DomeStatus:
         Set formatting=true to enable terminal formatting characters
         """
         if formatting:
-            if status in cls._formats and status in cls._formats:
-                return cls._formats[status] + cls._labels[status] + TFmt.Clear
-            return TFmt.Red + TFmt.Bold + 'UNKNOWN' + TFmt.Clear
+            if status in cls._labels and status in cls._colors:
+                return f'[b][{cls._colors[status]}]{cls._labels[status]}[/{cls._colors[status]}][/b]'
+            return '[b][red]UNKNOWN[/red][/b]'
 
         if status in cls._labels:
             return cls._labels[status]
@@ -135,15 +133,15 @@ class ConditionStatus:
     """Represents the status of a condition type"""
     Unknown, Safe, Warning, Unsafe = range(4)
 
-    _formats = {
-        0: TFmt.Cyan + TFmt.Bold,
-        1: TFmt.Green + TFmt.Bold,
-        2: TFmt.Yellow + TFmt.Bold,
-        3: TFmt.Red + TFmt.Bold,
+    _colors = {
+        0: 'cyan',
+        1: 'green',
+        2: 'yellow',
+        3: 'red',
     }
 
     @classmethod
     def format_label(cls, status, label):
-        if status in cls._formats and status in cls._formats:
-            return cls._formats[status] + label + TFmt.Clear
+        if status in cls._colors:
+            return f'[b][{cls._colors[status]}]{label}[/{cls._colors[status]}][/b]'
         return label

@@ -22,7 +22,7 @@ from rockit.ashdome import CommandStatus as DomeCommandStatus
 from rockit.atlas import CommandStatus as FocusCommandStatus
 from rockit.camera.qhy import CommandStatus as CamCommandStatus
 from rockit.cfw import CommandStatus as FilterCommandStatus
-from rockit.common import daemons, TFmt
+from rockit.common import daemons, print
 from rockit.meade import CommandStatus as TelCommandStatus
 from rockit.pipeline import CommandStatus as PipelineCommandStatus
 from .helpers import power_switches
@@ -48,9 +48,9 @@ def startup(prefix, args):
                 if status != PipelineCommandStatus.Succeeded:
                     raise Failed
 
-                print(f'\r\033[KInitializing pipeline...     {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+                print(f'\r\033[KInitializing pipeline...     [b][green]COMPLETE[/green][/b]')
         except Exception:
-            print(f'\r\033[KInitializing pipeline...     {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KInitializing pipeline...     [b][red]FAILED[/red][/b]')
             return
 
         sys.stdout.write('Initializing dome...')
@@ -62,9 +62,9 @@ def startup(prefix, args):
                 if status not in [DomeCommandStatus.Succeeded, DomeCommandStatus.NotDisconnected]:
                     raise Failed
 
-                print(f'\r\033[KInitializing dome...         {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+                print(f'\r\033[KInitializing dome...         [b][green]COMPLETE[/green][/b]')
         except Exception:
-            print(f'\r\033[KInitializing dome...         {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KInitializing dome...         [b][red]FAILED[/red][/b]')
             return
 
         sys.stdout.write('Initializing power...')
@@ -78,14 +78,14 @@ def startup(prefix, args):
                         power.switch(p, True)
                         switched = True
         except Exception:
-            print(f'\r\033[KInitializing power...        {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KInitializing power...        [b][red]FAILED[/red][/b]')
             return
 
         # Wait for cameras to power up
         if switched:
             time.sleep(5)
 
-        print(f'\r\033[KInitializing power...        {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+        print(f'\r\033[KInitializing power...        [b][green]COMPLETE[/green][/b]')
 
         sys.stdout.write('Initializing camera...')
         sys.stdout.flush()
@@ -99,9 +99,9 @@ def startup(prefix, args):
                 if cam.configure({}, quiet=True) != CamCommandStatus.Succeeded:
                     raise Failed
 
-                print(f'\r\033[KInitializing camera...       {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+                print(f'\r\033[KInitializing camera...       [b][green]COMPLETE[/green][/b]')
         except Exception:
-            print(f'\r\033[KInitializing camera...       {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KInitializing camera...       [b][red]FAILED[/red][/b]')
             return
 
         sys.stdout.write('Initializing filter wheel...')
@@ -113,9 +113,9 @@ def startup(prefix, args):
                 if status not in [FilterCommandStatus.Succeeded, FilterCommandStatus.NotDisconnected]:
                     raise Failed
 
-                print(f'\r\033[KInitializing filter wheel... {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+                print(f'\r\033[KInitializing filter wheel... [b][green]COMPLETE[/green][/b]')
         except Exception:
-            print(f'\r\033[KInitializing filter wheel... {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KInitializing filter wheel... [b][red]FAILED[/red][/b]')
             return
 
         sys.stdout.write('Initializing focuser...')
@@ -127,9 +127,9 @@ def startup(prefix, args):
                 if status not in [FocusCommandStatus.Succeeded, FocusCommandStatus.NotDisconnected]:
                     raise Failed
 
-                print(f'\r\033[KInitializing focuser...      {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+                print(f'\r\033[KInitializing focuser...      [b][green]COMPLETE[/green][/b]')
         except Exception:
-            print(f'\r\033[KInitializing focuser...      {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KInitializing focuser...      [b][red]FAILED[/red][/b]')
             return
 
         sys.stdout.write('Initializing telescope...')
@@ -141,9 +141,9 @@ def startup(prefix, args):
                 if status not in [TelCommandStatus.Succeeded, TelCommandStatus.NotDisconnected]:
                     raise Failed
 
-                print(f'\r\033[KInitializing telescope...    {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+                print(f'\r\033[KInitializing telescope...    [b][green]COMPLETE[/green][/b]')
         except Exception:
-            print(f'\r\033[KInitializing telescope...    {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KInitializing telescope...    [b][red]FAILED[/red][/b]')
             return
 
         sys.stdout.write('Homing dome...')
@@ -155,9 +155,9 @@ def startup(prefix, args):
                 if status != DomeCommandStatus.Succeeded:
                     raise Failed
 
-                print(f'\r\033[KHoming dome...               {TFmt.Bold}{TFmt.Green}COMPLETE{TFmt.Clear}')
+                print(f'\r\033[KHoming dome...               [b][green]COMPLETE[/green][/b]')
         except Exception:
-            print(f'\r\033[KHoming dome...               {TFmt.Bold}{TFmt.Red}FAILED{TFmt.Clear}')
+            print(f'\r\033[KHoming dome...               [b][red]FAILED[/red][/b]')
             return
 
     finally:
