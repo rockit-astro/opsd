@@ -1,8 +1,8 @@
 {
   "daemon": "onemetre_operations",
   "log_name": "opsd@onemetre",
-  "control_machines": ["OneMetreDome", "OneMetreTCS"],
-  "pipeline_machines": ["OneMetreTCS"],
+  "control_machines": ["OneMetreDome", "OneMetreTCS", "OneMetreDAS"],
+  "pipeline_machines": ["OneMetreDAS"],
   "actions_module": "rockit.operations.actions.onemetre",
   "scripts_module": "rockit.operations.scripts.onemetre",
   "loop_delay": 10,
