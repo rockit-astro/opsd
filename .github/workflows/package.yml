@@ -14,9 +14,8 @@ jobs:
       - name: Install Dependencies
         run: |
           cat /etc/redhat-release
-          dnf -y install 'dnf-command(config-manager)'
-          dnf -y config-manager --set-enabled crb
-          dnf -y install epel-release
+          yum -y install epel-release
+          /usr/bin/crb enable
           yum -y install git rpm-build rpm-sign rsync make python3-rpm-macros pyproject-rpm-macros python3-devel python3-tomli systemd-rpm-macros python3-wheel
 
       - name: Clone Repository
