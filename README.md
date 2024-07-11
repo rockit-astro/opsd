@@ -11,11 +11,11 @@ A configuration file is specified when launching the server, and the `ops` front
 
 ```python
 {
-  "daemon": "superwasp_operations", # Run the server as this daemon. Daemon types are registered in `rockit.common.daemons`.
-  "log_name": "opsd@superwasp", # The name to use when writing messages to the observatory log.
-  "control_machines": ["SWASPTCS"], # Machine names that are allowed to control (rather than just query) state. Machine names are registered in `rockit.common.IP`.
-  "pipeline_machines": ["SWASPTCS"], # Machine names that are allowed to notify pipelined frame metadata.
-  "actions_module": "rockit.operations.actions.superwasp", # Python module to search for actions for this telescope.
+  "daemon": "sting_operations", # Run the server as this daemon. Daemon types are registered in `rockit.common.daemons`.
+  "log_name": "opsd@sting", # The name to use when writing messages to the observatory log.
+  "control_machines": ["STINGTCS"], # Machine names that are allowed to control (rather than just query) state. Machine names are registered in `rockit.common.IP`.
+  "pipeline_machines": ["STINGTCS"], # Machine names that are allowed to notify pipelined frame metadata.
+  "actions_module": "rockit.operations.actions.sting", # Python module to search for actions for this telescope.
   "loop_delay": 10, # Delay between loop updates.
   "site_latitude": "28.76022 N", # Telescope latitude used for scheduling calculations.
   "site_longitude": "17.87928 W", # Telescope longitude used for scheduling calculations.
@@ -108,6 +108,6 @@ sudo systemctl restart opsd@<config>
 
 The ops server and client can be run directly from a git clone:
 ```
-./opsd superwasp.json
-OPSD_CONFIG_PATH=superwasp.json ./ops status
+./opsd sting.json
+OPSD_CONFIG_PATH=sting.json ./ops status
 ```

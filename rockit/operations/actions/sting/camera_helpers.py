@@ -29,15 +29,15 @@ from rockit.camera.qhy import CameraStatus, CommandStatus as CamCommandStatus
 from rockit.common import daemons, log
 
 cameras = {
-    'cam1': daemons.superwasp_cam1,
-    'cam2': daemons.superwasp_cam2,
-    'cam3': daemons.superwasp_cam3,
-    'cam4': daemons.superwasp_cam4,
+    'cam1': daemons.sting_cam1,
+    'cam2': daemons.sting_cam2,
+    'cam3': daemons.sting_cam3,
+    'cam4': daemons.sting_cam4,
 }
 
 das_machines = {
-    'das1': {'daemon': daemons.superwasp_camvirt_das1, 'cameras': ['cam1', 'cam2']},
-    'das2': {'daemon': daemons.superwasp_camvirt_das2, 'cameras': ['cam3', 'cam4']},
+    'das1': {'daemon': daemons.sting_camvirt_das1, 'cameras': ['cam1', 'cam2']},
+    'das2': {'daemon': daemons.sting_camvirt_das2, 'cameras': ['cam3', 'cam4']},
 }
 
 CAMERA_POWERON_DELAY = 5
@@ -304,7 +304,7 @@ def cam_shutdown(log_name, camera_id):
 def cam_switch_power(log_name, camera_ids, enabled):
     switched = False
     try:
-        with daemons.superwasp_power.connect() as powerd:
+        with daemons.sting_power.connect() as powerd:
             p = powerd.last_measurement()
             for camera_id in camera_ids:
                 if camera_id in p and p[camera_id] != enabled:
@@ -334,7 +334,7 @@ def cam_cycle_power(log_name, camera_id):
         return False
 
     try:
-        with daemons.superwasp_power.connect() as power:
+        with daemons.sting_power.connect() as power:
             power.switch(camera_id, False)
             time.sleep(10)
             power.switch(camera_id, True)

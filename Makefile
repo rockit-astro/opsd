@@ -22,7 +22,7 @@ all:
 	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope onemetre" --define "_label W1m" -ba python3-rockit-operations.spec
 	mv build/noarch/*.rpm .
 	rm -rf build/*
-	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope superwasp" --define "_label SuperWASP" -ba python3-rockit-operations.spec
+	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope sting" --define "_label STING" -ba python3-rockit-operations.spec
 	mv build/noarch/*.rpm .
 	rm -rf build/*
 	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope warwick" --define "_label Windmill Hill" -ba python3-rockit-operations.spec

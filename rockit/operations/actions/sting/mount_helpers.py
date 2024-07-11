@@ -31,7 +31,7 @@ SLEW_TIMEOUT = 60
 def mount_init(log_name):
     """Initialize the mount"""
     try:
-        with daemons.superwasp_telescope.connect() as lmountd:
+        with daemons.sting_telescope.connect() as lmountd:
             return lmountd.initialize() in [TelCommandStatus.Succeeded, TelCommandStatus.MountNotDisabled]
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with mount daemon')
@@ -45,7 +45,7 @@ def mount_init(log_name):
 def mount_home(log_name):
     """Homes the mount"""
     try:
-        with daemons.superwasp_telescope.connect(timeout=HOME_TIMEOUT) as lmountd:
+        with daemons.sting_telescope.connect(timeout=HOME_TIMEOUT) as lmountd:
             return lmountd.find_homes() == TelCommandStatus.Succeeded
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with mount daemon')
@@ -59,7 +59,7 @@ def mount_home(log_name):
 def mount_status(log_name):
     """Returns the mount status dict or None on error"""
     try:
-        with daemons.superwasp_telescope.connect() as lmountd:
+        with daemons.sting_telescope.connect() as lmountd:
             return lmountd.report_status()
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with mount daemon')
@@ -73,7 +73,7 @@ def mount_status(log_name):
 def mount_slew_radec(log_name, ra, dec, tracking, timeout=SLEW_TIMEOUT):
     """Slew the mount to a given RA, Dec"""
     try:
-        with daemons.superwasp_telescope.connect(timeout=timeout) as lmountd:
+        with daemons.sting_telescope.connect(timeout=timeout) as lmountd:
             if tracking:
                 status = lmountd.track_radec(ra, dec)
             else:
@@ -95,7 +95,7 @@ def mount_slew_radec(log_name, ra, dec, tracking, timeout=SLEW_TIMEOUT):
 def mount_offset_radec(log_name, ra, dec, timeout=SLEW_TIMEOUT):
     """Offset the mount by a given RA, Dec"""
     try:
-        with daemons.superwasp_telescope.connect(timeout=timeout) as lmountd:
+        with daemons.sting_telescope.connect(timeout=timeout) as lmountd:
             status = lmountd.offset_radec(ra, dec)
             if status != TelCommandStatus.Succeeded:
                 log.error(log_name, 'Failed to offset mount position')
@@ -113,7 +113,7 @@ def mount_offset_radec(log_name, ra, dec, timeout=SLEW_TIMEOUT):
 def mount_slew_altaz(log_name, alt, az, tracking, timeout=SLEW_TIMEOUT):
     """Slew the mount to a given Alt, Az"""
     try:
-        with daemons.superwasp_telescope.connect(timeout=timeout) as lmountd:
+        with daemons.sting_telescope.connect(timeout=timeout) as lmountd:
             if tracking:
                 status = lmountd.track_altaz(alt, az)
             else:
@@ -135,7 +135,7 @@ def mount_slew_altaz(log_name, alt, az, tracking, timeout=SLEW_TIMEOUT):
 def mount_slew_hadec(log_name, ha, dec, timeout=SLEW_TIMEOUT):
     """Slew the mount to a given HA, Dec"""
     try:
-        with daemons.superwasp_telescope.connect(timeout=timeout) as lmountd:
+        with daemons.sting_telescope.connect(timeout=timeout) as lmountd:
             status = lmountd.slew_hadec(ha, dec)
             if status != TelCommandStatus.Succeeded:
                 log.error(log_name, 'Failed to slew mount')
@@ -153,7 +153,7 @@ def mount_slew_hadec(log_name, ha, dec, timeout=SLEW_TIMEOUT):
 def mount_track_tle(log_name, tle, timeout=SLEW_TIMEOUT):
     """Slew the mount to track a given TLE"""
     try:
-        with daemons.superwasp_telescope.connect(timeout=timeout) as lmountd:
+        with daemons.sting_telescope.connect(timeout=timeout) as lmountd:
             status = lmountd.track_tle(tle[0], tle[1], tle[2])
             if status != TelCommandStatus.Succeeded:
                 log.error(log_name, 'Failed to slew mount')
@@ -171,7 +171,7 @@ def mount_track_tle(log_name, tle, timeout=SLEW_TIMEOUT):
 def mount_stop(log_name):
     """Stop the mount tracking or movement"""
     try:
-        with daemons.superwasp_telescope.connect() as lmountd:
+        with daemons.sting_telescope.connect() as lmountd:
             lmountd.stop()
         return True
     except Pyro4.errors.CommunicationError:
@@ -186,7 +186,7 @@ def mount_stop(log_name):
 def mount_add_pointing_model_point(log_name, ra_j2000_deg, dec_j2000_deg):
     """Stop the mount tracking or movement"""
     try:
-        with daemons.superwasp_telescope.connect() as lmountd:
+        with daemons.sting_telescope.connect() as lmountd:
             lmountd.add_pointing_model_point(ra_j2000_deg, dec_j2000_deg)
         return True
     except Pyro4.errors.CommunicationError:
@@ -201,7 +201,7 @@ def mount_add_pointing_model_point(log_name, ra_j2000_deg, dec_j2000_deg):
 def mount_park(log_name):
     """Park the telescope in the stow position"""
     try:
-        with daemons.superwasp_telescope.connect(timeout=PARK_TIMEOUT) as lmountd:
+        with daemons.sting_telescope.connect(timeout=PARK_TIMEOUT) as lmountd:
             status = lmountd.park(PARK_POSITION)
             if status != TelCommandStatus.Succeeded:
                 log.error(log_name, 'Failed to park mount')

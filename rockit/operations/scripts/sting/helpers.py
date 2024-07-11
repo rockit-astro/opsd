@@ -34,7 +34,7 @@ def schedule_action(action):
     }
 
     try:
-        with daemons.superwasp_operations.connect() as ops:
+        with daemons.sting_operations.connect() as ops:
             ret = ops.schedule_observations(schedule)
     except Pyro4.errors.CommunicationError:
         ret = -101

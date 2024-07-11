@@ -26,7 +26,7 @@ from rockit.pipeline import CommandStatus as PipelineCommandStatus
 def pipeline_enable_archiving(log_name, camera_id, enabled):
     """Toggle archiving on or off for a given arm name"""
     try:
-        with daemons.superwasp_pipeline.connect() as pipeline:
+        with daemons.sting_pipeline.connect() as pipeline:
             return pipeline.set_archive(camera_id.upper(), enabled) == PipelineCommandStatus.Succeeded
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with pipeline daemon')
@@ -40,7 +40,7 @@ def pipeline_enable_archiving(log_name, camera_id, enabled):
 def configure_pipeline(log_name, config, quiet=False):
     """Update pipeline configuration"""
     try:
-        with daemons.superwasp_pipeline.connect() as pipeline:
+        with daemons.sting_pipeline.connect() as pipeline:
             return pipeline.configure(config, quiet=quiet) == PipelineCommandStatus.Succeeded
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with pipeline daemon')

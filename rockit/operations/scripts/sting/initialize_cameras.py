@@ -21,7 +21,7 @@ import sys
 import time
 from rockit.camera.qhy import CommandStatus
 from rockit.common import daemons, print
-from rockit.operations.actions.superwasp.camera_helpers import cameras, das_machines
+from rockit.operations.actions.sting.camera_helpers import cameras, das_machines
 
 
 def initialize_cameras(prefix, args):
@@ -59,7 +59,7 @@ def initialize_cameras(prefix, args):
         sys.stdout.flush()
         switched = False
         try:
-            with daemons.superwasp_power.connect() as powerd:
+            with daemons.sting_power.connect() as powerd:
                 p = powerd.last_measurement()
                 for camera_id in args.cameras:
                     if camera_id in p and not p[camera_id]:

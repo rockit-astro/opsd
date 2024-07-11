@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with rockit.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Interface to allow the dome controller to operate SuperWASP's roof"""
+"""Interface to allow the dome controller to operate the SuperWASP building's roof"""
 
 from rockit.operations.constants import DomeStatus
 from rockit.common import daemons, validation

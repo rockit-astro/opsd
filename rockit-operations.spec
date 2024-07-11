@@ -23,7 +23,7 @@ mkdir -p %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/clasp.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/halfmetre.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/onemetre.json %{buildroot}%{_sysconfdir}/opsd
-%{__install} %{_sourcedir}/config/superwasp.json %{buildroot}%{_sysconfdir}/opsd
+%{__install} %{_sourcedir}/config/sting.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/warwick.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/ngts.json %{buildroot}%{_sysconfdir}/opsd
 
@@ -80,15 +80,15 @@ Requires: python3-rockit-operations-onemetre
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/onemetre.json
 
-%package data-superwasp
-Summary: Operations data for SuperWASP telescope
+%package data-sting
+Summary: Operations data for the STING telescope
 Group:   Unspecified
-Requires: python3-rockit-operations-superwasp
-%description data-superwasp
+Requires: python3-rockit-operations-sting
+%description data-sting
 
-%files data-superwasp
+%files data-sting
 %defattr(0644,root,root,-)
-%{_sysconfdir}/opsd/superwasp.json
+%{_sysconfdir}/opsd/sting.json
 
 %package data-warwick
 Summary: Operations data for Windmill Hill observatory

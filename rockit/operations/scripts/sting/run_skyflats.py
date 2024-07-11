@@ -17,7 +17,7 @@
 """Script to queue a skyflats action"""
 
 import argparse
-from rockit.operations.actions.superwasp.camera_helpers import cameras
+from rockit.operations.actions.sting.camera_helpers import cameras
 from .helpers import schedule_action
 
 

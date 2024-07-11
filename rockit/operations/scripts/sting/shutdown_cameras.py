@@ -21,7 +21,7 @@ import sys
 import time
 from rockit.camera.qhy import CameraStatus, CommandStatus, CoolerMode
 from rockit.common import daemons, print
-from rockit.operations.actions.superwasp.camera_helpers import cameras, das_machines
+from rockit.operations.actions.sting.camera_helpers import cameras, das_machines
 
 
 def shutdown_cameras(prefix, args):
@@ -85,7 +85,7 @@ def shutdown_cameras(prefix, args):
                 with cameras[camera_id].connect() as cam:
                     cam.shutdown()
 
-                with daemons.superwasp_power.connect() as powerd:
+                with daemons.sting_power.connect() as powerd:
                     p = powerd.last_measurement()
                     if camera_id in p and p[camera_id]:
                         powerd.switch(camera_id, False)

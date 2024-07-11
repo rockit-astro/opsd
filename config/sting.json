@@ -1,10 +1,10 @@
 {
-  "daemon": "superwasp_operations",
-  "log_name": "opsd@superwasp",
-  "control_machines": ["SWASPTCS"],
-  "pipeline_machines": ["SWASPCameraVM1", "SWASPCameraVM2", "SWASPCameraVM3", "SWASPCameraVM4"],
-  "actions_module": "rockit.operations.actions.superwasp",
-  "scripts_module": "rockit.operations.scripts.superwasp",
+  "daemon": "sting_operations",
+  "log_name": "opsd@sting",
+  "control_machines": ["STINGTCS"],
+  "pipeline_machines": ["STINGCameraVM1", "STINGCameraVM2", "STINGCameraVM3", "STINGCameraVM4"],
+  "actions_module": "rockit.operations.actions.sting",
+  "scripts_module": "rockit.operations.scripts.sting",
   "loop_delay": 10,
   "site_latitude": "28.76022 N",
   "site_longitude": "17.87928 W",
@@ -12,7 +12,7 @@
   "sun_altitude_limit": 5,
   "dome": {
     "module": "rockit.operations.dome.astrohaven",
-    "daemon": "superwasp_dome",
+    "daemon": "sting_dome",
     "movement_timeout": 60,
     "heartbeat_timeout": 119
   },
@@ -104,7 +104,7 @@
         {
           "label": "Dome",
           "sensor": "clasp_domealert",
-          "parameter": "superwasp_humidity"
+          "parameter": "sting_humidity"
         }
       ]
     },
@@ -178,12 +178,12 @@
       "sensors": [
         {
           "label": "DAS1",
-          "sensor": "superwasp_diskspace_das1",
+          "sensor": "sting_diskspace_das1",
           "parameter": "data_fs_available_bytes"
         },
         {
           "label": "DAS2",
-          "sensor": "superwasp_diskspace_das2",
+          "sensor": "sting_diskspace_das2",
           "parameter": "data_fs_available_bytes"
         }
       ]
