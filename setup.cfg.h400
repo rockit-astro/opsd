@@ -1,0 +1,17 @@
+[metadata]
+name = rockit.operations.h400
+version = file: VERSION
+
+[options]
+packages =
+  rockit.operations.actions.h400
+  rockit.operations.scripts.h400
+  rockit.operations.dome.halfmetre
+
+install_requires =
+    rockit.camera.moravian
+    rockit.focuser.aaf5
+    rockit.mount.planewave
+    rockit.operations
+    rockit.pipeline
+    rockit.roof

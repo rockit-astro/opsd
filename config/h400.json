@@ -1,0 +1,190 @@
+{
+  "daemon": "halfmetre_operations",
+  "log_name": "opsd@halfmetre",
+  "control_machines": ["HalfMetreTCS"],
+  "pipeline_machines": ["HalfMetreTCS"],
+  "actions_module": "rockit.operations.actions.h400",
+  "scripts_module": "rockit.operations.scripts.h400",
+  "loop_delay": 10,
+  "site_latitude": "28.76022 N",
+  "site_longitude": "17.87928 W",
+  "site_elevation": 2350,
+  "sun_altitude_limit": 5,
+  "dome": {
+    "module": "rockit.operations.dome.halfmetre",
+    "daemon": "halfmetre_roof",
+    "open_timeout": 60,
+    "close_timeout": 120,
+    "heartbeat_timeout": 60,
+    "heartbeat_open_timeout": 60,
+    "heartbeat_close_timeout": 120
+  },
+  "environment_daemon": "observatory_environment",
+  "environment_conditions": [
+    {
+      "label": "Wind",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_vaisala",
+          "parameter": "wind_speed"
+        },
+        {
+          "label": "GOTO",
+          "sensor": "goto_vaisala",
+          "parameter": "wind_speed"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "wind_speed"
+        }
+      ]
+    },
+    {
+      "label": "Median Wind",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_vaisala",
+          "parameter": "median_wind_speed"
+        },
+        {
+          "label": "GOTO",
+          "sensor": "goto_vaisala",
+          "parameter": "median_wind_speed"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "median_wind_speed"
+        }
+      ]
+    },
+    {
+      "label": "Temperature",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_vaisala",
+          "parameter": "temperature"
+        },
+        {
+          "label": "GOTO",
+          "sensor": "goto_vaisala",
+          "parameter": "temperature"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "temperature"
+        }
+      ]
+    },
+    {
+      "label": "Humidity",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_vaisala",
+          "parameter": "relative_humidity"
+        },
+        {
+          "label": "GOTO",
+          "sensor": "goto_vaisala",
+          "parameter": "relative_humidity"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "relative_humidity"
+        }
+      ]
+    },
+    {
+      "label": "Dew Point",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "w1m_vaisala",
+          "parameter": "dew_point_delta"
+        },
+        {
+          "label": "GOTO",
+          "sensor": "goto_vaisala",
+          "parameter": "dew_point_delta"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "dew_point_delta"
+        }
+      ]
+    },
+    {
+      "label": "Rain",
+      "sensors": [
+        {
+          "label": "W1m",
+          "sensor": "rain",
+          "parameter": "unsafe_boards"
+        },
+        {
+          "label": "0.5m",
+          "sensor": "halfmetre_vaisala",
+          "parameter": "rg11_unsafe"
+        }
+      ]
+    },
+    {
+      "label": "Network",
+      "sensors": [
+        {
+          "label": "Google",
+          "sensor": "netping",
+          "parameter": "google"
+        },
+        {
+          "label": "NGTSHead",
+          "sensor": "netping",
+          "parameter": "ngtshead"
+        }
+      ]
+    },
+    {
+      "label": "Disk Space",
+      "sensors": [
+        {
+          "label": "TCS",
+          "sensor": "halfmetre_diskspace",
+          "parameter": "data_fs_available_bytes"
+        }
+      ]
+    },
+    {
+      "label": "UPS Battery",
+      "sensors": [
+        {
+          "label": "UPS1",
+          "sensor": "halfmetre_power",
+          "parameter": "ups1_battery_remaining"
+        },
+        {
+          "label": "UPS2",
+          "sensor": "halfmetre_power",
+          "parameter": "ups2_battery_remaining"
+        }
+      ]
+    },
+    {
+      "label": "Sun",
+      "sensors": [
+        {
+          "label": "Altitude",
+          "sensor": "ephem",
+          "parameter": "sun_alt"
+        }
+      ]
+    }
+  ]
+}

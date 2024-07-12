@@ -26,6 +26,7 @@ mkdir -p %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/sting.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/warwick.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/ngts.json %{buildroot}%{_sysconfdir}/opsd
+%{__install} %{_sourcedir}/config/h400.json %{buildroot}%{_sysconfdir}/opsd
 
 %package server
 Summary:  Operations server
@@ -109,5 +110,15 @@ Requires: python3-rockit-operations-ngts
 %files data-ngts
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/ngts.json
+
+%package data-h400
+Summary: Operations data for the H400 test telescope
+Group:   Unspecified
+Requires: python3-rockit-operations-h400
+%description data-h400
+
+%files data-h400
+%defattr(0644,root,root,-)
+%{_sysconfdir}/opsd/h400.json
 
 %changelog
