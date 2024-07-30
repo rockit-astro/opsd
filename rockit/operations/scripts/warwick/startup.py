@@ -23,7 +23,7 @@ from rockit.atlas import CommandStatus as FocusCommandStatus
 from rockit.camera.qhy import CommandStatus as CamCommandStatus
 from rockit.cfw import CommandStatus as FilterCommandStatus
 from rockit.common import daemons, print
-from rockit.meade import CommandStatus as TelCommandStatus
+from rockit.mount.meade import CommandStatus as TelCommandStatus
 from rockit.pipeline import CommandStatus as PipelineCommandStatus
 from .helpers import power_switches
 

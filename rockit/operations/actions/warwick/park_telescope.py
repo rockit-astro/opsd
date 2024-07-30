@@ -17,7 +17,7 @@
 """Telescope action to park the telescope"""
 
 from rockit.common import validation
-from rockit.meade import TelescopeState
+from rockit.mount.meade import TelescopeState
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .mount_helpers import mount_status, mount_stop, mount_park
 
