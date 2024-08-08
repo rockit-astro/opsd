@@ -27,6 +27,7 @@ mkdir -p %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/warwick.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/ngts.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/h400.json %{buildroot}%{_sysconfdir}/opsd
+%{__install} %{_sourcedir}/config/portable.json %{buildroot}%{_sysconfdir}/opsd
 
 %package server
 Summary:  Operations server
@@ -120,5 +121,15 @@ Requires: python3-rockit-operations-h400
 %files data-h400
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/h400.json
+
+%package data-portable
+Summary: Operations data for the portable telescope
+Group:   Unspecified
+Requires: python3-rockit-operations-portable
+%description data-portable
+
+%files data-portable
+%defattr(0644,root,root,-)
+%{_sysconfdir}/opsd/portable.json
 
 %changelog
