@@ -1,0 +1,15 @@
+[metadata]
+name = rockit.operations.portable
+version = file: VERSION
+
+[options]
+packages =
+  rockit.operations.actions.portable
+  rockit.operations.scripts.portable
+
+install_requires =
+    rockit.camera.qhy
+    rockit.mount.planewave
+    rockit.focuser
+    rockit.operations
+    rockit.pipeline
