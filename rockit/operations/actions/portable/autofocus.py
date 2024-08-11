@@ -145,7 +145,7 @@ class AutoFocus(TelescopeAction):
                 return
 
             if ra is None:
-                ra = ms['lst'] + 15 * u.deg
+                ra = ms['lst'] + 15
 
             if dec is None:
                 dec = ms['site_latitude']
