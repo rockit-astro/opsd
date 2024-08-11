@@ -41,7 +41,7 @@ def run_skyflats(prefix, args):
         }
     }
 
-    for camera_id in cameras:
+    for camera_id in args.cameras:
         action[camera_id] = {}
 
     schedule_action(action)
