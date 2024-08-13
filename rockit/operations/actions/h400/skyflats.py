@@ -48,7 +48,7 @@ class SkyFlats(TelescopeAction):
     {
         "type": "SkyFlats",
         "evening": true,
-        "filters": ['L', 'B'] # Optional: defaults will be used if not specified
+        "filters": ['L', 'g', 'r', 'i', 'I'] # Optional: defaults will be used if not specified
         "count": 21,
         "camera": { # Optional: defaults will be used if not specified
             "window": [1, 14208, 1, 10656] # Optional: defaults to full-frame

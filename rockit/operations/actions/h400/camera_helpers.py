@@ -30,7 +30,7 @@ from rockit.common import daemons, log
 
 FILTER_TIMEOUT = 30
 
-filters = ['L', 'B']
+filters = ['L', 'g', 'r', 'i', 'I']
 
 
 def cam_set_filter(log_name, filter_name, quiet=False, timeout=FILTER_TIMEOUT):
