@@ -20,7 +20,8 @@ import sys
 import traceback
 import Pyro4
 from rockit.common import daemons, log
-from rockit.mount.talon import CommandStatus as TelCommandStatus, FocusState
+from rockit.mount.talon import CommandStatus as TelCommandStatus, FocusState as TelFocusState
+from rockit.focuser.c863 import CommandStatus as RedCommandStatus, FocuserStatus as RedFocusState
 
 FOCUS_TIMEOUT = 300
 
@@ -37,7 +38,7 @@ def focus_get(log_name, camera_id):
                     log.error(log_name, 'Telescope is not initialized')
                     return None
 
-                if status['telescope_focus_state'] != FocusState.Ready or 'telescope_focus_um' not in status:
+                if status['telescope_focus_state'] != TelFocusState.Ready or 'telescope_focus_um' not in status:
                     log.error(log_name, 'Telescope focuser is not ready')
                     return None
 
@@ -49,8 +50,27 @@ def focus_get(log_name, camera_id):
             log.error(log_name, 'Unknown error while querying telescope focus')
             traceback.print_exc(file=sys.stdout)
             return None
+    elif camera_id == 'red':
+        try:
+            with daemons.onemetre_red_focuser.connect() as focusd:
+                status = focusd.report_status()
+                if status is None or status.get('status', RedFocusState.Disabled) == RedFocusState.Disabled:
+                    log.error(log_name, 'Focuser is not initialized')
+                    return None
 
-    # TODO: Support red focuser
+                if status['status'] not in [RedFocusState.Idle, RedFocusState.Moving]:
+                    log.error(log_name, 'Focuser is not ready')
+                    return None
+
+                return status['current_steps']
+        except Pyro4.errors.CommunicationError:
+            log.error(log_name, 'Failed to communicate with focuser daemon')
+            return None
+        except Exception:
+            log.error(log_name, 'Unknown error while querying red focus')
+            traceback.print_exc(file=sys.stdout)
+            return None
+
     return None
 
 
@@ -70,6 +90,18 @@ def focus_set(log_name, camera_id, position, timeout=FOCUS_TIMEOUT):
             log.error(log_name, 'Unknown error while setting telescope focus')
             traceback.print_exc(file=sys.stdout)
             return False
-
-    # TODO: Support red focuser
+    elif camera_id == "red":
+        try:
+            with daemons.onemetre_red_focuser.connect(timeout=timeout) as focusd:
+                if focusd.move(position, relative=False) != RedCommandStatus.Succeeded:
+                    log.error(log_name, 'Failed to set focuser position')
+                    return False
+                return True
+        except Pyro4.errors.CommunicationError:
+            log.error(log_name, 'Failed to communicate with focuser daemon')
+            return False
+        except Exception:
+            log.error(log_name, 'Unknown error while setting focus')
+            traceback.print_exc(file=sys.stdout)
+            return False
     return False

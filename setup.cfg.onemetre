@@ -12,6 +12,7 @@ install_requires =
     rockit.camera.andor2
     rockit.covers
     rockit.dome
+    rockit.focuser.c863
     rockit.operations
     rockit.pipeline
     rockit.mount.talon

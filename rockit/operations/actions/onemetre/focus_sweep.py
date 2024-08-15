@@ -260,11 +260,17 @@ class FocusSweep(TelescopeAction):
             return
 
         with self._wait_condition:
-            if 'MEDHFD' in headers and 'HFDCNT' in headers and 'TELFOCUS' in headers:
+            if 'MEDHFD' in headers and 'HFDCNT' in headers:
                 print('got hfd', headers['MEDHFD'], 'from', headers['HFDCNT'], 'sources')
-                self._focus_measurements[headers['TELFOCUS']] = (headers['MEDHFD'], headers['HFDCNT'])
+                if self._camera_id == 'red' and 'REDFTARG' in headers:
+                    self._focus_measurements[headers['REDFTARG']] = (headers['MEDHFD'], headers['HFDCNT'])
+                elif self._camera_id == 'blue' and 'TELFOCUS' in headers:
+                    self._focus_measurements[headers['TELFOCUS']] = (headers['MEDHFD'], headers['HFDCNT'])
+                else:
+                    print('Missing focus headers for', self._camera_id)
+                    print(headers)
             else:
-                print('Headers are missing MEDHFD, HFDCNT, or TELFOCUS')
+                print('Headers are missing MEDHFD, HFDCNT')
                 print(headers)
 
             self._wait_condition.notify_all()
@@ -289,14 +295,10 @@ class FocusSweep(TelescopeAction):
                     'maximum': 90
                 },
                 'min': {
-                    'type': 'integer',
-                    'minimum': -5000,
-                    'maximum': 5000
+                    'type': 'integer'
                 },
                 'max': {
-                    'type': 'integer',
-                    'minimum': -5000,
-                    'maximum': 5000
+                    'type': 'integer'
                 },
                 'step': {
                     'type': 'integer',

@@ -187,8 +187,8 @@ class AutoFocus(TelescopeAction):
 
                 # Step inwards until we are well defocused on the inside edge of the v curve
                 failed = False
+                log.info(self.log_name, 'AutoFocus: Searching for position on v-curve')
                 while True:
-                    log.info(self.log_name, 'AutoFocus: Searching for position on v-curve')
                     current_focus -= camera_config['focus_step_size']
                     if not focus_set(self.log_name, camera_id, current_focus):
                         failed = True
@@ -445,12 +445,11 @@ CONFIG = {
     },
     'red': {
         # The slope (in hfd / step) on the inside edge of the v-curve
-        # TODO: Calibrate this!
-        'inside_focus_slope': -0.020337,
+        'inside_focus_slope': -0.0006526110711109228,
 
         # The HFD value where the two v-curve edges cross
         # This is a more convenient way of representing the position intercept difference
-        'crossing_hfd': 1.1,
+        'crossing_hfd': 0.943,
 
         # Threshold HFD that is used to filter junk
         # Real stars should never be smaller than this
@@ -470,7 +469,7 @@ CONFIG = {
         'fine_measure_repeats': 7,
 
         # Number of focuser steps to move when searching for the target HFD
-        'focus_step_size': 100,
+        'focus_step_size': 500,
 
         # Number of seconds to add to the exposure time to account for readout + object detection
         # Consider the frame lost if this is exceeded
