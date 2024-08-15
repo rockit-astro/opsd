@@ -19,18 +19,23 @@
 # pylint: disable=too-many-return-statements
 # pylint: disable=too-many-branches
 
+from collections import deque
 import re
+import sys
 import threading
 import time
+import traceback
+
 from astropy import wcs
+from astropy.wcs.utils import local_partial_pixel_derivatives
 from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.time import Time
 import astropy.units as u
 import numpy as np
 from scipy import conjugate, polyfit
 from scipy.fftpack import fft, ifft
-from rockit.common import log, validation
 from rockit.camera.andor2 import CameraStatus
+from rockit.common import log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cameras, cam_status, cam_take_images, cam_stop
 from .mount_helpers import mount_slew_radec, mount_offset_radec, mount_stop
@@ -44,14 +49,22 @@ MAX_PROCESSING_TIME = 25 * u.s
 # Amount of time to wait before retrying if an image acquisition generates an error
 CAM_ERROR_RETRY_DELAY = 10 * u.s
 
-# Expected time to converge on target field
-SETUP_DELAY = 15 * u.s
-
 # Exposure time to use when taking a WCS field image
 WCS_EXPOSURE_TIME = 5 * u.s
 
 # Amount of time to wait between camera status checks while observing
 CAM_CHECK_STATUS_DELAY = 10 * u.s
+
+
+# Track a limited history of shifts so we can handle outliers
+GUIDE_BUFFER_REJECTION_SIGMA = 10
+GUIDE_BUFFER_LENGTH = 20
+
+# Shifts larger than this are automatically rejected without touching the guide buffer
+GUIDE_MAX_PIXEL_ERROR = 100
+
+# PID loop coefficients
+GUIDE_PID = [0.75, 0.02, 0.0]
 
 
 class Progress:
@@ -66,20 +79,31 @@ class ObserveTimeSeries(TelescopeAction):
 
         self._start_date = Time(config['start'])
         self._end_date = Time(config['end'])
-        self._guide_camera = config['guide_camera']
         self._progress = Progress.Waiting
 
         self._wcs_status = WCSStatus.Inactive
         self._wcs = None
         self._wcs_field_center = None
+        self._wcs_derivatives = None
 
         self._observation_status = ObservationStatus.PositionLost
+        self._guide_camera = config['guide_camera']
         self._is_guiding = False
+        self._guide_reference_expcount = None
+        self._guide_filename = None
         self._guide_profiles = None
+        self._guide_accumulated_ra = 0
+        self._guide_accumulated_dec = 0
+        self._guide_last_updated = None
 
         self._cameras = {}
         for camera_id in cameras:
             self._cameras[camera_id] = CameraWrapper(camera_id, self.config.get(camera_id, None), self.log_name)
+
+        self._guide_buff_x = deque(maxlen=GUIDE_BUFFER_LENGTH)
+        self._guide_buff_y = deque(maxlen=GUIDE_BUFFER_LENGTH)
+        self._guide_pid_x = PIDController(*GUIDE_PID)
+        self._guide_pid_y = PIDController(*GUIDE_PID)
 
     def task_labels(self):
         """Returns list of tasks to be displayed in the schedule table"""
@@ -107,7 +131,11 @@ class ObserveTimeSeries(TelescopeAction):
         # Point to the requested location
         acquire_start = Time.now()
         print('ObserveTimeSeries: slewing to target field')
-        if not mount_slew_radec(self.log_name, self.config['ra'], self.config['dec'], True, open_covers=True):
+        blind_offset_dra = self.config.get('blind_offset_dra', 0)
+        blind_offset_ddec = self.config.get('blind_offset_ddec', 0)
+        acquisition_ra = self.config['ra'] + blind_offset_dra
+        acquisition_dec = self.config['dec'] + blind_offset_ddec
+        if not mount_slew_radec(self.log_name, acquisition_ra, acquisition_dec, True, open_covers=True):
             return ObservationStatus.Error
 
         # Take a frame to solve field center
@@ -129,7 +157,7 @@ class ObserveTimeSeries(TelescopeAction):
 
         # Converge on requested position
         attempt = 1
-        target = SkyCoord(self.config['ra'], self.config['dec'], unit=u.degree, frame='icrs')
+        target = SkyCoord(ra=acquisition_ra, dec=acquisition_dec, unit=u.degree, frame='icrs')
         while not self.aborted and self.dome_is_open:
             # Wait for telescope position to settle before taking first image
             time.sleep(5)
@@ -190,9 +218,19 @@ class ObserveTimeSeries(TelescopeAction):
                   f'{offset_dec.to_value(u.arcsecond):.1f}')
 
             # Close enough!
-            if offset_ra < 5 * u.arcsecond and offset_dec < 5 * u.arcsecond:
+            # TODO: Unhardcode the pointing threshold
+            if abs(offset_ra) < 5 * u.arcsecond and abs(offset_dec) < 5 * u.arcsecond:
                 dt = (Time.now() - acquire_start).to(u.s).value
                 print(f'ObserveTimeSeries: Acquired field in {dt:.1f} seconds')
+                if blind_offset_dra != 0 or blind_offset_ddec != 0:
+                    print('ObserveTimeSeries: Offsetting to target')
+                    if not mount_offset_radec(self.log_name, -blind_offset_dra, -blind_offset_ddec):
+                        return ObservationStatus.Error
+
+                    # Wait for the offset to complete
+                    # TODO: monitor tel status instead!
+                    time.sleep(10)
+
                 return ObservationStatus.OnTarget
 
             # Offset telescope
@@ -208,6 +246,7 @@ class ObserveTimeSeries(TelescopeAction):
         return ObservationStatus.Error
 
     def __wait_for_dome(self):
+        self._progress = Progress.Waiting
         while True:
             with self._wait_condition:
                 if Time.now() > self._end_date or self.aborted:
@@ -223,6 +262,8 @@ class ObserveTimeSeries(TelescopeAction):
         pipeline_config = self.config['pipeline'].copy()
         pipeline_config['guide'] = self._guide_camera.upper()
         pipeline_config['type'] = 'SCIENCE'
+        if 'archive' not in pipeline_config:
+            pipeline_config['archive'] = [camera_id.upper() for camera_id in self._cameras]
 
         if not configure_pipeline(self.log_name, pipeline_config):
             return ObservationStatus.Error
@@ -267,8 +308,8 @@ class ObserveTimeSeries(TelescopeAction):
             camera.stop()
 
         while True:
-            if all(c.status in [CameraWrapperStatus.Error, CameraWrapperStatus.Stopped]
-                    for c in self._cameras.values()):
+            if all(camera.status in [CameraWrapperStatus.Error, CameraWrapperStatus.Stopped]
+                   for camera in self._cameras.values()):
                 break
 
             for camera in self._cameras.values():
@@ -277,7 +318,7 @@ class ObserveTimeSeries(TelescopeAction):
             with self._wait_condition:
                 self._wait_condition.wait(CAM_CHECK_STATUS_DELAY.to_value(u.s))
 
-        print('ObserveField: cameras have stopped')
+        print('ObserveTimeSeries: camera has stopped')
         return return_status
 
     def run_thread(self):
@@ -338,10 +379,17 @@ class ObserveTimeSeries(TelescopeAction):
 
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
-        print('Got frame from', headers.get('CAMID', '').lower())
-        camera = self._cameras.get(headers.get('CAMID', '').lower(), None)
-        if camera is not None:
-            camera.received_frame(headers)
+        camera_id = headers.get('CAMID', '').lower()
+        if camera_id in self._cameras:
+            self._cameras[camera_id].received_frame(headers)
+        else:
+            print('ObserveTimeSeries: Ignoring unknown frame')
+
+        # The FILENAME header key is not available when received_guide_profile is called
+        # so we instead save the exposure count number to match against filename here
+        if self._guide_reference_expcount is not None and self._guide_filename is None:
+            if headers.get('EXPCNT', None) == self._guide_reference_expcount:
+                self._guide_filename = headers.get('FILENAME', None)
 
         with self._wait_condition:
             if self._wcs_status == WCSStatus.WaitingForWCS:
@@ -349,18 +397,12 @@ class ObserveTimeSeries(TelescopeAction):
                     r = re.search(r'^\[(\d+):(\d+),(\d+):(\d+)\]$', headers['IMAG-RGN']).groups()
                     cx = (int(r[0]) - 1 + int(r[1])) / 2
                     cy = (int(r[2]) - 1 + int(r[3])) / 2
-                    location = EarthLocation(
-                        lat=headers['SITELAT'],
-                        lon=headers['SITELONG'],
-                        height=headers['SITEELEV'])
+                    location = EarthLocation(lat=headers['SITELAT'], lon=headers['SITELONG'], height=headers['SITEELEV'])
                     wcs_time = Time(headers['DATE-OBS'], location=location) + 0.5 * headers['EXPTIME'] * u.s
                     self._wcs = wcs.WCS(headers)
                     ra, dec = self._wcs.all_pix2world(cx, cy, 0)
-                    self._wcs_field_center = SkyCoord(
-                        ra=ra * u.deg,
-                        dec=dec * u.deg,
-                        frame='icrs',
-                        obstime=wcs_time)
+                    self._wcs_field_center = SkyCoord(ra=ra * u.deg, dec=dec * u.deg, frame='icrs', obstime=wcs_time)
+                    self._wcs_derivatives = local_partial_pixel_derivatives(self._wcs, cx, cy)
                     self._wcs_status = WCSStatus.WCSComplete
                 else:
                     self._wcs_status = WCSStatus.WCSFailed
@@ -370,29 +412,158 @@ class ObserveTimeSeries(TelescopeAction):
 
     def received_guide_profile(self, headers, profile_x, profile_y):
         """Notification called when a guide profile has been calculated by the data pipeline"""
-        camera = headers.get('CAMID', '').lower()
-        if camera != self._guide_camera or not self._is_guiding:
-            return
+        if not self._is_guiding:
+            return None
 
         if self._guide_profiles is None:
             print('ObserveTimeSeries: set reference guide profiles')
+            self._guide_reference_expcount = headers.get('EXPCNT', None)
             self._guide_profiles = profile_x, profile_y
-            return
+            self._guide_accumulated_ra = 0
+            self._guide_accumulated_dec = 0
+            return None
 
-        # Measure image offset
-        dx = cross_correlate(profile_x, self._guide_profiles[0])
-        dy = cross_correlate(profile_y, self._guide_profiles[1])
+        # Status flags:
+        #    0x01: Image started exposing before the last guide correction was applied
+        #    0x02: Pixel offset is larger than the maximum allowed value
+        #    0x04: Pixel offset is more than 10 sigma away from the previous offset history
+        #    0x08: Mount offset failed
+        # A value of 0 means that the correction was valid and applied
+        guide_flags = 0
 
-        # TODO: Use WCS matrix to convert pixel offsets to sky offsets
-        print(f'ObserveTimeSeries: measured guide offsets {dx:.2f} {dy:.2f} px')
+        if self._guide_filename:
+            guide_headers = [{
+                "keyword": "AGREFIMG",
+                "value": self._guide_filename,
+                "comment": "filename of autoguider reference image"
+            }]
+        else:
+            guide_headers = [{
+                "keyword": "COMMENT",
+                "value": " AGREFIMG not available",
+            }]
 
-        # Stop science observations and reacquire using WCS if we are too far off target
-        # TODO: Do this in arcseconds
-        if abs(dx) > 100 or abs(dy) > 100:
+        try:
+            # Measure image offset
+            dx = cross_correlate(profile_x, self._guide_profiles[0])
+            dy = cross_correlate(profile_y, self._guide_profiles[1])
+            print(f'ObserveField: measured guide offsets {dx:.2f} {dy:.2f} px')
+
+            guide_headers.append({
+                "keyword": "AG_ERRX",
+                "value": round(dx, 2),
+                "comment": "[px] autoguider measured x-axis offset"
+            })
+
+            guide_headers.append({
+                "keyword": "AG_ERRY",
+                "value": round(dy, 2),
+                "comment": "[px] autoguider measured y-axis offset"
+            })
+
+            guide_date = headers.get('DATE-OBS', None)
+
+            if self._guide_last_updated and guide_date and Time(guide_date) < self._guide_last_updated:
+                print(f'ObserveTimeSeries: {guide_date} < last offset date ({self._guide_last_updated.isot})')
+                print('ObserveTimeSeries: Skipping this correction')
+                guide_flags += 0x01
+                return None
+
+            # Ignore suspiciously big shifts
+            if abs(dx) > GUIDE_MAX_PIXEL_ERROR or abs(dy) > GUIDE_MAX_PIXEL_ERROR:
+                print(f'ObserveTimeSeries: Offset larger than max allowed pixel shift: x: {dx} y:{dy}')
+                print('ObserveTimeSeries: Skipping this correction')
+                guide_flags += 0x02
+                return None
+
+            # Store the pre-pid values in the buffer
+            self._guide_buff_x.append(dx)
+            self._guide_buff_y.append(dx)
+
+            # Ignore shifts that are inconsistent with previous shifts,
+            # but only after we have collected enough measurements to trust the stats
+            if len(self._guide_buff_x) == self._guide_buff_x.maxlen:
+                if abs(dx) > GUIDE_BUFFER_REJECTION_SIGMA * np.std(self._guide_buff_x) or \
+                        abs(dy) > GUIDE_BUFFER_REJECTION_SIGMA * np.std(self._guide_buff_y):
+                    print(f'ObserveTimeSeries: Guide correction(s) too large x:{dx:.2f} y:{dy:.2f}')
+                    print('ObserveTimeSeries: Skipping this correction but adding to stats buffer')
+                    guide_flags += 0x04
+                    return None
+
+            # Generate the corrections from the PID controllers
+            corr_dx = -self._guide_pid_x.update(dx)
+            corr_dy = -self._guide_pid_y.update(dy)
+            print(f'ObserveTimeSeries: post-PID corrections {corr_dx:.2f} {corr_dy:.2f} px')
+
+            guide_headers.append({
+                "keyword": "AG_CORRX",
+                "value": round(corr_dx, 2),
+                "comment": "[px] autoguider x-axis correction"
+            })
+
+            guide_headers.append({
+                "keyword": "AG_CORRY",
+                "value": round(corr_dy, 2),
+                "comment": "[px] autoguider y-axis correction"
+            })
+
+            corr_dra = self._wcs_derivatives[0, 0] * corr_dx + self._wcs_derivatives[0, 1] * corr_dy
+            corr_ddec = self._wcs_derivatives[1, 0] * corr_dx + self._wcs_derivatives[1, 1] * corr_dy
+            print(f'ObserveTimeSeries: post-PID corrections {corr_dra * 3600:.2f} {corr_ddec * 3600:.2f} arcsec')
+
+            self._guide_accumulated_ra += corr_dra
+            self._guide_accumulated_dec += corr_ddec
+
+            guide_headers.append({
+                "keyword": "AG_CORRR",
+                "value": round(3600 * corr_dra, 2),
+                "comment": "[arcsec] autoguider ra correction"
+            })
+
+            guide_headers.append({
+                "keyword": "AG_CORRD",
+                "value": round(3600 * corr_ddec, 2),
+                "comment": "[arcsec] autoguider dec correction"
+            })
+
+            # TODO: reacquire using WCS (self._is_guiding = False) if we detect things have gone wrong
+
+            # Apply correction
+            if not mount_offset_radec(self.log_name, corr_dra, corr_ddec):
+                print('ObserveTimeSeries: Mount offset failed')
+                guide_flags += 0x08
+
+            self._guide_last_updated = Time.now()
+        except Exception:
+            traceback.print_exc(file=sys.stdout)
             self._is_guiding = False
-            return
+        finally:
+            if len(guide_headers) == 3:
+                for key in ['AG_CORRX', 'AG_CORRY', 'AG_CORRR', 'AG_CORRD']:
+                    guide_headers.append({
+                        "keyword": "COMMENT",
+                        "value": f" {key} not available",
+                    })
 
-        # TODO: Apply guide offset
+            guide_headers.append({
+                "keyword": "AG_DELTR",
+                "value": round(3600 * self._guide_accumulated_ra, 2),
+                "comment": "[arcsec] autoguider accumulated ra correction"
+            })
+
+            guide_headers.append({
+                "keyword": "AG_DELTD",
+                "value": round(3600 * self._guide_accumulated_dec, 2),
+                "comment": "[arcsec] autoguider accumulated dec correction"
+            })
+
+            guide_headers.append({
+                "keyword": "AG_FLAGS",
+                "value": guide_flags,
+                "comment": "autoguider status flags"
+            })
+
+            return guide_headers
 
     @classmethod
     def validate_config(cls, config_json):
@@ -421,11 +592,17 @@ class ObserveTimeSeries(TelescopeAction):
                     'minimum': -90,
                     'maximum': 90
                 },
+                'blind_offset_dra': {
+                    'type': 'number'
+                },
+                'blind_offset_ddec': {
+                    'type': 'number'
+                },
                 'guide_camera': {
                     'type': 'string',
                     'enum': list(cameras.keys())
                 },
-                'pipeline': pipeline_science_schema()
+                'pipeline': pipeline_science_schema(),
             }
         }
 
@@ -470,6 +647,31 @@ def cross_correlate(check, reference):
     if peak <= len(corr) / 2:
         return -(-coeffs[1] / (2 * coeffs[0]))
     return len(corr) + (coeffs[1] / (2 * coeffs[0]))
+
+
+class PIDController:
+    """
+    Simple PID controller that acts to minimise the given error term.
+    Note that this assumes that frames are coming in with an equal cadence,
+    which allows us to ignore the delta-time handling from the loop
+    """
+
+    def __init__(self, kp, ki, kd, max_integrated_error=500):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.max_integrated_error = max_integrated_error
+
+        self.previous_error = 0
+        self.integral = 0
+        self.derivative = 0
+
+    def update(self, error):
+        # Reduce the impact of "windup error" by bounding the integral within a maximum range
+        self.integral = max(min(self.integral + error, self.max_integrated_error), -self.max_integrated_error)
+        self.derivative = error - self.previous_error
+        self.previous_error = error
+        return self.kp * error + self.ki * self.integral + self.kd * (error - self.previous_error)
 
 
 class WCSStatus:
@@ -522,11 +724,10 @@ class CameraWrapper:
 
             # Something went wrong - see if we can recover
             self._start_attempts += 1
-            log.error(self._log_name, 'Failed to start exposures for camera ' + self.camera_id +
-                      f' (attempt {self._start_attempts} of 5)')
+            log.error(self._log_name, f'Failed to start {self.camera_id} exposures (attempt {self._start_attempts} of 5)')
 
             if self._start_attempts >= 5:
-                log.error(self._log_name, 'Too many start attempts: aborting')
+                log.error(self._log_name, f'Too many {self.camera_id} start attempts: aborting')
                 self.status = CameraWrapperStatus.Error
                 return
 
@@ -548,17 +749,17 @@ class CameraWrapper:
 
         # Lost communication with camera daemon, this is assumed to be unrecoverable
         if not status:
-            log.error(self._log_name, 'Lost communication with camera ' + self.camera_id)
+            log.error(self._log_name, f'Lost communication with {self.camera_id} camera')
             self.status = CameraWrapperStatus.Error
             return
 
         # Camera may be idle if the pipeline blocked for too long
-        if status is CameraStatus.Idle:
-            log.warning(self._log_name, 'Recovering idle camera ' + self.camera_id)
+        if status == CameraStatus.Idle:
+            log.warning(self._log_name, f'Recovering idle {self.camera_id} camera')
             self.status = CameraWrapperStatus.Idle
             self.update()
             return
 
         # Try stopping the camera and see if we can recover on the next update loop
-        log.warning(self._log_name, f'Camera has timed out in state {CameraStatus.label(status)}, stopping camera')
+        log.warning(self._log_name, f'Camera {self.camera_id} has timed out in state {CameraStatus.label(status)}, stopping camera')
         cam_stop(self._log_name, self.camera_id)
