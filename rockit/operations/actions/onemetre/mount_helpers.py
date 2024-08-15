@@ -32,6 +32,7 @@ INIT_TIMEOUT = 30
 HOME_TIMEOUT = 300
 SLEW_TIMEOUT = 60
 
+
 def mount_status(log_name):
     """Returns the telescope status dict or None on error"""
     try:
@@ -58,6 +59,7 @@ def mount_init(log_name):
         log.error(log_name, 'Unknown error while initializing telescope')
         traceback.print_exc(file=sys.stdout)
         return False
+
 
 def tel_home(log_name):
     """Homes the telescope"""
