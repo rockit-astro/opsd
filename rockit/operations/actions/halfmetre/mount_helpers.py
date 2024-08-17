@@ -23,7 +23,7 @@ from rockit.common import daemons, log
 from rockit.mount.planewave import CommandStatus as TelCommandStatus
 
 PARK_POSITION = 'stow'
-PARK_TIMEOUT = 30
+PARK_TIMEOUT = 60
 HOME_TIMEOUT = 60
 SLEW_TIMEOUT = 60
 
