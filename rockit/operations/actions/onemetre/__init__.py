@@ -20,4 +20,5 @@ from .autofocus import AutoFocus
 from .focus_sweep import FocusSweep
 from .observe_time_series import ObserveTimeSeries
 from .park_telescope import ParkTelescope
+from .pointing_mesh_pointing import PointingMeshPointing
 from .skyflats import SkyFlats
