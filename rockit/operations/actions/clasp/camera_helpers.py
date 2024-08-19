@@ -46,6 +46,8 @@ das_machines = {
 }
 
 CAMERA_POWERON_DELAY = 5
+CAMERA_INIT_TIMEOUT = 60
+CAMERA_VM_TIMEOUT = 300
 
 COMMAND_SUCCESS = {
     'cam1': QHYCommandStatus.Succeeded,
@@ -199,7 +201,7 @@ def cam_stop(log_name, camera_id, timeout=-1):
     return False
 
 
-def cam_initialize(log_name, camera_id, timeout=30):
+def cam_initialize(log_name, camera_id, timeout=CAMERA_INIT_TIMEOUT):
     """Initializes a given camera and resets configuration"""
     try:
         with cameras[camera_id].connect(timeout=timeout) as cam:
@@ -306,10 +308,10 @@ def cam_cycle_power(log_name, camera_id):
     return True
 
 
-def cam_initialize_vms(log_name, das_ids):
+def cam_initialize_vms(log_name, das_ids, timeout=CAMERA_VM_TIMEOUT):
     def boot_vms(daemon):
         try:
-            with daemon.connect(timeout=100) as camvirtd:
+            with daemon.connect(timeout=timeout) as camvirtd:
                 camvirtd.initialize()
         except Pyro4.errors.CommunicationError:
             log.error(log_name, 'Failed to communicate with camvirt daemon')
@@ -327,10 +329,10 @@ def cam_initialize_vms(log_name, das_ids):
         thread.join()
 
 
-def cam_shutdown_vms(log_name, das_ids):
+def cam_shutdown_vms(log_name, das_ids, timeout=CAMERA_VM_TIMEOUT):
     def shutdown_vms(daemon):
         try:
-            with daemon.connect(timeout=40) as camvirtd:
+            with daemon.connect(timeout=timeout) as camvirtd:
                 camvirtd.shutdown()
         except Pyro4.errors.CommunicationError:
             log.error(log_name, 'Failed to communicate with camvirt daemon')

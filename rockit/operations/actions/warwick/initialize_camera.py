@@ -27,7 +27,7 @@ from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cam_status
 
 CAMERA_POWERON_DELAY = 5
-CAMERA_INIT_TIMEOUT = 30
+CAMERA_INIT_TIMEOUT = 60
 
 # Interval (in seconds) to poll the camera for temperature lock
 CAMERA_CHECK_INTERVAL = 10
