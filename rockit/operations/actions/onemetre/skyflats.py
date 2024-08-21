@@ -310,6 +310,7 @@ class CameraWrapper:
             # Need to communicate directly with camera daemon
             # to adjust exposure without resetting other config
             with self._daemon.connect() as cam:
+                cam.set_exposure_delay(delay, quiet=True)
                 cam.set_exposure(exposure, quiet=True)
                 cam.start_sequence(1, quiet=True)
         except Pyro4.errors.CommunicationError:
