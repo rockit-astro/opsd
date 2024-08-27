@@ -16,13 +16,13 @@
 
 """Script to power on and initialize observatory hardware"""
 
-import sys
 import time
+from rich.progress import Progress, SpinnerColumn, TextColumn
 from rockit.ashdome import CommandStatus as DomeCommandStatus
 from rockit.atlas import CommandStatus as FocusCommandStatus
 from rockit.camera.qhy import CommandStatus as CamCommandStatus
 from rockit.cfw import CommandStatus as FilterCommandStatus
-from rockit.common import daemons, print
+from rockit.common import daemons
 from rockit.mount.meade import CommandStatus as TelCommandStatus
 from rockit.pipeline import CommandStatus as PipelineCommandStatus
 from .helpers import power_switches
@@ -35,12 +35,17 @@ class Failed(Exception):
 def startup(prefix, args):
     """power on and initialize instrumentation"""
 
-    try:
-        # Disable terminal cursor
-        sys.stdout.write('\033[?25l')
+    with Progress(SpinnerColumn(), TextColumn('{task.description}')) as progress:
 
-        sys.stdout.write('Initializing pipeline...')
-        sys.stdout.flush()
+        def task_completed(task_id):
+            progress.update(task_id, total=1, completed=1,
+                            description=f'{progress.tasks[task_id].description}[b][green]COMPLETE[/green][/b]')
+
+        def task_failed(task_id):
+            progress.update(task_id, total=1, completed=1,
+                            description=f'{progress.tasks[task_id].description}[b][red]FAILED[/red][/b]')
+
+        task = progress.add_task('Initializing pipeline...     ')
 
         try:
             with daemons.warwick_pipeline.connect() as pipeline:
@@ -48,13 +53,12 @@ def startup(prefix, args):
                 if status != PipelineCommandStatus.Succeeded:
                     raise Failed
 
-                print(f'\r\033[KInitializing pipeline...     [b][green]COMPLETE[/green][/b]')
+                task_completed(task)
         except Exception:
-            print(f'\r\033[KInitializing pipeline...     [b][red]FAILED[/red][/b]')
+            task_failed(task)
             return
 
-        sys.stdout.write('Initializing dome...')
-        sys.stdout.flush()
+        task = progress.add_task('Initializing dome...         ')
 
         try:
             with daemons.warwick_dome.connect(timeout=10) as dome:
@@ -62,13 +66,12 @@ def startup(prefix, args):
                 if status not in [DomeCommandStatus.Succeeded, DomeCommandStatus.NotDisconnected]:
                     raise Failed
 
-                print(f'\r\033[KInitializing dome...         [b][green]COMPLETE[/green][/b]')
+                task_completed(task)
         except Exception:
-            print(f'\r\033[KInitializing dome...         [b][red]FAILED[/red][/b]')
+            task_failed(task)
             return
 
-        sys.stdout.write('Initializing power...')
-        sys.stdout.flush()
+        task = progress.add_task('Initializing power...        ')
         switched = False
         try:
             with daemons.warwick_power.connect() as power:
@@ -78,17 +81,16 @@ def startup(prefix, args):
                         power.switch(p, True)
                         switched = True
         except Exception:
-            print(f'\r\033[KInitializing power...        [b][red]FAILED[/red][/b]')
+            task_failed(task)
             return
 
         # Wait for cameras to power up
         if switched:
             time.sleep(5)
 
-        print(f'\r\033[KInitializing power...        [b][green]COMPLETE[/green][/b]')
+        task_completed(task)
 
-        sys.stdout.write('Initializing camera...')
-        sys.stdout.flush()
+        task = progress.add_task('Initializing camera...       ')
 
         try:
             with daemons.warwick_camera.connect(timeout=10) as cam:
@@ -99,13 +101,12 @@ def startup(prefix, args):
                 if cam.configure({}, quiet=True) != CamCommandStatus.Succeeded:
                     raise Failed
 
-                print(f'\r\033[KInitializing camera...       [b][green]COMPLETE[/green][/b]')
+                task_completed(task)
         except Exception:
-            print(f'\r\033[KInitializing camera...       [b][red]FAILED[/red][/b]')
+            task_failed(task)
             return
 
-        sys.stdout.write('Initializing filter wheel...')
-        sys.stdout.flush()
+        task = progress.add_task('Initializing filter wheel... ')
 
         try:
             with daemons.warwick_filterwheel.connect(timeout=15) as filt:
@@ -113,13 +114,12 @@ def startup(prefix, args):
                 if status not in [FilterCommandStatus.Succeeded, FilterCommandStatus.NotDisconnected]:
                     raise Failed
 
-                print(f'\r\033[KInitializing filter wheel... [b][green]COMPLETE[/green][/b]')
+                task_completed(task)
         except Exception:
-            print(f'\r\033[KInitializing filter wheel... [b][red]FAILED[/red][/b]')
+            task_failed(task)
             return
 
-        sys.stdout.write('Initializing focuser...')
-        sys.stdout.flush()
+        task = progress.add_task('Initializing focuser...      ')
 
         try:
             with daemons.warwick_focuser.connect(timeout=15) as focuser:
@@ -127,13 +127,12 @@ def startup(prefix, args):
                 if status not in [FocusCommandStatus.Succeeded, FocusCommandStatus.NotDisconnected]:
                     raise Failed
 
-                print(f'\r\033[KInitializing focuser...      [b][green]COMPLETE[/green][/b]')
+                task_completed(task)
         except Exception:
-            print(f'\r\033[KInitializing focuser...      [b][red]FAILED[/red][/b]')
+            task_failed(task)
             return
 
-        sys.stdout.write('Initializing telescope...')
-        sys.stdout.flush()
+        task = progress.add_task('Initializing telescope...    ')
 
         try:
             with daemons.warwick_telescope.connect(timeout=125) as telescope:
@@ -141,13 +140,12 @@ def startup(prefix, args):
                 if status not in [TelCommandStatus.Succeeded, TelCommandStatus.NotDisconnected]:
                     raise Failed
 
-                print(f'\r\033[KInitializing telescope...    [b][green]COMPLETE[/green][/b]')
+                task_completed(task)
         except Exception:
-            print(f'\r\033[KInitializing telescope...    [b][red]FAILED[/red][/b]')
+            task_failed(task)
             return
 
-        sys.stdout.write('Homing dome...')
-        sys.stdout.flush()
+        task = progress.add_task('Homing dome...               ')
 
         try:
             with daemons.warwick_dome.connect(timeout=200) as dome:
@@ -155,11 +153,7 @@ def startup(prefix, args):
                 if status != DomeCommandStatus.Succeeded:
                     raise Failed
 
-                print(f'\r\033[KHoming dome...               [b][green]COMPLETE[/green][/b]')
+                task_completed(task)
         except Exception:
-            print(f'\r\033[KHoming dome...               [b][red]FAILED[/red][/b]')
+            task_failed(task)
             return
-
-    finally:
-        # Restore cursor
-        sys.stdout.write('\033[?25h')

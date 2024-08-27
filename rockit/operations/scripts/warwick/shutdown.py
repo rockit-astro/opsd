@@ -16,20 +16,19 @@
 
 """Script to shut down and power off observatory hardware"""
 
-import sys
+from datetime import datetime
 import time
-from astropy.time import Time
-import astropy.units as u
+from rich.progress import Progress, SpinnerColumn, TextColumn
 from rockit.ashdome import CommandStatus as DomeCommandStatus
 from rockit.atlas import CommandStatus as FocusCommandStatus
 from rockit.camera.qhy import CommandStatus as CamCommandStatus, CameraStatus, CoolerMode
 from rockit.cfw import CommandStatus as FilterCommandStatus
-from rockit.common import daemons, print
+from rockit.common import daemons
 from rockit.mount.meade import CommandStatus as TelCommandStatus, TelescopeState
 from rockit.operations import DomeStatus, OperationsMode
 from .helpers import power_switches
 
-CAMERA_WARMING_TIMEOUT = 300 * u.s
+CAMERA_WARMING_TIMEOUT = 300
 
 
 class Failed(Exception):
@@ -39,11 +38,17 @@ class Failed(Exception):
 def shutdown(prefix, args):
     """shut down and power off instrumentation"""
 
-    try:
-        # Disable terminal cursor
-        sys.stdout.write('\033[?25l')
-        sys.stdout.write('Stopping operations...')
-        sys.stdout.flush()
+    with Progress(SpinnerColumn(), TextColumn('{task.description}')) as progress:
+
+        def task_completed(task_id):
+            progress.update(task_id, total=1, completed=1,
+                            description=f'{progress.tasks[task_id].description}[b][green]COMPLETE[/green][/b]')
+
+        def task_failed(task_id):
+            progress.update(task_id, total=1, completed=1,
+                            description=f'{progress.tasks[task_id].description}[b][red]FAILED[/red][/b]')
+
+        task = progress.add_task('Stopping operations...        ')
 
         try:
             with daemons.warwick_operations.connect() as ops:
@@ -70,12 +75,12 @@ def shutdown(prefix, args):
 
                 if status.get('telescope', {}).get('mode', OperationsMode.Error) != OperationsMode.Manual:
                     ops.tel_control(False)
-                print(f'\r\033[KStopping operations...        [b][green]COMPLETE[/green][/b]')
-        except Exception:
-            print(f'\r\033[KStopping operations...        [b][red]FAILED[/red][/b]')
 
-        sys.stdout.write('Warming camera...')
-        sys.stdout.flush()
+                task_completed(task)
+        except Exception:
+            task_failed(task)
+
+        task = progress.add_task('Warming camera...             ')
         warm = False
 
         try:
@@ -86,63 +91,60 @@ def shutdown(prefix, args):
         except Exception:
             pass
 
-        timeout = Time.now() + CAMERA_WARMING_TIMEOUT
+        start = datetime.now()
         while not warm:
             time.sleep(5)
-            if Time.now() >= timeout:
-                print(f'\r\033[KWarming camera...             [b][red]FAILED[/red][/b]')
+            if (datetime.now() - start).total_seconds() > CAMERA_WARMING_TIMEOUT:
                 break
 
             try:
                 with daemons.warwick_camera.connect() as cam:
                     status = cam.report_status() or {}
                     if 'state' not in status or 'cooler_mode' not in status:
-                        print(f'\r\033[KWarming camera...             [b][green]COMPLETE[/green][/b]')
                         warm = True
                     else:
                         warm = status['state'] == CameraStatus.Disabled or \
                                status['cooler_mode'] == CoolerMode.Warm
             except Exception:
                 pass
+        if warm:
+            task_completed(task)
+        else:
+            task_failed(task)
 
-        sys.stdout.write('Shutting down camera...')
-        sys.stdout.flush()
+        task = progress.add_task('Shutting down camera...       ')
         try:
             with daemons.warwick_camera.connect() as cam:
                 status = cam.shutdown()
                 if status not in [CamCommandStatus.Succeeded, CamCommandStatus.CameraNotInitialized]:
                     raise Failed
-
-                print(f'\r\033[KShutting down camera...       [b][green]COMPLETE[/green][/b]')
+                task_completed(task)
         except Exception:
-            print(f'\r\033[KShutting down camera...       [b][red]FAILED[/red][/b]')
+            task_failed(task)
 
-        sys.stdout.write('Shutting down filter wheel...')
-        sys.stdout.flush()
+        task = progress.add_task('Shutting down filter wheel... ')
         try:
             with daemons.warwick_filterwheel.connect() as filt:
                 status = filt.shutdown()
                 if status not in [FilterCommandStatus.Succeeded, FilterCommandStatus.NotConnected]:
                     raise Failed
 
-                print(f'\r\033[KShutting down filter wheel... [b][green]COMPLETE[/green][/b]')
+                task_completed(task)
         except Exception:
-            print(f'\r\033[KShutting down filter wheel... [b][red]FAILED[/red][/b]')
+            task_failed(task)
 
-        sys.stdout.write('Shutting down focuser...')
-        sys.stdout.flush()
+        task = progress.add_task('Shutting down focuser...      ')
         try:
             with daemons.warwick_focuser.connect(timeout=15) as focuser:
                 status = focuser.shutdown()
                 if status not in [FocusCommandStatus.Succeeded, FocusCommandStatus.NotConnected]:
                     raise Failed
 
-                print(f'\r\033[KShutting down focuser...      [b][green]COMPLETE[/green][/b]')
+                task_completed(task)
         except Exception:
-            print(f'\r\033[KShutting down focuser...      [b][red]FAILED[/red][/b]')
+            task_failed(task)
 
-        sys.stdout.write('Shutting down telescope...')
-        sys.stdout.flush()
+        task = progress.add_task('Shutting down telescope...    ')
         try:
             with daemons.warwick_telescope.connect(timeout=120) as telescope:
                 status = telescope.report_status() or {}
@@ -159,12 +161,12 @@ def shutdown(prefix, args):
 
                 # Wait for the mount to store its position (and make an audible beep) before powering off!
                 time.sleep(30)
-                print(f'\r\033[KShutting down telescope...    [b][green]COMPLETE[/green][/b]')
-        except Exception:
-            print(f'\r\033[KShutting down telescope...    [b][red]FAILED[/red][/b]')
 
-        sys.stdout.write('Shutting down dome...')
-        sys.stdout.flush()
+            task_completed(task)
+        except Exception:
+            task_failed(task)
+
+        task = progress.add_task('Shutting down dome...         ')
         try:
             with daemons.warwick_operations.connect() as ops:
                 status = ops.status()
@@ -176,12 +178,11 @@ def shutdown(prefix, args):
                 if status not in [DomeCommandStatus.Succeeded, DomeCommandStatus.NotConnected]:
                     raise Failed
 
-            print(f'\r\033[KShutting down dome...         [b][green]COMPLETE[/green][/b]')
+            task_completed(task)
         except Exception:
-            print(f'\r\033[KShutting down dome...         [b][red]FAILED[/red][/b]')
+            task_failed(task)
 
-        sys.stdout.write('Shutting down power...')
-        sys.stdout.flush()
+        task = progress.add_task('Shutting down power...        ')
         try:
             with daemons.warwick_power.connect() as power:
                 status = power.last_measurement()
@@ -189,10 +190,6 @@ def shutdown(prefix, args):
                     if status.get(p, False):
                         power.switch(p, False)
 
-            print(f'\r\033[KShutting down power...        [b][green]COMPLETE[/green][/b]')
+            task_completed(task)
         except Exception:
-            print(f'\r\033[KShutting down power...        [b][red]FAILED[/red][/b]')
-
-    finally:
-        # Restore cursor
-        sys.stdout.write('\033[?25h')
+            task_failed(task)
