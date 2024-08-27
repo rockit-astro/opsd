@@ -18,6 +18,8 @@
 
 import sys
 import time
+from astropy.time import Time
+import astropy.units as u
 from rockit.ashdome import CommandStatus as DomeCommandStatus
 from rockit.atlas import CommandStatus as FocusCommandStatus
 from rockit.camera.qhy import CommandStatus as CamCommandStatus, CameraStatus, CoolerMode
@@ -26,6 +28,8 @@ from rockit.common import daemons, print
 from rockit.mount.meade import CommandStatus as TelCommandStatus, TelescopeState
 from rockit.operations import DomeStatus, OperationsMode
 from .helpers import power_switches
+
+CAMERA_WARMING_TIMEOUT = 300 * u.s
 
 
 class Failed(Exception):
@@ -69,30 +73,37 @@ def shutdown(prefix, args):
                 print(f'\r\033[KStopping operations...        [b][green]COMPLETE[/green][/b]')
         except Exception:
             print(f'\r\033[KStopping operations...        [b][red]FAILED[/red][/b]')
-            return
 
         sys.stdout.write('Warming camera...')
         sys.stdout.flush()
+        warm = False
+
         try:
-            warm = False
             with daemons.warwick_camera.connect() as cam:
                 status = cam.set_target_temperature(None)
                 if status != CamCommandStatus.Succeeded:
                     warm = True
+        except Exception:
+            pass
 
-            while not warm:
+        timeout = Time.now() + CAMERA_WARMING_TIMEOUT
+        while not warm:
+            time.sleep(5)
+            if Time.now() >= timeout:
+                print(f'\r\033[KWarming camera...             [b][red]FAILED[/red][/b]')
+                break
+
+            try:
                 with daemons.warwick_camera.connect() as cam:
                     status = cam.report_status() or {}
                     if 'state' not in status or 'cooler_mode' not in status:
+                        print(f'\r\033[KWarming camera...             [b][green]COMPLETE[/green][/b]')
                         warm = True
                     else:
                         warm = status['state'] == CameraStatus.Disabled or \
                                status['cooler_mode'] == CoolerMode.Warm
-        except Exception:
-            print(f'\r\033[KWarming camera...             [b][red]FAILED[/red][/b]')
-            return
-
-        print(f'\r\033[KWarming camera...             [b][green]COMPLETE[/green][/b]')
+            except Exception:
+                pass
 
         sys.stdout.write('Shutting down camera...')
         sys.stdout.flush()
@@ -105,7 +116,6 @@ def shutdown(prefix, args):
                 print(f'\r\033[KShutting down camera...       [b][green]COMPLETE[/green][/b]')
         except Exception:
             print(f'\r\033[KShutting down camera...       [b][red]FAILED[/red][/b]')
-            return
 
         sys.stdout.write('Shutting down filter wheel...')
         sys.stdout.flush()
@@ -118,7 +128,6 @@ def shutdown(prefix, args):
                 print(f'\r\033[KShutting down filter wheel... [b][green]COMPLETE[/green][/b]')
         except Exception:
             print(f'\r\033[KShutting down filter wheel... [b][red]FAILED[/red][/b]')
-            return
 
         sys.stdout.write('Shutting down focuser...')
         sys.stdout.flush()
@@ -153,7 +162,6 @@ def shutdown(prefix, args):
                 print(f'\r\033[KShutting down telescope...    [b][green]COMPLETE[/green][/b]')
         except Exception:
             print(f'\r\033[KShutting down telescope...    [b][red]FAILED[/red][/b]')
-            return
 
         sys.stdout.write('Shutting down dome...')
         sys.stdout.flush()
@@ -171,7 +179,6 @@ def shutdown(prefix, args):
             print(f'\r\033[KShutting down dome...         [b][green]COMPLETE[/green][/b]')
         except Exception:
             print(f'\r\033[KShutting down dome...         [b][red]FAILED[/red][/b]')
-            return
 
         sys.stdout.write('Shutting down power...')
         sys.stdout.flush()
@@ -181,11 +188,10 @@ def shutdown(prefix, args):
                 for p in power_switches:
                     if status.get(p, False):
                         power.switch(p, False)
+
+            print(f'\r\033[KShutting down power...        [b][green]COMPLETE[/green][/b]')
         except Exception:
             print(f'\r\033[KShutting down power...        [b][red]FAILED[/red][/b]')
-            return
-
-        print(f'\r\033[KShutting down power...        [b][green]COMPLETE[/green][/b]')
 
     finally:
         # Restore cursor
