@@ -190,9 +190,11 @@ class ObserveTLETracking(TelescopeAction):
             if self.aborted:
                 self.status = TelescopeActionStatus.Complete
             else:
-                # If we're able to park the telescope then its likely just a problem with the TLE.
-                # Skip this action instead of erroring the entire queue
-                if mount_park(self.log_name):
+                # The telescope occasionally fails to lock onto the target TLE (due to e.g. wind)
+                # and times out. If we're able to stop the telescope then it is likely to be this
+                # rather than something more serious.
+                # Skip this action instead of erroring the entire queue!
+                if mount_stop(self.log_name):
                     self.status = TelescopeActionStatus.Complete
                 else:
                     self.status = TelescopeActionStatus.Error
