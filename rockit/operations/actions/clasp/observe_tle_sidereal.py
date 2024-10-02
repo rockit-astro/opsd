@@ -31,7 +31,7 @@ from skyfield.sgp4lib import EarthSatellite
 from skyfield.api import Loader
 from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from .mount_helpers import mount_slew_radec, mount_status, mount_offset_radec, mount_stop
+from .mount_helpers import mount_slew_radec, mount_offset_radec, mount_stop
 from .camera_helpers import cam_take_images, cam_stop
 from .pipeline_helpers import configure_pipeline
 from .schema_helpers import pipeline_science_schema, camera_science_schema

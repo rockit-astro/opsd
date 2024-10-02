@@ -23,7 +23,7 @@ import threading
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
 import astropy.units as u
-from rockit.common import log, validation
+from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cameras, cam_take_images, cam_stop
 from .coordinate_helpers import zenith_radec
