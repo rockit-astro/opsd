@@ -100,7 +100,7 @@ class TelescopeController:
                         # We have nothing left to do, so stow the telescope until next time
                         elif not self._action_queue and not self._idle and \
                                 self._requested_mode != OperationsMode.Manual:
-                            self._active_action = self._park_action(self._config.log_name)
+                            self._active_action = self._park_action(log_name=self._config.log_name)
 
                         # Start the action running
                         if self._active_action is not None:

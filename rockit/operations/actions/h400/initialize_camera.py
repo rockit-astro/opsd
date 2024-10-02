@@ -50,12 +50,12 @@ class InitializeCamera(TelescopeAction):
         "start": "2022-09-18T22:20:00", # Optional: defaults to immediately
     }
     """
-    def __init__(self, log_name, config):
-        super().__init__('Initializing Camera', log_name, config)
+    def __init__(self, **args):
+        super().__init__('Initializing Camera', **args)
 
         self._progress = Progress.Waiting
-        if 'start' in config:
-            self._start_date = Time(config['start'])
+        if 'start' in self.config:
+            self._start_date = Time(self.config['start'])
         else:
             self._start_date = None
 

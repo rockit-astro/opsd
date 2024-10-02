@@ -58,8 +58,8 @@ class PointingModelPointing(TelescopeAction):
         }
     }
     """
-    def __init__(self, log_name, config):
-        super().__init__('Pointing Model', log_name, config)
+    def __init__(self, **args):
+        super().__init__('Pointing Model', **args)
         self._progress = Progress.Slewing
         self._wait_condition = threading.Condition()
         self._wcs_status = WCSStatus.Inactive

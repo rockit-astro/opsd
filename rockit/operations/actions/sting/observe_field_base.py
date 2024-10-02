@@ -59,16 +59,16 @@ class ObserveFieldBase(TelescopeAction):
     Base field observation logic that is inherited by other telescope actions.
     Should not be scheduled directly.
     """
-    def __init__(self, action_name, log_name, config):
-        super().__init__(action_name, log_name, config)
+    def __init__(self, action_name, **args):
+        super().__init__(action_name, **args)
         self._wait_condition = threading.Condition()
 
-        self._start_date = Time(config['start'])
-        self._end_date = Time(config['end'])
+        self._start_date = Time(self.config['start'])
+        self._end_date = Time(self.config['end'])
         self._progress = Progress.Waiting
 
         self._camera_ids = [c for c in cameras if c in self.config]
-        self._acquisition_camera = config.get('acquisition', None)
+        self._acquisition_camera = self.config.get('acquisition', None)
 
         self._observation_status = ObservationStatus.PositionLost
         self._last_exposure_started = {camera_id: Time.now() for camera_id in self._camera_ids}

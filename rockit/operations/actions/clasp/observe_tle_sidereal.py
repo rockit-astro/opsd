@@ -84,14 +84,14 @@ class ObserveTLESidereal(TelescopeAction):
        }
     }
     """
-    def __init__(self, log_name, config):
-        super().__init__('Observe TLE', log_name, config)
+    def __init__(self, **args):
+        super().__init__('Observe TLE', **args)
         self._wait_condition = threading.Condition()
         self._progress = Progress.Waiting
         self._camera = 'cam1'
 
-        self._start_date = Time(config['start'])
-        self._end_date = Time(config['end'])
+        self._start_date = Time(self.config['start'])
+        self._end_date = Time(self.config['end'])
         self._field_end_date = None
 
         self._field_width = 2.6 * u.deg

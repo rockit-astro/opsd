@@ -27,8 +27,8 @@ class ParkTelescope(TelescopeAction):
     Internal action to park the telescope once the actions queue is empty.
     Can also be manually scheduled.
     """
-    def __init__(self, log_name, _=None):
-        super().__init__('Park Telescope', log_name, {})
+    def __init__(self, **args):
+        super().__init__('Park Telescope', **args)
 
     def run_thread(self):
         """Thread that runs the hardware actions"""

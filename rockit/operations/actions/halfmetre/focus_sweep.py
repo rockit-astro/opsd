@@ -69,19 +69,19 @@ class FocusSweep(TelescopeAction):
        }
     }
     """
-    def __init__(self, log_name, config):
-        super().__init__('Focus Sweep', log_name, config)
+    def __init__(self, **args):
+        super().__init__('Focus Sweep', **args)
         self._wait_condition = threading.Condition()
         self._progress = Progress.Waiting
         self._focus_measurements = {}
 
-        if 'start' in config:
-            self._start_date = Time(config['start'])
+        if 'start' in self.config:
+            self._start_date = Time(self.config['start'])
         else:
             self._start_date = None
 
-        if 'expires' in config:
-            self._expires_date = Time(config['expires'])
+        if 'expires' in self.config:
+            self._expires_date = Time(self.config['expires'])
         else:
             self._expires_date = None
 

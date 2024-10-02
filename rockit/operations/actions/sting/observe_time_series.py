@@ -73,12 +73,12 @@ class Progress:
 
 class ObserveTimeSeries(TelescopeAction):
     """Telescope action to observe a sidereally tracked field with autoguiding"""
-    def __init__(self, log_name, config):
-        super().__init__('Observe Time Series', log_name, config)
+    def __init__(self, **args):
+        super().__init__('Observe Time Series', **args)
         self._wait_condition = threading.Condition()
 
-        self._start_date = Time(config['start'])
-        self._end_date = Time(config['end'])
+        self._start_date = Time(self.config['start'])
+        self._end_date = Time(self.config['end'])
         self._progress = Progress.Waiting
 
         self._wcs_status = WCSStatus.Inactive
@@ -87,7 +87,7 @@ class ObserveTimeSeries(TelescopeAction):
         self._wcs_derivatives = None
 
         self._observation_status = ObservationStatus.PositionLost
-        self._guide_camera = config['guide_camera']
+        self._guide_camera = self.config['guide_camera']
         self._is_guiding = False
         self._guide_reference_expcount = None
         self._guide_filename = None

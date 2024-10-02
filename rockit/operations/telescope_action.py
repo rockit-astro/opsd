@@ -31,10 +31,10 @@ class TelescopeActionStatus:
 
 class TelescopeAction:
     """Base telescope action that is extended by other actions"""
-    def __init__(self, name, log_name, config):
+    def __init__(self, name, **args):
         self.name = name
-        self.config = config
-        self.log_name = log_name
+        self.config = args.get('config', {})
+        self.log_name = args['log_name']
 
         # The current status of the action, queried by the controller thread
         # This should only change to Complete or Error immediately before

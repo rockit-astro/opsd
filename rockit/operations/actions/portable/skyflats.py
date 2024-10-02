@@ -58,8 +58,8 @@ class SkyFlats(TelescopeAction):
        }
     }
     """
-    def __init__(self, log_name, config):
-        super().__init__('Sky Flats', log_name, config)
+    def __init__(self, **args):
+        super().__init__('Sky Flats', **args)
         self._wait_condition = threading.Condition()
         self._progress = Progress.Waiting
 

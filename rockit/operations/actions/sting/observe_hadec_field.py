@@ -51,8 +51,8 @@ class ObserveHADecField(ObserveFieldBase):
        }
     }
     """
-    def __init__(self, log_name, config):
-        super().__init__('Observe HA-Dec field', log_name, config)
+    def __init__(self, **args):
+        super().__init__('Observe HA-Dec field', **args)
 
     def slew_to_field(self):
         """

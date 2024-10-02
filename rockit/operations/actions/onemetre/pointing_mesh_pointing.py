@@ -24,7 +24,7 @@ import astropy.units as u
 from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cameras, cam_take_images
-from .mount_helpers import mount_slew_altaz, mount_stop, mount_status
+from .mount_helpers import mount_slew_altaz, mount_stop
 from .pipeline_helpers import configure_pipeline
 from .schema_helpers import camera_science_schema, pipeline_junk_schema
 
@@ -60,8 +60,8 @@ class PointingMeshPointing(TelescopeAction):
        }
     }
     """
-    def __init__(self, log_name, config):
-        super().__init__('Pointing Model', log_name, config)
+    def __init__(self, **args):
+        super().__init__('Pointing Model', **args)
         self._wait_condition = threading.Condition()
         self._progress = Progress.NotStarted
         self._camera_ids = []

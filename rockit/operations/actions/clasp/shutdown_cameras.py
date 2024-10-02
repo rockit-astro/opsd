@@ -49,16 +49,16 @@ class ShutdownCameras(TelescopeAction):
         "cameras": ["cam1"] # Optional: defaults to all cameras
     }
     """
-    def __init__(self, log_name, config):
-        super().__init__('Shutdown Cameras', log_name, config)
+    def __init__(self, **args):
+        super().__init__('Shutdown Cameras', **args)
         self._progress = Progress.Waiting
-        if 'start' in config:
-            self._start_date = Time(config['start'])
+        if 'start' in self.config:
+            self._start_date = Time(self.config['start'])
         else:
             self._start_date = None
 
-        if 'cameras' in config:
-            self._camera_ids = config['cameras']
+        if 'cameras' in self.config:
+            self._camera_ids = self.config['cameras']
             self._das_ids = []
             for das_id, das_info in das_machines.items():
                 if all(camera_id in self._camera_ids for camera_id in das_info['cameras']):

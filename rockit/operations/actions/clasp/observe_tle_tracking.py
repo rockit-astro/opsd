@@ -25,7 +25,7 @@ from skyfield.sgp4lib import EarthSatellite
 from skyfield.api import Loader, Topos
 from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from .mount_helpers import mount_track_tle, mount_stop, mount_status, mount_park
+from .mount_helpers import mount_track_tle, mount_stop, mount_status
 from .camera_helpers import cameras, cam_take_images, cam_stop
 from .pipeline_helpers import configure_pipeline
 from .schema_helpers import pipeline_science_schema, camera_science_schema
@@ -70,12 +70,12 @@ class ObserveTLETracking(TelescopeAction):
        }
     }
     """
-    def __init__(self, log_name, config):
-        super().__init__('Observe TLE', log_name, config)
+    def __init__(self, **args):
+        super().__init__('Observe TLE', **args)
         self._wait_condition = threading.Condition()
 
-        self._start_date = Time(config['start'])
-        self._end_date = Time(config['end'])
+        self._start_date = Time(self.config['start'])
+        self._end_date = Time(self.config['end'])
         self._progress = Progress.Waiting
 
         self._camera_ids = [c for c in cameras if c in self.config]

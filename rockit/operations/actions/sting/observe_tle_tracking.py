@@ -66,12 +66,12 @@ class ObserveTLETracking(TelescopeAction):
        }
     }
     """
-    def __init__(self, log_name, config):
-        super().__init__('Observe TLE', log_name, config)
+    def __init__(self, **args):
+        super().__init__('Observe TLE', **args)
         self._wait_condition = threading.Condition()
 
-        self._start_date = Time(config['start'])
-        self._end_date = Time(config['end'])
+        self._start_date = Time(self.config['start'])
+        self._end_date = Time(self.config['end'])
         self._progress = Progress.Waiting
 
         self._camera_ids = [c for c in cameras if c in self.config]

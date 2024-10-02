@@ -50,8 +50,8 @@ class ObserveAltAzField(ObserveFieldBase):
        }
     }
     """
-    def __init__(self, log_name, config):
-        super().__init__('Observe Alt-Az field', log_name, config)
+    def __init__(self, **args):
+        super().__init__('Observe Alt-Az field', **args)
 
     def slew_to_field(self):
         """

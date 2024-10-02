@@ -210,7 +210,7 @@ def parse_schedule_actions(config, json):
     actions = []
     try:
         for action in json.get('actions', []):
-            actions.append(config.actions[action['type']](config.log_name, action))
+            actions.append(config.actions[action['type']](log_name=config.log_name, config=action))
     except Exception:
         print('exception while parsing schedule')
         traceback.print_exc(file=sys.stdout)
