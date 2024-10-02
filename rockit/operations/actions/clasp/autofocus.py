@@ -27,9 +27,10 @@ from astropy.time import Time
 import astropy.units as u
 from rockit.common import log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from .mount_helpers import mount_slew_radec, mount_status, mount_stop
-from .focus_helpers import focus_set, focus_get
 from .camera_helpers import cameras, cam_configure, cam_take_images
+from .coordinate_helpers import zenith_radec
+from .focus_helpers import focus_set, focus_get
+from .mount_helpers import mount_slew_radec, mount_stop
 from .pipeline_helpers import configure_pipeline
 from .schema_helpers import camera_science_schema
 
@@ -134,18 +135,9 @@ class AutoFocus(TelescopeAction):
             return
 
         # Fall back to zenith if coords not specified
-        ra = self.config.get('ra', None)
-        dec = self.config.get('dec', None)
-        if ra is None or dec is None:
-            ms = mount_status(self.log_name)
-            if ms is None or 'lst' not in ms or 'site_latitude' not in ms:
-                log.error(self.log_name, 'Failed to query mount LST or latitude')
-                self.status = TelescopeActionStatus.Error
-                return
-
-            if ra is None or dec is None:
-                ra = ms['lst']
-                dec = ms['site_latitude']
+        zenith_ra, zenith_dec = zenith_radec(self.site_location)
+        ra = self.config.get('ra', zenith_ra)
+        dec = self.config.get('dec', zenith_dec)
 
         self._progress = Progress.Slewing
         if not mount_slew_radec(self.log_name, ra, dec, True):

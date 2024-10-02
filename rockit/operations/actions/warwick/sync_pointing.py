@@ -23,10 +23,10 @@ import threading
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
 import astropy.units as u
-from rockit.common import log, validation
+from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .action_helpers import FieldAcquisitionHelper
-from .mount_helpers import mount_status
+from .coordinate_helpers import zenith_radec
 from .schema_helpers import camera_science_schema
 
 
@@ -97,20 +97,9 @@ class SyncPointing(TelescopeAction):
             return
 
         # Fall back to zenith if coords not specified
-        ra = self.config.get('ra', None)
-        dec = self.config.get('dec', None)
-        if ra is None or dec is None:
-            ms = mount_status(self.log_name)
-            if ms is None or 'lst' not in ms or 'site_latitude' not in ms:
-                log.error(self.log_name, 'Failed to query mount LST or latitude')
-                self.status = TelescopeActionStatus.Error
-                return
-
-            if ra is None:
-                ra = ms['lst']
-
-            if dec is None:
-                dec = ms['site_latitude']
+        zenith_ra, zenith_dec = zenith_radec(self.site_location)
+        ra = self.config.get('ra', zenith_ra)
+        dec = self.config.get('dec', zenith_dec)
 
         self._progress = Progress.Acquiring
         if self._acquisition_helper.acquire_field(ra, dec):
