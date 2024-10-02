@@ -27,6 +27,15 @@ def zenith_radec(site_location):
     return ra._degrees, dec.degrees
 
 
+def sun_altaz(site_location):
+    """Calculate the current Alt and Az of the Sun, in degrees"""
+    load = Loader('/var/tmp')
+    t = load.timescale().now()
+    eph = load('de421.bsp')
+    alt, az, _ = (eph['earth'] + site_location).at(t).observe(eph['sun']).apparent().altaz()
+    return alt.degrees, az.degrees
+
+
 def altaz_to_radec(site_location, alt_degrees, az_degrees):
     load = Loader('/var/tmp')
     t = load.timescale().now()

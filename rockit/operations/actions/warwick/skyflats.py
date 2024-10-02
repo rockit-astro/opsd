@@ -23,13 +23,13 @@ import sys
 import threading
 import traceback
 import Pyro4
-from astropy.coordinates import get_sun, EarthLocation, AltAz
 from astropy.time import Time
 from astropy import units as u
 from rockit.common import daemons, log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cam_configure, cam_set_filter, cam_stop
-from .mount_helpers import mount_status, mount_slew_altaz
+from .coordinate_helpers import sun_altaz
+from .mount_helpers import mount_slew_altaz
 from .pipeline_helpers import pipeline_enable_archiving, configure_pipeline
 from .schema_helpers import pipeline_flat_schema, camera_flat_schema
 
@@ -105,18 +105,6 @@ class SkyFlats(TelescopeAction):
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
-        # Query site location from the telescope
-        ms = mount_status(self.log_name)
-        if not ms:
-            self.status = TelescopeActionStatus.Error
-            return
-
-        # pylint: disable=no-member
-        location = EarthLocation(lat=ms['site_latitude'] * u.deg,
-                                 lon=ms['site_longitude'] * u.deg,
-                                 height=ms['site_elevation'] * u.m)
-        # pylint: enable=no-member
-
         # Configure pipeline immediately so the dashboard can show target name etc
         # Archiving will be enabled when the brightness is inside the required range
         pipeline_config = self.config['pipeline'].copy()
@@ -130,7 +118,7 @@ class SkyFlats(TelescopeAction):
             return
 
         while not self.aborted:
-            sun_altitude = sun_position(location)[0]
+            sun_altitude = sun_altaz(self.site_location)[0]
             if self.config['evening']:
                 if sun_altitude < CONFIG['min_sun_altitude']:
                     log.info(self.log_name, 'AutoFlat: Sun already below minimum altitude')
@@ -161,13 +149,11 @@ class SkyFlats(TelescopeAction):
             self.status = TelescopeActionStatus.Complete
             return
 
-
         # The anti-solar point is opposite the sun at 75 degrees
-        sun_altaz = sun_position(location)
-        print('AutoFlat: Sun position is', sun_altaz)
+        sun_az = sun_altaz(self.site_location)[1]
 
         self._progress = Progress.Slewing
-        if not mount_slew_altaz(self.log_name, 75, sun_altaz[1] + 180, False):
+        if not mount_slew_altaz(self.log_name, 75, sun_az + 180, False):
             if not self.aborted:
                 log.error(self.log_name, 'AutoFlat: Failed to slew telescope')
                 self.status = TelescopeActionStatus.Error
@@ -358,14 +344,6 @@ class SkyFlats(TelescopeAction):
         }
 
         return validation.validation_errors(config_json, schema)
-
-
-def sun_position(location):
-    """Returns current (alt, az) of sun in degrees for the given location"""
-    now = Time.now()
-    frame = AltAz(obstime=now, location=location)
-    sun = get_sun(now).transform_to(frame)
-    return sun.alt.value, sun.az.value
 
 
 class AutoFlatState:
