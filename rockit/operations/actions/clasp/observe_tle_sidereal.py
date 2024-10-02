@@ -28,7 +28,7 @@ from astropy.time import Time, TimeDelta
 import astropy.units as u
 import numpy as np
 from skyfield.sgp4lib import EarthSatellite
-from skyfield.api import Loader, Topos
+from skyfield.api import Loader
 from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .mount_helpers import mount_slew_radec, mount_status, mount_offset_radec, mount_stop
@@ -192,16 +192,6 @@ class ObserveTLESidereal(TelescopeAction):
         last_offset_dec = 0
         first_field = True
 
-        status = mount_status(self.log_name)
-        if status is None:
-            self.status = TelescopeActionStatus.Error
-            return
-
-        observer = Topos(
-            f'{status["site_latitude"]} N',
-            f'{status["site_longitude"]} E',
-            elevation_m=status['site_elevation'])
-
         target = EarthSatellite(
             self.config['tle'][1],
             self.config['tle'][2],
@@ -216,7 +206,7 @@ class ObserveTLESidereal(TelescopeAction):
                 break
 
             field_start = acquire_start + SETUP_DELAY
-            target_coord, field_end = self.__field_coord(field_start, observer, target, timescale)
+            target_coord, field_end = self.__field_coord(field_start, self.site_location, target, timescale)
             self._field_end_date = field_end
             if not mount_slew_radec(self.log_name,
                                     (target_coord.ra + last_offset_ra).to_value(u.deg),

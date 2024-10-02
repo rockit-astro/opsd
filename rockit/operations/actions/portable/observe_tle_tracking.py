@@ -22,7 +22,7 @@ import threading
 from astropy.time import Time
 import astropy.units as u
 from skyfield.sgp4lib import EarthSatellite
-from skyfield.api import Loader, Topos
+from skyfield.api import Loader
 from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .mount_helpers import mount_track_tle, mount_stop, mount_status, mount_park
@@ -126,16 +126,6 @@ class ObserveTLETracking(TelescopeAction):
             return
 
         # Make sure the target is above the horizon
-        status = mount_status(self.log_name)
-        if status is None:
-            self.status = TelescopeActionStatus.Error
-            return
-
-        observer = Topos(
-            f'{status["site_latitude"]} N',
-            f'{status["site_longitude"]} E',
-            elevation_m=status['site_elevation'])
-
         target = EarthSatellite(
             self.config['tle'][1],
             self.config['tle'][2],
@@ -149,7 +139,7 @@ class ObserveTLETracking(TelescopeAction):
             if now > self._end_date:
                 break
 
-            pos = (target - observer).at(timescale.from_astropy(now))
+            pos = (target - self.site_location).at(timescale.from_astropy(now))
             alt, *_ = pos.altaz()
             _, dec, _ = pos.radec()
             if alt.to(u.deg) > MIN_ALTITUDE * u.deg and dec.to(u.deg) > -45 * u.deg:
