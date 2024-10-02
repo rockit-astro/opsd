@@ -35,6 +35,7 @@ class TelescopeAction:
         self.name = name
         self.config = args.get('config', {})
         self.log_name = args['log_name']
+        self.site_location = args['site_location']
 
         # The current status of the action, queried by the controller thread
         # This should only change to Complete or Error immediately before
