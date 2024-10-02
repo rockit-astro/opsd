@@ -20,13 +20,13 @@
 
 import threading
 from astropy import wcs
-from astropy.coordinates import EarthLocation, SkyCoord
 from astropy.time import Time
 import astropy.units as u
 from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cameras, cam_take_images
-from .mount_helpers import mount_slew_radec, mount_stop, mount_status, mount_add_pointing_model_point
+from .coordinate_helpers import altaz_to_radec
+from .mount_helpers import mount_slew_radec, mount_stop, mount_add_pointing_model_point
 from .pipeline_helpers import configure_pipeline
 from .schema_helpers import camera_science_schema
 
@@ -84,21 +84,8 @@ class PointingModelPointing(TelescopeAction):
 
     def run_thread(self):
         """Thread that runs the hardware actions"""
-        status = mount_status(self.log_name)
-        if status is None:
-            self.status = TelescopeActionStatus.Error
-            return
-
-        location = EarthLocation(
-            lat=status['site_latitude'],
-            lon=status['site_longitude'],
-            height=status['site_elevation'])
-
-        # Convert the requested altaz to radec that we track for the measurement
-        coords = SkyCoord(alt=self.config['alt'], az=self.config['az'], unit=u.deg, frame='altaz',
-                          location=location, obstime=Time.now())
-
-        if not mount_slew_radec(self.log_name, coords.icrs.ra.to_value(u.deg), coords.icrs.dec.to_value(u.deg), True):
+        ra, dec = altaz_to_radec(self.site_location, self.config['alt'], self.config['az'])
+        if not mount_slew_radec(self.log_name, ra, dec, True):
             self.status = TelescopeActionStatus.Complete
             return
 
