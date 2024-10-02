@@ -39,14 +39,7 @@ def pipeline_junk_schema():
         'required': ['prefix'],
         'properties': {
             'subdirectory': {'type': 'string'},
-            'prefix': {'type': 'string'},
-            'archive': {
-                'type': 'array',
-                'items': {
-                    'type': 'string',
-                    'enum': [camera_id.upper() for camera_id in cameras]
-                }
-            }
+            'prefix': {'type': 'string'}
         }
     }
 
