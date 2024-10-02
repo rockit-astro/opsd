@@ -25,7 +25,6 @@ mkdir -p %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/onemetre.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/sting.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/warwick.json %{buildroot}%{_sysconfdir}/opsd
-%{__install} %{_sourcedir}/config/ngts.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/h400.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/portable.json %{buildroot}%{_sysconfdir}/opsd
 
@@ -101,16 +100,6 @@ Requires: python3-rockit-operations-warwick
 %files data-warwick
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/warwick.json
-
-%package data-ngts
-Summary: Operations data for NGTS
-Group:   Unspecified
-Requires: python3-rockit-operations-ngts
-%description data-ngts
-
-%files data-ngts
-%defattr(0644,root,root,-)
-%{_sysconfdir}/opsd/ngts.json
 
 %package data-h400
 Summary: Operations data for the H400 test telescope
