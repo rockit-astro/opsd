@@ -6,8 +6,8 @@
   "actions_module": "rockit.operations.actions.warwick",
   "scripts_module": "rockit.operations.scripts.warwick",
   "loop_delay": 10,
-  "site_latitude": "52.376861 N",
-  "site_longitude": "1.583861 W",
+  "site_latitude": 52.376861,
+  "site_longitude": -1.583861,
   "site_elevation": 94,
   "sun_altitude_limit": 20,
   "dome": {

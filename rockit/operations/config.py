@@ -23,7 +23,7 @@ import json
 import sys
 import traceback
 import jsonschema
-from skyfield.api import Topos
+from skyfield.api import wgs84
 from rockit.common import daemons, IP, validation
 from .telescope_action import TelescopeAction
 
@@ -62,10 +62,10 @@ CONFIG_SCHEMA = {
             'minimum': 0
         },
         'site_latitude': {
-            'type': 'string',
+            'type': 'number',
         },
         'site_longitude': {
-            'type': 'string',
+            'type': 'number',
         },
         'site_elevation': {
             'type': 'number',
@@ -195,8 +195,8 @@ class Config:
         self.control_ips = [getattr(IP, machine) for machine in config_json['control_machines']]
         self.pipeline_ips = [getattr(IP, machine) for machine in config_json['pipeline_machines']]
         self.loop_delay = config_json['loop_delay']
-        self.site_location = Topos(config_json['site_latitude'], config_json['site_longitude'],
-                                   elevation_m=config_json['site_elevation'])
+        self.site_location = wgs84.latlon(config_json['site_latitude'], config_json['site_longitude'],
+                                          config_json['site_elevation'])
         self.sun_altitude_limit = config_json['sun_altitude_limit']
 
         # Import all TelescopeAction subclasses defined in actions_module

@@ -6,8 +6,8 @@
   "actions_module": "rockit.operations.actions.clasp",
   "scripts_module": "rockit.operations.scripts.clasp",
   "loop_delay": 10,
-  "site_latitude": "28.76022 N",
-  "site_longitude": "17.87928 W",
+  "site_latitude": 28.76022,
+  "site_longitude": -17.87928,
   "site_elevation": 2350,
   "sun_altitude_limit": 5,
   "dome": {
