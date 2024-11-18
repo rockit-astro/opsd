@@ -25,8 +25,8 @@ from rockit.focuser import FocuserStatus, CommandStatus as FocCommandStatus
 FOCUS_TIMEOUT=300
 
 channels = {
-    'cam1': 1,
-    'cam2': 2,
+    'cmos': 1,
+    'swir': 2,
 }
 
 

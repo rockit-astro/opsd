@@ -46,7 +46,7 @@ class ShutdownCameras(TelescopeAction):
     {
         "type": "ShutdownCameras",
         "start": "2022-09-18T22:20:00", # Optional: defaults to immediately
-        "cameras": ["cam1"] # Optional: defaults to all cameras
+        "cameras": ["cmos"] # Optional: defaults to all cameras
     }
     """
     def __init__(self, **args):

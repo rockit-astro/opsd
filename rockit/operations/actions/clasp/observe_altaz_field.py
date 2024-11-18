@@ -33,12 +33,12 @@ class ObserveAltAzField(ObserveFieldBase):
         "alt": 40,
         "az": 180,
         "onsky": true, # Optional: defaults to true
-        "cam1": { # Optional: cameras that aren't listed won't be focused
+        "cmos": { # Optional: cameras that aren't listed won't be focused
             "exposure": 1,
             "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
             # Also supports optional temperature, window, gain, offset, stream (advanced options)
         },
-        "cam2": { # Optional: cameras that aren't listed won't be focused
+        "swir": { # Optional: cameras that aren't listed won't be focused
             "exposure": 1,
             # Also supports optional temperature (advanced options)
         },

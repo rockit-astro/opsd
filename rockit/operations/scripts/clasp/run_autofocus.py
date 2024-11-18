@@ -31,8 +31,8 @@ def run_autofocus(prefix, args):
 
     parser.add_argument('--cameras', type=str, nargs='+', choices=cameras.keys(),
                         default=cameras.keys(), help='cameras to focus')
-    parser.add_argument('--cam1', type=float, default=5, help='exposure time for cam1')
-    parser.add_argument('--cam2', type=float, default=10, help='exposure time for cam2')
+    parser.add_argument('--cmos', type=float, default=5, help='exposure time for cmos')
+    parser.add_argument('--swir', type=float, default=10, help='exposure time for swir')
     args = parser.parse_args(args)
 
     action = {'type': 'AutoFocus'}
@@ -43,10 +43,10 @@ def run_autofocus(prefix, args):
     if args.dec:
         action['dec'] = args.dec
 
-    if 'cam1' in args.cameras:
-        action['cam1'] = {'exposure': args.cam1}
+    if 'cmos' in args.cameras:
+        action['cmos'] = {'exposure': args.cmos}
 
-    if 'cam2' in args.cameras:
-        action['cam2'] = {'exposure': args.cam2}
+    if 'swir' in args.cameras:
+        action['swir'] = {'exposure': args.swir}
 
     schedule_action(action)

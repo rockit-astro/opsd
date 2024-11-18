@@ -42,7 +42,7 @@ class InitializeCameras(TelescopeAction):
     {
         "type": "InitializeCameras",
         "start": "2022-09-18T22:20:00", # Optional: defaults to immediately
-        "cameras": ["cam1", "cam2"] # Optional: defaults to all cameras
+        "cameras": ["cmos", "swir"] # Optional: defaults to all cameras
     }
     """
     def __init__(self, **args):

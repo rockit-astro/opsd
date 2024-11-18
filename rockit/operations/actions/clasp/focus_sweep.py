@@ -57,19 +57,19 @@ class FocusSweep(TelescopeAction):
         "min": 1000,
         "max": 2001,
         "step": 100,
-        "camera": "cam1",
-        "cam1": { # Must match "camera"
+        "camera": "cmos",
+        "cmos": { # Must match "camera"
             "exposure": 1,
             "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
             # Also supports optional temperature, gain, offset, stream (advanced options)
         },
-        "cam2": { # Must match "camera"
+        "swir": { # Must match "camera"
             "exposure": 1,
             # Also supports optional temperature (advanced options)
         },
         "pipeline": {
            "prefix": "focussweep",
-           "archive": ["CAM1"] # Optional: defaults to "camera"
+           "archive": ["CMOS"] # Optional: defaults to "camera"
            # Also supports optional subdirectory (advanced option)
        }
     }

@@ -51,13 +51,13 @@ class PointingModelPointing(TelescopeAction):
         "az": 180,
         "refx": 4800,
         "refy": 3211,
-        "camera": "cam1",
-        "cam1": { # must match "camera"
+        "camera": "cmos",
+        "cmos": { # must match "camera"
             "exposure": 1,
             "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
             # Also supports optional temperature, window, gain, offset, stream (advanced options)
         },
-        "cam2": { # must match "camera"
+        "swir": { # must match "camera"
             "exposure": 1,
             # Also supports optional temperature (advanced options)
         }

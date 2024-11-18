@@ -418,7 +418,7 @@ CONFIG = {
 }
 
 CAMERA_CONFIG = {
-    'cam1': {
+    'cmos': {
         # Exposure limits in seconds
         'min_exposure': 0.1,
         'max_exposure': 10,
@@ -430,7 +430,7 @@ CAMERA_CONFIG = {
         # Target flat counts to aim for
         'target_counts': 30000,
     },
-    'cam2': {
+    'swir': {
         # Exposure limits in seconds
         'min_exposure': 0.05,
         'max_exposure': 1.0,

@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with rockit.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Telescope action to observe a GEO object with cam1 by allowing it to trail in front of tracked stars"""
+"""Telescope action to observe a GEO object with cmos by allowing it to trail in front of tracked stars"""
 
 # pylint: disable=too-many-return-statements
 # pylint: disable=too-many-instance-attributes
@@ -59,7 +59,7 @@ class Progress:
 
 class ObserveTLESidereal(TelescopeAction):
     """
-    Telescope action to observe a GEO object with cam1 by allowing it to trail in front of tracked stars
+    Telescope action to observe a GEO object with cmos by allowing it to trail in front of tracked stars
 
     Example block:
     {
@@ -71,7 +71,7 @@ class ObserveTLESidereal(TelescopeAction):
             "1 36033U 09058B   22263.78760138 -.00000015  00000-0  00000-0 0  9999",
             "2 36033   0.0158 227.3607 0002400 347.4358  67.5439  1.00272445 47312"
         ],
-        "cam1": {
+        "cmos": {
             "exposure": 1,
             "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
             # Also supports optional temperature, gain, offset, stream (advanced options)
@@ -79,7 +79,7 @@ class ObserveTLESidereal(TelescopeAction):
         "pipeline": {
            "prefix": "36033",
            "object": "THOR 6", # Optional: defaults to the TLE name without leading "0 "
-           "archive": ["CAM1"] # Optional: defaults to the cameras defined in the action
+           "archive": ["CMOS"] # Optional: defaults to the cameras defined in the action
            # Also supports optional subdirectory (advanced option)
        }
     }
@@ -88,7 +88,7 @@ class ObserveTLESidereal(TelescopeAction):
         super().__init__('Observe TLE', **args)
         self._wait_condition = threading.Condition()
         self._progress = Progress.Waiting
-        self._camera = 'cam1'
+        self._camera = 'cmos'
 
         self._start_date = Time(self.config['start'])
         self._end_date = Time(self.config['end'])
@@ -375,7 +375,7 @@ class ObserveTLESidereal(TelescopeAction):
         schema = {
             'type': 'object',
             'additionalProperties': False,
-            'required': ['tle', 'start', 'end', 'pipeline', 'cam1'],
+            'required': ['tle', 'start', 'end', 'pipeline', 'cmos'],
             'properties': {
                 'type': {'type': 'string'},
                 'tle': {
@@ -407,7 +407,7 @@ class ObserveTLESidereal(TelescopeAction):
                     'format': 'date-time',
                 },
                 'pipeline': pipeline_science_schema(),
-                'cam1': camera_science_schema('cam1')
+                'cmos': camera_science_schema('cmos')
             }
         }
 

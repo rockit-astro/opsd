@@ -50,12 +50,12 @@ class AutoFocus(TelescopeAction):
         "expires": "2022-09-18T22:30:00", # Optional: defaults to never
         "ra": 0, # Optional: defaults to zenith
         "dec": -4.5, # Optional: defaults to zenith
-        "cam1": { # Optional: cameras that aren't listed won't be focused
+        "cmos": { # Optional: cameras that aren't listed won't be focused
             "exposure": 1,
             "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
             # Also supports optional temperature, window, gain, offset, stream (advanced options)
         },
-        "cam2": { # Optional: cameras that aren't listed won't be focused
+        "swir": { # Optional: cameras that aren't listed won't be focused
             "exposure": 1,
             # Also supports optional temperature (advanced options)
         }
@@ -310,7 +310,7 @@ class CameraWrapper:
 
         # Set the camera config once at the start to avoid duplicate changes
         cam_config = self._camera_config.copy()
-        if camera_id != 'cam2':
+        if camera_id == 'cmos':
             cam_config['stream'] = False
 
         if not cam_configure(log_name, camera_id, cam_config):
@@ -476,7 +476,7 @@ CONFIG = {
 }
 
 CAMERA_CONFIG = {
-    'cam1': {
+    'cmos': {
         # The slope (in hfd / step) on the inside edge of the v-curve
         'inside_focus_slope': -0.06504,
 
@@ -487,7 +487,7 @@ CAMERA_CONFIG = {
         # Number of objects that are required to consider MEDHFD valid
         'minimum_object_count': 50,
     },
-    'cam2': {
+    'swir': {
         # The slope (in hfd / step) on the inside edge of the v-curve
         'inside_focus_slope': -0.0415,
 

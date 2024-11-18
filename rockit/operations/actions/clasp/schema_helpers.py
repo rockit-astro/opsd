@@ -76,7 +76,7 @@ def pipeline_flat_schema():
 
 def camera_science_schema(camera_id):
     """Schema block for cameras"""
-    if camera_id == 'cam2':
+    if camera_id == 'swir':
         return {
             'type': 'object',
             'additionalProperties': False,
@@ -88,12 +88,13 @@ def camera_science_schema(camera_id):
                 },
                 'temperature': {
                     'type': 'number',
-                    'minimum': -30,
+                    'minimum': -60,
                     'maximum': 30,
                 }
             }
         }
-    # cam1
+
+    # cmos
     return {
         'type': 'object',
         'additionalProperties': False,
@@ -170,7 +171,7 @@ def camera_flat_schema(camera_id):
     schema['required'].remove('exposure')
 
     # Streaming is force-disabled as images are processed one-by-one
-    if camera_id != 'cam2':
+    if camera_id == 'cmos':
         schema['properties'].pop('stream')
 
     return schema

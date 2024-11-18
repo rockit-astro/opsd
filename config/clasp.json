@@ -162,13 +162,13 @@
       "label": "Disk Space",
       "sensors": [
         {
-          "label": "CAM1",
-          "sensor": "clasp_diskspace_cam1",
+          "label": "CMOS",
+          "sensor": "clasp_diskspace_cmos",
           "parameter": "data_fs_available_bytes"
         },
         {
-          "label": "CAM2",
-          "sensor": "clasp_diskspace_cam2",
+          "label": "SWIR",
+          "sensor": "clasp_diskspace_swir",
           "parameter": "data_fs_available_bytes"
         }
       ]

@@ -36,13 +36,13 @@ from rockit.camera.raptor import (
 from rockit.common import daemons, log
 
 cameras = {
-    'cam1': daemons.clasp_camera_1,
-    'cam2': daemons.clasp_camera_2,
+    'cmos': daemons.clasp_camera_cmos,
+    'swir': daemons.clasp_camera_swir,
 }
 
 das_machines = {
-    'das1': {'daemon': daemons.clasp_camvirt_1, 'cameras': ['cam1']},
-    'das2': {'daemon': daemons.clasp_camvirt_2, 'cameras': ['cam2']},
+    'cmos': {'daemon': daemons.clasp_camvirt_cmos, 'cameras': ['cmos']},
+    'swir': {'daemon': daemons.clasp_camvirt_swir, 'cameras': ['swir']},
 }
 
 CAMERA_POWERON_DELAY = 5
@@ -50,43 +50,43 @@ CAMERA_INIT_TIMEOUT = 60
 CAMERA_VM_TIMEOUT = 300
 
 COMMAND_SUCCESS = {
-    'cam1': QHYCommandStatus.Succeeded,
-    'cam2': SWIRCommandStatus.Succeeded
+    'cmos': QHYCommandStatus.Succeeded,
+    'swir': SWIRCommandStatus.Succeeded
 }
 
 COMMAND_NOT_INITIALIZED = {
-    'cam1': QHYCommandStatus.CameraNotInitialized,
-    'cam2': SWIRCommandStatus.CameraNotInitialized
+    'cmos': QHYCommandStatus.CameraNotInitialized,
+    'swir': SWIRCommandStatus.CameraNotInitialized
 }
 
 COMMAND_NOT_UNINITIALIZED = {
-    'cam1': QHYCommandStatus.CameraNotUninitialized,
-    'cam2': SWIRCommandStatus.CameraNotUninitialized
+    'cmos': QHYCommandStatus.CameraNotUninitialized,
+    'swir': SWIRCommandStatus.CameraNotUninitialized
 }
 
 STATUS_DISABLED = {
-    'cam1': QHYStatus.Disabled,
-    'cam2': SWIRStatus.Disabled
+    'cmos': QHYStatus.Disabled,
+    'swir': SWIRStatus.Disabled
 }
 
 STATUS_IDLE = {
-    'cam1': QHYStatus.Idle,
-    'cam2': SWIRStatus.Idle
+    'cmos': QHYStatus.Idle,
+    'swir': SWIRStatus.Idle
 }
 
 STATUS_ACQUIRING = {
-    'cam1': QHYStatus.Acquiring,
-    'cam2': SWIRStatus.Acquiring
+    'cmos': QHYStatus.Acquiring,
+    'swir': SWIRStatus.Acquiring
 }
 
 STATUS_READING = {
-    'cam1': QHYStatus.Reading,
-    'cam2': SWIRStatus.Reading
+    'cmos': QHYStatus.Reading,
+    'swir': SWIRStatus.Reading
 }
 
 COOLER_WARM = {
-    'cam1': QHYCoolerMode.Warm,
-    'cam2': SWIRCoolerMode.Off
+    'cmos': QHYCoolerMode.Warm,
+    'swir': SWIRCoolerMode.Off
 }
 
 
