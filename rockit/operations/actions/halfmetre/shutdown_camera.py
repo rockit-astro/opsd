@@ -23,7 +23,7 @@ import threading
 import traceback
 import Pyro4
 from astropy.time import Time
-from rockit.camera.qhy import CameraStatus, CoolerMode
+from rockit.camera.moravian import CameraStatus
 from rockit.common import daemons, log, validation
 from rockit.mount.planewave import MountState
 from rockit.operations import TelescopeAction, TelescopeActionStatus
@@ -105,19 +105,15 @@ class ShutdownCamera(TelescopeAction):
         # Warm cameras
         self._progress = Progress.Warming
         cam_stop(self.log_name, timeout=CAMERA_STOP_TIMEOUT)
-        cam_configure(self.log_name, {'temperature': None}, quiet=True)
+        cam_configure(self.log_name, {'temperature': 15}, quiet=True)
 
-        warm = False
         while not self.aborted:
-            if warm:
-                continue
-
             status = cam_status(self.log_name)
-            if 'state' not in status or 'cooler_mode' not in status:
+            if 'state' not in status or 'cooler_power' not in status:
                 log.error(self.log_name, 'Failed to check temperature on camera')
                 break
 
-            if status['state'] == CameraStatus.Disabled or status['cooler_mode'] == CoolerMode.Warm:
+            if status['state'] == CameraStatus.Disabled or status['cooler_power'] == 0:
                 break
 
             with self._wait_condition:
