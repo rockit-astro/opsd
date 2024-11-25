@@ -2,7 +2,7 @@
   "daemon": "clasp_operations",
   "log_name": "opsd@clasp",
   "control_machines": ["CLASPTCS"],
-  "pipeline_machines": ["CLASPCMOSVM", "CLASPTCS"],
+  "pipeline_machines": ["CLASPCMOSVM", "CLASPSWIR"],
   "actions_module": "rockit.operations.actions.clasp",
   "scripts_module": "rockit.operations.scripts.clasp",
   "loop_delay": 10,

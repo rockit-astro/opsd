@@ -437,9 +437,9 @@ CAMERA_CONFIG = {
         'min_save_exposure': 0.1,
 
         # Exposures with less counts than this lack the signal to noise ratio that we desire
-        'min_save_counts': 1000,
+        'min_save_counts': 6000,
 
         # Target flat counts to aim for
-        'target_counts': 2000
+        'target_counts': 10000
     }
 }
