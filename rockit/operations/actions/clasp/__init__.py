@@ -18,6 +18,7 @@
 
 from .park_telescope import ParkTelescope
 from .autofocus import AutoFocus
+from .dark_ramp import DarkRamp
 from .focus_sweep import FocusSweep
 from .initialize_cameras import InitializeCameras
 from .observe_field import ObserveField
