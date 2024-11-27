@@ -24,7 +24,8 @@ import astropy.units as u
 from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cameras, cam_take_images
-from .mount_helpers import mount_slew_altaz, mount_stop
+from .coordinate_helpers import altaz_to_radec
+from .mount_helpers import mount_slew_radec, mount_stop
 from .pipeline_helpers import configure_pipeline
 from .schema_helpers import camera_science_schema, pipeline_junk_schema
 
@@ -105,7 +106,8 @@ class PointingMeshPointing(TelescopeAction):
             self.status = TelescopeActionStatus.Error
             return
 
-        if not mount_slew_altaz(self.log_name, self.config['alt'], self.config['az'], True):
+        ra, dec = altaz_to_radec(self.site_location, self.config['alt'], self.config['az'])
+        if not mount_slew_radec(self.log_name, ra, dec, tracking=True, open_covers=True):
             self.status = TelescopeActionStatus.Complete
             return
 
@@ -173,9 +175,7 @@ class PointingMeshPointing(TelescopeAction):
                     'maximum': 360
                 },
                 'pipeline': pipeline_junk_schema()
-
-            },
-            'anyOf': []
+            }
         }
 
         for camera_id in cameras:
