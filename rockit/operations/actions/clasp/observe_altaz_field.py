@@ -58,7 +58,7 @@ class ObserveAltAzField(ObserveFieldBase):
         Implemented by subclasses to move the mount to the target
         :return: True on success, false on failure
         """
-        return mount_slew_altaz(self.log_name, self.config['alt'], self.config['az'], False)
+        return mount_slew_altaz(self.log_name, self.config['alt'], self.config['az'])
 
     @classmethod
     def validate_config(cls, config_json):

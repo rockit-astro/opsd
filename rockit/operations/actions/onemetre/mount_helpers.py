@@ -160,17 +160,14 @@ def mount_offset_radec(log_name, ra, dec, timeout=SLEW_TIMEOUT):
         return False
 
 
-def mount_slew_altaz(log_name, alt, az, tracking, open_covers=False, timeout=SLEW_TIMEOUT):
+def mount_slew_altaz(log_name, alt, az, open_covers=False, timeout=SLEW_TIMEOUT):
     """Slew the telescope to a given Alt, Az"""
     try:
         if open_covers:
             _move_covers(log_name, CoversState.Open)
 
         with daemons.onemetre_telescope.connect(timeout=timeout) as teld:
-            if tracking:
-                status = teld.track_altaz(alt, az)
-            else:
-                status = teld.slew_altaz(alt, az)
+            status = teld.slew_altaz(alt, az)
 
             if status != TelCommandStatus.Succeeded:
                 log.error(log_name, 'Failed to slew telescope')
@@ -228,7 +225,7 @@ def mount_park(log_name, close_covers=False):
     if close_covers:
         _move_covers(log_name, CoversState.Closed)
 
-    if not mount_slew_altaz(log_name, PARK_ALTAZ[0], PARK_ALTAZ[1], False, timeout=PARK_TIMEOUT) :
+    if not mount_slew_altaz(log_name, PARK_ALTAZ[0], PARK_ALTAZ[1], False, timeout=PARK_TIMEOUT):
         return False
 
     return not close_covers or _wait_for_covers(log_name, CoversState.Closed)

@@ -110,14 +110,11 @@ def mount_offset_radec(log_name, ra, dec, timeout=SLEW_TIMEOUT):
         return False
 
 
-def mount_slew_altaz(log_name, alt, az, tracking, timeout=SLEW_TIMEOUT):
+def mount_slew_altaz(log_name, alt, az, timeout=SLEW_TIMEOUT):
     """Slew the mount to a given Alt, Az"""
     try:
         with daemons.portable_telescope.connect(timeout=timeout) as lmountd:
-            if tracking:
-                status = lmountd.track_altaz(alt, az)
-            else:
-                status = lmountd.slew_altaz(alt, az)
+            status = lmountd.slew_altaz(alt, az)
 
             if status != TelCommandStatus.Succeeded:
                 log.error(log_name, 'Failed to slew mount')
