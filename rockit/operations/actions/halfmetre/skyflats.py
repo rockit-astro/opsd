@@ -27,7 +27,7 @@ from astropy.time import Time
 from astropy import units as u
 from rockit.common import daemons, log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from .camera_helpers import cam_stop
+from .camera_helpers import cam_configure, cam_set_filter, cam_stop, filters
 from .coordinate_helpers import sun_altaz
 from .mount_helpers import mount_slew_altaz
 from .pipeline_helpers import pipeline_enable_archiving, configure_pipeline
@@ -40,7 +40,6 @@ class Progress:
     Waiting, Slewing, Measuring = range(3)
 
 
-
 class SkyFlats(TelescopeAction):
     """
     Telescope action to acquire sky flats
@@ -49,9 +48,11 @@ class SkyFlats(TelescopeAction):
     {
         "type": "SkyFlats",
         "evening": true,
+        "filters": ['L', 'g', 'r', 'i', 'I'] # Optional: defaults will be used if not specified
+        "count": 21,
         "camera": { # Optional: defaults will be used if not specified
-            "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
-            # Also supports optional temperature, gain, offset (advanced options)
+            "window": [1, 14208, 1, 10656] # Optional: defaults to full-frame
+            # Also supports optional temperature, gain (advanced options)
         },
         "pipeline": {
            "prefix": "evening-flat",
@@ -64,7 +65,17 @@ class SkyFlats(TelescopeAction):
         self._wait_condition = threading.Condition()
         self._progress = Progress.Waiting
 
-        self._camera = CameraWrapper(self.config.get('camera', {}), self.config['evening'], self.log_name)
+        self._expected_complete = Time.now()
+        self._is_evening = self.config['evening']
+        self.state = AutoFlatState.Bias
+        self._scale = CONFIG['evening_scale'] if self.config['evening'] else CONFIG['dawn_scale']
+        self._start_exposure = CONFIG['min_exposure'] if self.config['evening'] else CONFIG['min_save_exposure']
+        self._start_time = None
+        self._exposure_count = 0
+        self._bias_level = 0
+        self._filters = self.config.get('filters', filters.copy())
+        self._current_filter = None
+        self._image_target = self.config.get('count', 21)
 
     def task_labels(self):
         """Returns list of tasks to be displayed in the schedule table"""
@@ -81,11 +92,15 @@ class SkyFlats(TelescopeAction):
         if self._progress <= Progress.Slewing:
             tasks.append('Slew to flats location')
 
-        if self._progress < Progress.Measuring:
-            tasks.append('Run AutoFlat')
-        elif self._progress == Progress.Measuring:
-            tasks.append('Run AutoFlat: ' + AutoFlatState.Labels[self._camera.state])
-
+        if self._progress <= Progress.Measuring:
+            tasks.append('Run AutoFlat:')
+            subtasks = []
+            if self._current_filter:
+                count = self._image_target - self._exposure_count
+                subtasks.append(f'Acquire {count} flats in filter {self._current_filter}')
+            for f in self._filters:
+                subtasks.append(f'Acquire {self._image_target} flats in filter {f}')
+            tasks.append(subtasks)
         return tasks
 
     def run_thread(self):
@@ -152,117 +167,48 @@ class SkyFlats(TelescopeAction):
         # This starts the autoflat logic, which is run
         # in the received_frame callbacks
         self._progress = Progress.Measuring
-        self._camera.start()
+        with daemons.halfmetre_cam.connect() as cam:
+            config = self.config.get('camera', {}).copy()
+
+            # Start by taking a full-frame image to measure the bias level
+            config.pop('window', None)
+            config['shutter'] = False
+
+            cam.configure(config, quiet=True)
+
+        self._current_filter = self._filters[0]
+        del self._filters[0]
+        print(f'AutoFlat: changing filter to {self._current_filter}')
+        cam_set_filter(self.log_name, self._current_filter)
+
+        self._start_time = Time.now()
+        self.__take_image(0)
 
         # Wait until complete
         while True:
             with self._wait_condition:
                 self._wait_condition.wait(LOOP_INTERVAL)
 
-            self._camera.check_timeout()
+            if self.state < AutoFlatState.FilterComplete and Time.now() > self._expected_complete:
+                log.error(self.log_name, 'AutoFlat: exposure timed out')
+                self.state = AutoFlatState.Error
+
             if self.aborted:
                 break
 
             if not self.dome_is_open:
-                self._camera.abort()
-
+                self.abort()
                 log.error(self.log_name, 'AutoFlat: Dome has closed')
                 break
 
-            # We are done once all cameras are either complete or have errored
-            if self._camera.state >= AutoFlatState.Complete:
+            # We are done once all filters are complete or acquisition has errored
+            if self.state >= AutoFlatState.FilterComplete and not self._filters:
                 break
 
-        if self._camera.state == AutoFlatState.Error:
+        if self.state == AutoFlatState.Error:
             self.status = TelescopeActionStatus.Error
         else:
             self.status = TelescopeActionStatus.Complete
-
-    def abort(self):
-        """Notification called when the telescope is stopped by the user"""
-        super().abort()
-        self._camera.abort()
-
-        with self._wait_condition:
-            self._wait_condition.notify_all()
-
-    def dome_status_changed(self, dome_is_open):
-        """Notification called when the dome is fully open or fully closed"""
-        super().dome_status_changed(dome_is_open)
-
-        with self._wait_condition:
-            self._wait_condition.notify_all()
-
-    def received_frame(self, headers):
-        """Notification called when a frame has been processed by the data pipeline"""
-        self._camera.received_frame(headers)
-
-    @classmethod
-    def validate_config(cls, config_json):
-        """Returns an iterator of schema violations for the given json configuration"""
-        schema = {
-            'type': 'object',
-            'additionalProperties': False,
-            'required': ['evening', 'pipeline'],
-            'properties': {
-                'type': {'type': 'string'},
-                'evening': {'type': 'boolean'},
-                'pipeline': pipeline_flat_schema(),
-                'camera': camera_flat_schema()
-            }
-        }
-
-        return validation.validation_errors(config_json, schema)
-
-
-class AutoFlatState:
-    """Possible states of the AutoFlat routine"""
-    Bias, Waiting, Saving, Complete, Error = range(5)
-    Labels = ['Bias', 'Waiting', 'Saving', 'Complete', 'Error']
-
-
-class CameraWrapper:
-    """Holds camera-specific flat state"""
-    def __init__(self, camera_config, is_evening, log_name):
-        self._log_name = log_name
-        self._camera_config = camera_config or {}
-        self._expected_complete = Time.now()
-        self._is_evening = is_evening
-        self.state = AutoFlatState.Bias if camera_config is not None else AutoFlatState.Complete
-        self._scale = CONFIG['evening_scale'] if is_evening else CONFIG['dawn_scale']
-        self._start_exposure = CONFIG['min_exposure'] if is_evening else CONFIG['min_save_exposure']
-        self._start_time = None
-        self._exposure_count = 0
-        self._bias_level = 0
-
-    def start(self):
-        """Starts the flat sequence for this camera"""
-        if self.state == AutoFlatState.Complete:
-            return
-
-        with daemons.halfmetre_cam.connect() as cam:
-            config = self._camera_config.copy()
-
-            # The current QHY firmware adds an extra exposure time's delay
-            # before returning the first frame. Use the single frame mode instead!
-            config['stream'] = False
-
-            # Start by taking a full-frame image to measure the bias level,
-            # as the actual flat frames may window away the overscan
-            config.pop('window', None)
-
-            cam.configure(config, quiet=True)
-
-        self.__take_image(0)
-        self._start_time = Time.now()
-
-    def check_timeout(self):
-        """Sets error state if an expected frame is more than 30 seconds late"""
-        if self.state >= AutoFlatState.Complete or Time.now() < self._expected_complete:
-            return
-
-        log.error(self._log_name, 'AutoFlat: exposure timed out')
-        self.state = AutoFlatState.Error
 
     def __take_image(self, exposure):
         """Tells the camera to take an exposure"""
@@ -275,34 +221,25 @@ class CameraWrapper:
                 cam.set_exposure(exposure, quiet=True)
                 cam.start_sequence(1, quiet=True)
         except Pyro4.errors.CommunicationError:
-            log.error(self._log_name, 'Failed to communicate with camera')
+            log.error(self.log_name, 'Failed to communicate with camera')
             self.state = AutoFlatState.Error
         except Exception:
-            log.error(self._log_name, 'Unknown error with camera')
+            log.error(self.log_name, 'Unknown error with camera')
             traceback.print_exc(file=sys.stdout)
             self.state = AutoFlatState.Error
 
     def received_frame(self, headers):
-        """Callback to process an acquired frame. headers is a dictionary of header keys"""
+        """Notification called when a frame has been processed by the data pipeline"""
         last_state = self.state
 
         if self.state == AutoFlatState.Bias:
-            self._bias_level = headers['MEDBIAS']
-            log.info(self._log_name, f'AutoFlat: bias is {self._bias_level:.0f} ADU')
+            self._bias_level = headers['MEDCNTS']
+            log.info(self.log_name, f'AutoFlat: bias is {self._bias_level:.0f} ADU')
 
-            if 'window' in self._camera_config:
-                try:
-                    with daemons.halfmetre_cam.connect() as cam:
-                        cam.set_window(self._camera_config['window'], quiet=True)
-                except Pyro4.errors.CommunicationError:
-                    log.error(self._log_name, 'Failed to communicate with camera ')
-                    self.state = AutoFlatState.Error
-                    return
-                except Exception:
-                    log.error(self._log_name, 'Unknown error with camera')
-                    traceback.print_exc(file=sys.stdout)
-                    self.state = AutoFlatState.Error
-                    return
+            # Reset window and shutter
+            camera_config = self.config.get('camera', {})
+            camera_config['filter'] = self._current_filter
+            cam_configure(self.log_name, camera_config, quiet=True)
 
             # Take the first flat image
             self.state = AutoFlatState.Waiting
@@ -332,39 +269,89 @@ class CameraWrapper:
 
             if self._is_evening:
                 if clamped_exposure == CONFIG['max_exposure'] and counts < CONFIG['min_save_counts']:
-                    self.state = AutoFlatState.Complete
+                    self.state = AutoFlatState.FilterComplete
                 elif self.state == AutoFlatState.Waiting and counts > CONFIG['min_save_counts'] \
                         and new_exposure > CONFIG['min_save_exposure']:
                     self.state = AutoFlatState.Saving
             else:
                 # Sky is increasing in brightness
                 if clamped_exposure < CONFIG['min_save_exposure']:
-                    self.state = AutoFlatState.Complete
+                    self.state = AutoFlatState.FilterComplete
                 elif self.state == AutoFlatState.Waiting and counts > CONFIG['min_save_counts']:
                     self.state = AutoFlatState.Saving
 
+            if self._exposure_count == self._image_target:
+                self.state = AutoFlatState.FilterComplete
+
+            if self.state == AutoFlatState.FilterComplete:
+                runtime = (Time.now() - self._start_time).to_value(u.s)
+                message = f'AutoFlat: acquired {self._exposure_count} {headers["FILTER"]} flats in {runtime:.0f} s'
+                log.info(self.log_name, message)
+
+                if self._filters:
+                    self._current_filter = self._filters[0]
+                    print(f'AutoFlat: changing filter to {self._current_filter}')
+                    cam_set_filter(self.log_name, self._current_filter)
+                    self._exposure_count = 0
+                    self._start_time = Time.now()
+                    self.state = AutoFlatState.Waiting
+                    del self._filters[0]
+
             if self.state != last_state:
                 archive = self.state == AutoFlatState.Saving
-                if not pipeline_enable_archiving(self._log_name, archive):
+                if not pipeline_enable_archiving(self.log_name, archive):
                     self.state = AutoFlatState.Error
                     return
 
-                print(f'AutoFlat: {AutoFlatState.Labels[last_state]} -> {AutoFlatState.Labels[self.state]}')
+                print(f'AutoFlat: {AutoFlatState.Names[last_state]} -> {AutoFlatState.Names[self.state]}')
                 if self.state == AutoFlatState.Saving:
-                    log.info(self._log_name, 'AutoFlat: saving enabled')
-                elif self.state == AutoFlatState.Complete:
-                    runtime = (Time.now() - self._start_time).to_value(u.s)
-                    message = f'AutoFlat: acquired {self._exposure_count} flats in {runtime:.0f} seconds'
-                    log.info(self._log_name, message)
+                    log.info(self.log_name, 'AutoFlat: saving enabled')
 
-            if self.state != AutoFlatState.Complete:
+            if self.state != AutoFlatState.FilterComplete:
                 self.__take_image(clamped_exposure)
 
     def abort(self):
-        """Aborts any active exposures and sets the state to complete"""
+        """Notification called when the telescope is stopped by the user"""
+        super().abort()
         if self.state == AutoFlatState.Saving:
-            cam_stop(self._log_name)
-        self.state = AutoFlatState.Complete
+            cam_stop(self.log_name)
+
+        self.state = AutoFlatState.FilterComplete
+        self._filters.clear()
+
+        with self._wait_condition:
+            self._wait_condition.notify_all()
+
+    def dome_status_changed(self, dome_is_open):
+        """Notification called when the dome is fully open or fully closed"""
+        super().dome_status_changed(dome_is_open)
+
+        with self._wait_condition:
+            self._wait_condition.notify_all()
+
+    @classmethod
+    def validate_config(cls, config_json):
+        """Returns an iterator of schema violations for the given json configuration"""
+        schema = {
+            'type': 'object',
+            'additionalProperties': False,
+            'required': ['evening', 'pipeline'],
+            'properties': {
+                'type': {'type': 'string'},
+                'evening': {'type': 'boolean'},
+                'pipeline': pipeline_flat_schema(),
+                'camera': camera_flat_schema()
+            }
+        }
+
+        return validation.validation_errors(config_json, schema)
+
+
+class AutoFlatState:
+    """Possible states of the AutoFlat routine"""
+    Bias, Waiting, Saving, FilterComplete, Error = range(5)
+    Names = ['Bias', 'Waiting', 'Saving', 'Filter Complete', 'Error']
+    Codes = ['B', 'W', 'S', 'C', 'E']
 
 
 CONFIG = {
@@ -374,7 +361,7 @@ CONFIG = {
     'sun_altitude_check_interval': 30,
 
     # Exposure fudge factor to account for changing sky brightness
-    'evening_scale': 1.07,
+    'evening_scale': 1.04,
     'dawn_scale': 0.9,
 
     # Clamp exposure time deltas to this range (e.g. 5 -> 15 or 5 -> 1.6)
@@ -382,13 +369,13 @@ CONFIG = {
 
     # Number of seconds to add to the exposure time to account for readout + object detection
     # Consider the frame lost if this is exceeded
-    'max_processing_time': 20,
+    'max_processing_time': 60,
 
     # Exposure limits in seconds
     'min_exposure': 0.1,
-    'max_exposure': 10,
+    'max_exposure': 20,
 
-    'min_save_exposure': 1.0,
+    'min_save_exposure': 0.25,
 
     # Exposures with less counts than this lack the signal to noise ratio that we desire
     'min_save_counts': 15000,
