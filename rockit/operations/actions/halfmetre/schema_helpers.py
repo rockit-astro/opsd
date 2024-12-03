@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with rockit.  If not, see <http://www.gnu.org/licenses/>.
 
+from .camera_helpers import filters
+
 def pipeline_science_schema():
     """Schema block for science actions"""
     return {
@@ -76,29 +78,29 @@ def camera_science_schema():
                     {
                         'type': 'number',
                         'minimum': 1,
-                        'maximum': 9600,
+                        'maximum': 14208
                     },
                     {
                         'type': 'number',
                         'minimum': 1,
-                        'maximum': 9600,
+                        'maximum': 14208
                     },
                     {
                         'type': 'number',
                         'minimum': 1,
-                        'maximum': 6422,
+                        'maximum': 10656
                     },
                     {
                         'type': 'number',
                         'minimum': 1,
-                        'maximum': 6422,
+                        'maximum': 10656
                     },
                 ]
             },
             'bin': {
                 'type': 'number',
                 'minimum': 1,
-                'maximum': 9600,
+                'maximum': 10656
             },
             'bin_method': {
                 'type': 'string',
@@ -112,16 +114,15 @@ def camera_science_schema():
             'gain': {
                 'type': 'integer',
                 'min': 0,
-                'max': 100,
-            },
-            'offset': {
-                'type': 'integer',
-                'min': 0,
-                'max': 1000,
+                'max': 4030,
             },
             'stream': {
                 'type': 'boolean'
-            }
+            },
+            'filter': {
+                "type": "string",
+                "enum": filters
+            },
         }
     }
 
@@ -133,8 +134,5 @@ def camera_flat_schema():
     # Exposure is calculated dynamically
     schema['properties'].pop('exposure')
     schema['required'].remove('exposure')
-
-    # Streaming is force-disabled as images are processed one-by-one
-    schema['properties'].pop('stream')
 
     return schema
