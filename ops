@@ -117,21 +117,21 @@ def tel_control(config, args):
 def validate_schedule_json(config, args):
     """checks a schedule file for errors"""
     if len(args) != 1:
-        print(f'usage: {SCRIPT_NAME} schedule <observation json>')
+        print(f'usage: {SCRIPT_NAME} validate <observation json>')
         return -1
 
     try:
         with open(args[0], 'r') as infile:
-            schedule = json.load(infile)
+            schedule_json = json.load(infile)
     except FileNotFoundError:
-        print('error: file ' + args[0] + ' not found')
+        print(f'error: file {args[0]} not found')
         return -1
     except Exception as e:
         print('error: invalid json file')
         print('error was: ' + str(e))
         return -1
 
-    valid, errors = validate_schedule(schedule, config, False)
+    valid, errors = validate_schedule(schedule_json, config, False)
     status = '[green]PASSED[/green]' if valid else '[red]FAILED[/red]'
     print(f'Validation [b]{status}[/b]')
     for e in errors:
@@ -142,15 +142,32 @@ def validate_schedule_json(config, args):
 
 def schedule(config, args):
     """Schedule observations for a nights observing"""
+    dome_arg = '--dome' in args
+    if dome_arg:
+        args.remove('--dome')
+
+    tel_arg = '--tel' in args
+    if tel_arg:
+        args.remove('--tel')
+
     if len(args) != 1:
-        print(f'usage: {SCRIPT_NAME} schedule <observation json>')
+        print(f'usage: {SCRIPT_NAME} schedule [--dome] [--tel] <observation json>')
         return -1
 
     try:
         with open(args[0], 'r') as infile:
-            schedule = json.load(infile)
+            schedule_json = json.load(infile)
+
+            # Skip tel actions
+            if dome_arg and not tel_arg and 'actions' in schedule_json:
+                schedule_json.pop('actions')
+
+            # Skip dome times
+            if tel_arg and not dome_arg and 'dome' in schedule_json:
+                schedule_json.pop('dome')
+
     except FileNotFoundError:
-        print('error: file ' + args[0] + ' not found')
+        print(f'error: file {args[0]} not found')
         return -1
     except Exception as e:
         print('error: invalid json file')
@@ -158,7 +175,7 @@ def schedule(config, args):
         return -1
 
     # Make sure the schedule is valid first!
-    valid, errors = validate_schedule(schedule, config, True)
+    valid, errors = validate_schedule(schedule_json, config, True)
     if not valid:
         print('error: invalid json file:')
         for e in errors:
@@ -166,7 +183,7 @@ def schedule(config, args):
         return -1
 
     with config.daemon.connect() as ops:
-        return ops.schedule_observations(schedule)
+        return ops.schedule_observations(schedule_json)
 
 
 def print_status(config, _):
