@@ -49,7 +49,6 @@ class DarkRamp(TelescopeAction):
     {
         "type": "DarkRamp",
         "start": "2022-09-18T22:20:00", # Optional: defaults to immediately
-        "expires": "2022-09-18T22:30:00", # Optional: defaults to never
         "cmos": { # Optional: cameras that aren't listed won't be used
             "exposures": [0.1, ..., 10.0], # Optional
             "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
@@ -76,11 +75,6 @@ class DarkRamp(TelescopeAction):
         else:
             self._start_date = None
 
-        if 'expires' in self.config:
-            self._expires_date = Time(self.config['expires'])
-        else:
-            self._expires_date = None
-
         self._cameras = {}
         for camera_id in cameras:
             self._cameras[camera_id] = CameraWrapper(camera_id, self.config.get(camera_id, None), self.log_name)
@@ -89,14 +83,8 @@ class DarkRamp(TelescopeAction):
         """Returns list of tasks to be displayed in the schedule table"""
         tasks = []
 
-        if self._progress <= Progress.Waiting:
-            if self._start_date:
-                tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
-        elif not self.dome_is_open:
-            label = 'Wait for dome'
-            if self._expires_date:
-                label += f' (expires {self._expires_date.strftime("%H:%M:%S")})'
-            tasks.append(label)
+        if self._progress <= Progress.Waiting and self._start_date:
+            tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
 
         if self._progress <= Progress.Slewing:
             tasks.append('Slew to calibration position')
@@ -131,16 +119,11 @@ class DarkRamp(TelescopeAction):
         if self._start_date is not None and Time.now() < self._start_date:
             self.wait_until_time_or_aborted(self._start_date, self._wait_condition)
 
-        while not self.aborted and not self.dome_is_open:
-            if self._expires_date is not None and Time.now() > self._expires_date:
-                break
-
-            with self._wait_condition:
-                self._wait_condition.wait(10)
-
-        if self.aborted or self._expires_date is not None and Time.now() > self._expires_date:
+        if self.aborted:
             self.status = TelescopeActionStatus.Complete
             return
+
+        self._progress = Progress.Slewing
 
         if not mount_slew_altaz(self.log_name, CALIB_ALT, CALIB_AZ):
             self.status = TelescopeActionStatus.Error
@@ -197,10 +180,6 @@ class DarkRamp(TelescopeAction):
             'properties': {
                 'type': {'type': 'string'},
                 'start': {
-                    'type': 'string',
-                    'format': 'date-time',
-                },
-                'expires': {
                     'type': 'string',
                     'format': 'date-time',
                 },
