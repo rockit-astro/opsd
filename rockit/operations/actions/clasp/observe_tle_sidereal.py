@@ -28,7 +28,7 @@ from astropy.time import Time, TimeDelta
 import astropy.units as u
 import numpy as np
 from skyfield.sgp4lib import EarthSatellite
-from skyfield.api import Loader
+from skyfield.api import load
 from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .mount_helpers import mount_slew_radec, mount_offset_radec, mount_stop
@@ -197,7 +197,7 @@ class ObserveTLESidereal(TelescopeAction):
             self.config['tle'][2],
             name=self.config['tle'][0])
 
-        timescale = Loader('/var/tmp').timescale()
+        timescale = load.timescale()
 
         while not self.aborted and self.dome_is_open:
             self._progress = Progress.AcquiringTarget

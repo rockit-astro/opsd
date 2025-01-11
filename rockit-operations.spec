@@ -19,6 +19,7 @@ mkdir -p %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/opsd %{buildroot}%{_bindir}
 %{__install} %{_sourcedir}/opsd@.service %{buildroot}%{_unitdir}
 %{__install} %{_sourcedir}/completion/ops %{buildroot}/etc/bash_completion.d
+%{__install} %{_sourcedir}/data/de421.bsp %{buildroot}%{_sysconfdir}/opsd
 
 %{__install} %{_sourcedir}/config/clasp.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/halfmetre.json %{buildroot}%{_sysconfdir}/opsd
@@ -59,6 +60,7 @@ Requires: python3-rockit-operations-clasp
 %files data-clasp
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/clasp.json
+%{_sysconfdir}/opsd/de421.bsp
 
 %package data-halfmetre
 Summary: Operations data for the half metre telescope
@@ -69,6 +71,7 @@ Requires: python3-rockit-operations-halfmetre
 %files data-halfmetre
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/halfmetre.json
+%{_sysconfdir}/opsd/de421.bsp
 
 %package data-onemetre
 Summary: Operations data for W1m telescope
@@ -79,6 +82,7 @@ Requires: python3-rockit-operations-onemetre
 %files data-onemetre
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/onemetre.json
+%{_sysconfdir}/opsd/de421.bsp
 
 %package data-sting
 Summary: Operations data for the STING telescope
@@ -89,6 +93,7 @@ Requires: python3-rockit-operations-sting
 %files data-sting
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/sting.json
+%{_sysconfdir}/opsd/de421.bsp
 
 %package data-warwick
 Summary: Operations data for Windmill Hill observatory
@@ -99,6 +104,7 @@ Requires: python3-rockit-operations-warwick
 %files data-warwick
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/warwick.json
+%{_sysconfdir}/opsd/de421.bsp
 
 %package data-portable
 Summary: Operations data for the portable telescope
@@ -109,5 +115,6 @@ Requires: python3-rockit-operations-portable
 %files data-portable
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/portable.json
+%{_sysconfdir}/opsd/de421.bsp
 
 %changelog

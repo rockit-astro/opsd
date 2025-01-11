@@ -22,7 +22,7 @@ import sys
 import traceback
 import jsonschema
 from skyfield import almanac
-from skyfield.api import Loader
+from skyfield.api import load, load_file
 from astropy.time import Time
 import astropy.units as u
 from rockit.common import validation
@@ -39,9 +39,8 @@ def __format_errors(errors):
 
 
 def night_start_end(night, site_location, horizon_degrees=-34.0/60.0):
-    loader = Loader('/var/tmp/')
-    ts = loader.timescale()
-    eph = loader('de421.bsp')
+    ts = load.timescale()
+    eph = load_file('/etc/opsd/de421.bsp')
 
     sun_above_horizon = almanac.risings_and_settings(eph, eph['Sun'], site_location,
                                                      horizon_degrees=horizon_degrees)

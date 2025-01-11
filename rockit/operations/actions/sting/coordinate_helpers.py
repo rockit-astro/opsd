@@ -17,28 +17,26 @@
 """Helper functions for coordinate calculations"""
 
 
-from skyfield.api import Loader
+from skyfield.api import load, load_file
 
 
 def zenith_radec(site_location):
     """Calculate the current RA and Dec of the zenith, in degrees"""
-    t = Loader('/var/tmp').timescale().now()
+    t = load.timescale().now()
     ra, dec, _ = site_location.at(t).from_altaz(alt_degrees=90.0, az_degrees=0.0).radec()
     return ra._degrees, dec.degrees
 
 
 def sun_altaz(site_location):
     """Calculate the current Alt and Az of the Sun, in degrees"""
-    load = Loader('/var/tmp')
     t = load.timescale().now()
-    eph = load('de421.bsp')
+    eph = load_file('/etc/opsd/de421.bsp')
     alt, az, _ = (eph['earth'] + site_location).at(t).observe(eph['sun']).apparent().altaz()
     return alt.degrees, az.degrees
 
 
 def altaz_to_radec(site_location, alt_degrees, az_degrees):
-    load = Loader('/var/tmp')
     t = load.timescale().now()
-    earth = load('de421.bsp')['earth']
+    earth = load_file('/etc/opsd/de421.bsp')['earth']
     ra, dec, _ = (earth + site_location).at(t).from_altaz(alt_degrees=alt_degrees, az_degrees=az_degrees).radec()
     return ra._degrees, dec.degrees

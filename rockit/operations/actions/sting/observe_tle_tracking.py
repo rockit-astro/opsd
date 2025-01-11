@@ -22,7 +22,7 @@ import threading
 from astropy.time import Time
 import astropy.units as u
 from skyfield.sgp4lib import EarthSatellite
-from skyfield.api import Loader
+from skyfield.api import load
 from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .mount_helpers import mount_track_tle, mount_stop, mount_status
@@ -140,7 +140,7 @@ class ObserveTLETracking(TelescopeAction):
             name=self.config['tle'][0])
 
         self._progress = Progress.WaitingForTarget
-        timescale = Loader('/var/tmp').timescale()
+        timescale = load.timescale()
         while not self.aborted:
             now = Time.now()
             if now > self._end_date:
