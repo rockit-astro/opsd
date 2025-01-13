@@ -113,8 +113,8 @@ def camera_science_schema():
             },
             'gain': {
                 'type': 'integer',
-                'min': 0,
-                'max': 4030,
+                'minimum': 0,
+                'maximum': 4030,
             },
             'stream': {
                 'type': 'boolean'

@@ -147,13 +147,13 @@ def camera_science_schema(camera_id):
             },
             'gain': {
                 'type': 'integer',
-                'min': 0,
-                'max': 100,
+                'minimum': 0,
+                'maximum': 100,
             },
             'offset': {
                 'type': 'integer',
-                'min': 0,
-                'max': 1000,
+                'minimum': 0,
+                'maximum': 1000,
             },
             'stream': {
                 'type': 'boolean'
