@@ -27,7 +27,7 @@ from astropy.time import Time
 from astropy import units as u
 from rockit.common import daemons, log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from .camera_helpers import cam_configure, cam_set_filter, cam_stop
+from .camera_helpers import cam_configure, cam_set_filter, cam_stop, filters
 from .coordinate_helpers import sun_altaz
 from .mount_helpers import mount_slew_altaz
 from .pipeline_helpers import pipeline_enable_archiving, configure_pipeline
@@ -73,7 +73,7 @@ class SkyFlats(TelescopeAction):
         self._start_time = None
         self._exposure_count = 0
         self._bias_level = 0
-        self._filters = self.config.get('filters', ['I', 'R', 'V', 'B', 'NONE'])
+        self._filters = self.config.get('filters', filters)
         self._current_filter = None
         self._image_target = self.config.get('count', 21)
 
@@ -338,6 +338,8 @@ class SkyFlats(TelescopeAction):
             'properties': {
                 'type': {'type': 'string'},
                 'evening': {'type': 'boolean'},
+                'filters': {'type': 'array', 'items': {'type': 'string', 'enum': filters}},
+                'count': {'type': 'integer', 'minimum': 1},
                 'pipeline': pipeline_flat_schema(),
                 'camera': camera_flat_schema()
             }

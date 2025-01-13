@@ -29,6 +29,8 @@ from rockit.camera.qhy import CameraStatus, CommandStatus as CamCommandStatus
 from rockit.common import daemons, log
 from .focus_helpers import focus_offset
 
+filters = ['I', 'R', 'V', 'B', 'NONE']
+
 # Defined relative to NONE
 FOCUS_OFFSETS = {
     'NONE': 0,
