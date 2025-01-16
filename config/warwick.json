@@ -79,11 +79,11 @@
       ]
     },
     {
-      "label": "Dew Point",
+      "label": "Int. Dew Point",
       "sensors": [
         {
           "label": "Warwick",
-          "sensor": "vaisala",
+          "sensor": "internal",
           "parameter": "dew_point_delta"
         }
       ]
