@@ -74,7 +74,7 @@
         {
           "label": "Warwick",
           "sensor": "internal",
-          "parameter": "humidity"
+          "parameter": "relative_humidity"
         }
       ]
     },
