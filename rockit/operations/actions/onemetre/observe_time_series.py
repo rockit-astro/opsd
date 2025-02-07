@@ -391,6 +391,10 @@ class ObserveTimeSeries(TelescopeAction):
             if headers.get('EXPCNT', None) == self._guide_reference_expcount:
                 self._guide_filename = headers.get('FILENAME', None)
 
+        if headers.get('TELSTATE', None) == 'STOPPED':
+            print('ObserveTimeSeries: telescope has stopped!')
+            self._is_guiding = False
+
         with self._wait_condition:
             if self._wcs_status == WCSStatus.WaitingForWCS:
                 if 'CRVAL1' in headers and 'IMAG-RGN' in headers and 'SITELAT' in headers:
