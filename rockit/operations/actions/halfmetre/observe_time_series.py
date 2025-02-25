@@ -38,6 +38,9 @@ from .schema_helpers import camera_science_schema, pipeline_science_schema
 # Amount of time to wait between camera status checks while observing
 CAM_CHECK_STATUS_DELAY = 10 * u.s
 
+# Amount of time to wait for cameras to report the stopped status before giving up
+CAM_STOP_TIMEOUT = 60 * u.s
+
 # Track a limited history of shifts so we can handle outliers
 GUIDE_BUFFER_REJECTION_SIGMA = 10
 GUIDE_BUFFER_LENGTH = 20
@@ -188,8 +191,14 @@ class ObserveTimeSeries(TelescopeAction):
         self._is_guiding = False
         self._camera.stop()
 
+        start = Time.now()
         while True:
             if self._camera.status in [CameraWrapperStatus.Error, CameraWrapperStatus.Stopped]:
+                print('ObserveTimeSeries: camera has stopped')
+                break
+
+            if (Time.now() - start) > CAM_STOP_TIMEOUT:
+                print('ObserveTimeSeries: timeout waiting for camera to stop')
                 break
 
             self._camera.update()
@@ -197,7 +206,6 @@ class ObserveTimeSeries(TelescopeAction):
             with self._wait_condition:
                 self._wait_condition.wait(CAM_CHECK_STATUS_DELAY.to_value(u.s))
 
-        print('ObserveTimeSeries: camera has stopped')
         return return_status
 
     def run_thread(self):

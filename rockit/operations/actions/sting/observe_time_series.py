@@ -55,6 +55,8 @@ WCS_EXPOSURE_TIME = 5 * u.s
 # Amount of time to wait between camera status checks while observing
 CAM_CHECK_STATUS_DELAY = 10 * u.s
 
+# Amount of time to wait for cameras to report the stopped status before giving up
+CAM_STOP_TIMEOUT = 60 * u.s
 
 # Track a limited history of shifts so we can handle outliers
 GUIDE_BUFFER_REJECTION_SIGMA = 10
@@ -311,9 +313,15 @@ class ObserveTimeSeries(TelescopeAction):
         for camera in self._cameras.values():
             camera.stop()
 
+        start = Time.now()
         while True:
             if all(camera.status in [CameraWrapperStatus.Error, CameraWrapperStatus.Stopped]
                    for camera in self._cameras.values()):
+                print('ObserveTimeSeries: cameras have stopped')
+                break
+
+            if (Time.now() - start) > CAM_STOP_TIMEOUT:
+                print('ObserveTimeSeries: timeout waiting for cameras to stop')
                 break
 
             for camera in self._cameras.values():
@@ -321,8 +329,6 @@ class ObserveTimeSeries(TelescopeAction):
 
             with self._wait_condition:
                 self._wait_condition.wait(CAM_CHECK_STATUS_DELAY.to_value(u.s))
-
-        print('ObserveTimeSeries: camera has stopped')
         return return_status
 
     def run_thread(self):
