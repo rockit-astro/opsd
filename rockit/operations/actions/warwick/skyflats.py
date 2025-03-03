@@ -338,7 +338,7 @@ class SkyFlats(TelescopeAction):
             'properties': {
                 'type': {'type': 'string'},
                 'evening': {'type': 'boolean'},
-                'filters': {'type': 'array', 'items': {'type': 'string', 'enum': filters}},
+                'filters': {'type': 'array', 'minItems': 1, 'items': {'type': 'string', 'enum': filters}},
                 'count': {'type': 'integer', 'minimum': 1},
                 'pipeline': pipeline_flat_schema(),
                 'camera': camera_flat_schema()
