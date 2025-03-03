@@ -95,7 +95,6 @@ class DomeInterface:
         return DomeStatus.Open
 
     def ping_heartbeat(self):
-        print('roof: sending heartbeat ping')
         with self._daemon.connect() as roof:
             ret = roof.set_heartbeat_timer(self._heartbeat_timeout)
             return ret == RoofCommandStatus.Succeeded

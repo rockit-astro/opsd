@@ -121,9 +121,6 @@ class DomeController:
                     status = self._dome_interface.query_status()
                     self.__set_status(status)
 
-                    print('dome: is ' + DomeStatus.label(status) + ' and wants to be ' +
-                          DomeStatus.label(requested_status))
-
                     if status == DomeStatus.Timeout:
                         print('dome: detected heartbeat timeout!')
                         self.__set_mode(OperationsMode.Error)
