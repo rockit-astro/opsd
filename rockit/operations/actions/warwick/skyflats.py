@@ -73,7 +73,7 @@ class SkyFlats(TelescopeAction):
         self._start_time = None
         self._exposure_count = 0
         self._bias_level = 0
-        self._filters = self.config.get('filters', filters)
+        self._filters = self.config.get('filters', filters.copy())
         self._current_filter = None
         self._image_target = self.config.get('count', 21)
 
