@@ -85,9 +85,8 @@ class AutoFocus(TelescopeAction):
         """Returns list of tasks to be displayed in the schedule table"""
         tasks = []
 
-        if self._progress <= Progress.Waiting:
-            if self._start_date:
-                tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
+        if self._progress <= Progress.Waiting and self._start_date is not None and Time.now() < self._start_date:
+            tasks.append(f'Wait until {self._start_date.strftime("%H:%M:%S")}')
         elif not self.dome_is_open:
             label = 'Wait for dome'
             if self._expires_date:
@@ -372,7 +371,8 @@ class AutoFocus(TelescopeAction):
             },
             'dependencies': {
                 'ra': ['dec'],
-                'dec': ['ra']
+                'dec': ['ra'],
+                'start': ['expires']
             }
         }
 
