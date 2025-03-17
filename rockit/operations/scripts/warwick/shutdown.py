@@ -67,11 +67,12 @@ def shutdown(prefix, args):
                         time.sleep(5)
 
                 # Wait for dome to close
-                while True:
-                    status = ops.status()
-                    if status.get('dome', {}).get('status', DomeStatus.Open) == DomeStatus.Closed:
-                        break
-                    time.sleep(5)
+                if status.get('dome', {}).get('mode', OperationsMode.Error) == OperationsMode.Automatic:
+                    while True:
+                        status = ops.status()
+                        if status.get('dome', {}).get('status', DomeStatus.Closed) == DomeStatus.Closed:
+                            break
+                        time.sleep(5)
 
                 if status.get('telescope', {}).get('mode', OperationsMode.Error) != OperationsMode.Manual:
                     ops.tel_control(False)
