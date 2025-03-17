@@ -101,12 +101,12 @@ class DomeController:
                             self.__set_mode(OperationsMode.Error)
                             log.info(self._config.log_name, 'Failed to switch dome to Automatic mode')
                     else:
-                        if self._dome_interface.disable_heartbeat():
-                            self.__set_mode(OperationsMode.Manual)
-                            log.info(self._config.log_name, 'Dome switched to Manual mode')
-                        else:
-                            self.__set_mode(OperationsMode.Error)
-                            log.error(self._config.log_name, 'Failed to switch dome to Manual mode')
+                        if not self._dome_interface.disable_heartbeat():
+                            log.warning(self._config.log_name, 'Failed to disable heartbeat')
+
+                        self.__set_mode(OperationsMode.Manual)
+                        log.info(self._config.log_name, 'Dome switched to Manual mode')
+
                     if self._daemon_error:
                         log.info(self._config.log_name, 'Restored contact with Dome daemon')
                 except Exception:
