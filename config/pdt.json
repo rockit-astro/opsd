@@ -1,0 +1,26 @@
+{
+  "daemon": "pdt_operations",
+  "log_name": "opsd@pdt",
+  "control_machines": ["LocalHost"],
+  "pipeline_machines": ["LocalHost"],
+  "actions_module": "rockit.operations.actions.pdt",
+  "scripts_module": "rockit.operations.scripts.pdt",
+  "loop_delay": 10,
+  "site_latitude": 52.376861,
+  "site_longitude": -1.583861,
+  "site_elevation": 94,
+  "sun_altitude_limit": 5,
+  "environment_daemon": "pdt_environment",
+  "environment_conditions": [
+    {
+      "label": "Disk Space",
+      "sensors": [
+        {
+          "label": "PDT",
+          "sensor": "pdt_diskspace",
+          "parameter": "data_fs_available_bytes"
+        }
+      ]
+    }
+  ]
+}

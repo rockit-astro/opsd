@@ -1,0 +1,15 @@
+[metadata]
+name = rockit.operations.pdt
+version = file: VERSION
+
+[options]
+packages =
+  rockit.operations.actions.pdt
+  rockit.operations.scripts.pdt
+
+install_requires =
+    rockit.camera.qhy
+    rockit.focuser.klipper
+    rockit.klippermcu
+    rockit.operations
+    rockit.pipeline

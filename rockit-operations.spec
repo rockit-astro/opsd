@@ -27,6 +27,7 @@ mkdir -p %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/sting.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/warwick.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/portable.json %{buildroot}%{_sysconfdir}/opsd
+%{__install} %{_sourcedir}/config/pdt.json %{buildroot}%{_sysconfdir}/opsd
 
 %package server
 Summary:  Operations server
@@ -115,6 +116,17 @@ Requires: python3-rockit-operations-portable
 %files data-portable
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/portable.json
+%{_sysconfdir}/opsd/de421.bsp
+
+%package data-pdt
+Summary: Operations data for the PDT
+Group:   Unspecified
+Requires: python3-rockit-operations-pdt
+%description data-pdt
+
+%files data-pdt
+%defattr(0644,root,root,-)
+%{_sysconfdir}/opsd/pdt.json
 %{_sysconfdir}/opsd/de421.bsp
 
 %changelog

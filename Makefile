@@ -30,4 +30,7 @@ all:
 	rm -rf build/*
 	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope portable" --define "_label Portable" -ba python3-rockit-operations.spec
 	mv build/noarch/*.rpm .
+	rm -rf build/*
+	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope pdt" --define "_label PDT" -ba python3-rockit-operations.spec
+	mv build/noarch/*.rpm .
 	rm -rf build VERSION
