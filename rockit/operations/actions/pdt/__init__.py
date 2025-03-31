@@ -17,6 +17,7 @@
 """Actions that can be scheduled for automated observation"""
 
 from .park_telescope import ParkTelescope
+from .focus_sweep import FocusSweep
 from .initialize_cameras import InitializeCameras
 from .skyflats import SkyFlats
 from .shutdown_cameras import ShutdownCameras

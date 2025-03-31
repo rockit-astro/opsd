@@ -40,6 +40,19 @@ def pipeline_science_schema():
     }
 
 
+def pipeline_junk_schema():
+    """Schema block for junk actions"""
+    return {
+        'type': 'object',
+        'additionalProperties': False,
+        'required': ['prefix'],
+        'properties': {
+            'subdirectory': {'type': 'string'},
+            'prefix': {'type': 'string'},
+        }
+    }
+
+
 def pipeline_flat_schema():
     """Schema block for skyflat actions"""
     return {
