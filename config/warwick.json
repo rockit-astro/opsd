@@ -13,7 +13,7 @@
   "dome": {
     "module": "rockit.operations.dome.ash",
     "daemon": "warwick_dome",
-    "movement_timeout": 135,
+    "movement_timeout": 160,
     "heartbeat_timeout": 160
   },
   "environment_daemon": "warwick_environment",
