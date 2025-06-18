@@ -6,7 +6,7 @@ Name:           python3-rockit-operations-%{_telescope}
 Summary:        %{_label} specific operations code
 %endif
 Version:        %{_version}
-Release:        1
+Release:        1%{dist}
 License:        GPL3
 Url:            https://github.com/rockit-astro/opsd
 BuildArch:      noarch

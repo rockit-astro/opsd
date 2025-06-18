@@ -1,6 +1,6 @@
 Name:      rockit-operations
 Version:   %{_version}
-Release:   1
+Release:   1%{dist}
 Summary:   Observatory automation code
 Url:       https://github.com/rockit-astro/opsd
 License:   GPL-3.0
