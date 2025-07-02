@@ -16,6 +16,7 @@
 
 """Actions that can be scheduled for automated observation"""
 
+from .acquire_dark_frames import AcquireDarkFrames
 from .autofocus import AutoFocus
 from .focus_sweep import FocusSweep
 from .initialize_camera import InitializeCamera
