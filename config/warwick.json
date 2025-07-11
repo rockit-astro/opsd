@@ -1,7 +1,7 @@
 {
   "daemon": "warwick_operations",
   "log_name": "opsd@warwick",
-  "control_machines": ["WarwickTCS", "WarwickDome"],
+  "control_machines": ["WarwickTCS"],
   "pipeline_machines": ["WarwickTCS"],
   "actions_module": "rockit.operations.actions.warwick",
   "scripts_module": "rockit.operations.scripts.warwick",
