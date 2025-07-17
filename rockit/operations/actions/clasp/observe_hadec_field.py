@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with rockit.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Telescope action to observe a static HA/Dec field within a defined time window"""
+"""Telescope action to observe a topocentric HA/Dec field within a defined time window"""
 
 from rockit.common import validation
 from .mount_helpers import mount_slew_hadec
@@ -23,7 +23,7 @@ from .observe_field_base import ObserveFieldBase
 
 class ObserveHADecField(ObserveFieldBase):
     """
-    Telescope action to observe a static HA/Dec field within a time window
+    Telescope action to observe a topocentric HA/Dec field within a time window
 
     Example block:
     {

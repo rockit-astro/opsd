@@ -14,20 +14,18 @@
 # You should have received a copy of the GNU General Public License
 # along with rockit.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Telescope action to observe a static HA/Dec field within a defined time window"""
+"""Telescope action to observe a topocentric HA/Dec field within a defined time window"""
 
 import numpy as np
-from astropy.coordinates import SkyCoord
-from astropy.time import Time
+from astropy.coordinates import SkyCoord, ICRS
 import astropy.units as u
 from rockit.common import validation
 from .mount_helpers import mount_slew_hadec, mount_offset_radec
 from .observe_field_base import ObserveFieldBase, ObservationStatus
 
-
 class ObserveHADecField(ObserveFieldBase):
     """
-    Telescope action to observe a static HA/Dec field within a time window
+    Telescope action to observe a topocentric HA/Dec field within a time window
 
     Example block:
     {
@@ -69,15 +67,14 @@ class ObserveHADecField(ObserveFieldBase):
                  ObservationStatus.Error on failure
         """
 
-        lst = Time(self._wcs_field_center.obstime, location=self._wcs_field_center.location).sidereal_time('apparent')
         current = SkyCoord(
             ra=self._wcs_field_center.ra,
             dec=self._wcs_field_center.dec,
             frame='icrs')
-        target = SkyCoord(
-            ra=lst - self.config['ha'] * u.deg,
-            dec=self.config['dec'] * u.deg,
-            frame='icrs')
+
+        target = SkyCoord(ha=self.config['ha'], dec=self.config['dec'], unit=u.deg,
+                          frame='hadec', obstime=self._wcs_field_center.obstime,
+                          location=self._wcs_field_center.location).transform_to(ICRS())
 
         offset_ra, offset_dec = current.spherical_offsets_to(target)
         print(f'ObserveField: offset is {offset_ra.to_value(u.arcsecond):.1f}, ' +
