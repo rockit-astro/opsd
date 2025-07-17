@@ -21,6 +21,7 @@ from .initialize_cameras import InitializeCameras
 from .observe_field import ObserveField
 from .observe_altaz_field import ObserveAltAzField
 from .observe_hadec_field import ObserveHADecField
+from .observe_path_tracking import ObservePathTracking
 from .observe_time_series import ObserveTimeSeries
 from .observe_tle_tracking import ObserveTLETracking
 from .pointing_model_pointing import PointingModelPointing

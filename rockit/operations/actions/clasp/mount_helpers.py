@@ -165,6 +165,24 @@ def mount_track_tle(log_name, tle, timeout=SLEW_TIMEOUT):
         return False
 
 
+def mount_track_path(log_name, path, timeout=SLEW_TIMEOUT):
+    """Slew the mount to track a given TLE"""
+    try:
+        with daemons.clasp_telescope.connect(timeout=timeout) as lmountd:
+            status = lmountd.track_radec_path(path)
+            if status != TelCommandStatus.Succeeded:
+                log.error(log_name, 'Failed to slew mount')
+                return False
+            return True
+    except Pyro4.errors.CommunicationError:
+        log.error(log_name, 'Failed to communicate with mount daemon')
+        return False
+    except Exception:
+        log.error(log_name, 'Unknown error while slewing mount')
+        traceback.print_exc(file=sys.stdout)
+        return False
+
+
 def mount_stop(log_name):
     """Stop the mount tracking or movement"""
     try:
