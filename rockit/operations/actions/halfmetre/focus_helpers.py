@@ -20,7 +20,8 @@ import sys
 import traceback
 import Pyro4
 from rockit.common import daemons, log
-from rockit.focuser import FocuserStatus, CommandStatus as FocCommandStatus
+from rockit.focuser.klipper import FocuserStatus, CommandStatus as FocCommandStatus
+from rockit.klippermcu import StepperStatus
 
 FOCUS_TIMEOUT = 300
 
@@ -32,13 +33,13 @@ def focus_get(log_name):
     try:
         with daemons.halfmetre_focuser.connect() as focusd:
             status = focusd.report_status()
-            if status['status'] != FocuserStatus.Active:
+            if status['status'] != FocuserStatus.Connected:
                 log.error(log_name, 'Focuser is offline')
                 return None
-            if status['moving_1']:
+            if status['channels']['1']['status'] != StepperStatus.Idle:
                 log.error(log_name, 'Focuser is moving')
                 return None
-            return status['current_steps_1']
+            return status['channels']['1']['pos']
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with focuser daemon')
         return None
@@ -53,7 +54,7 @@ def focus_set(log_name, position, timeout=FOCUS_TIMEOUT):
     try:
         with daemons.halfmetre_focuser.connect(timeout=timeout) as focusd:
             print(f'moving focus to {position}')
-            status = focusd.set_focus(1, position)
+            status = focusd.set_channel('1', position)
             if status != FocCommandStatus.Succeeded:
                 log.error(log_name, 'Failed to set focuser position')
                 return False
@@ -71,7 +72,7 @@ def focus_stop(log_name):
     """Stop the focuser movement"""
     try:
         with daemons.halfmetre_focuser.connect() as focusd:
-            focusd.stop_channel(1)
+            focusd.stop()
         return True
     except Pyro4.errors.CommunicationError:
         log.error(log_name, 'Failed to communicate with focuser daemon')

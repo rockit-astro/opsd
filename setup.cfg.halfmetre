@@ -10,7 +10,7 @@ packages =
 
 install_requires =
     rockit.camera.moravian
-    rockit.focuser
+    rockit.focuser.klipper
     rockit.mount.planewave
     rockit.operations
     rockit.pipeline
