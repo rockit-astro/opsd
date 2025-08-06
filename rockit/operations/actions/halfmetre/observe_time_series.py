@@ -30,7 +30,6 @@ import numpy as np
 from rockit.common import log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .action_helpers import CameraWrapper, CameraWrapperStatus, FieldAcquisitionHelper, PIDController, cross_correlate
-from .camera_helpers import filters
 from .mount_helpers import mount_offset_radec, mount_stop
 from .pipeline_helpers import configure_pipeline
 from .schema_helpers import camera_science_schema, pipeline_science_schema
@@ -108,10 +107,8 @@ class ObserveTimeSeries(TelescopeAction):
         elif self._progress <= Progress.Observing:
             tasks.append(f'Observe target {target_name} until {self._end_date.strftime("%H:%M:%S")}')
 
-        filter_name = self.config['camera'].get('filter', filters[0])
         exposure = self.config['camera']['exposure']
         tasks.append([
-            f'Filter: {filter_name}',
             f'Exposure time: {exposure}s',
             'Autoguiding: enabled'
         ])

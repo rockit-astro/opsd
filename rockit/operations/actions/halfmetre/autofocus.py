@@ -53,7 +53,6 @@ class AutoFocus(TelescopeAction):
         "dec": -4.5, # Optional: defaults to zenith
         "camera": {
             "exposure": 1,
-            "filter": "NONE" # Optional: defaults to None
             # Also supports optional temperature, gain, offset, stream (advanced options)
         }
     }

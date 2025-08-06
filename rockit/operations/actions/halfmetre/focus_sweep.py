@@ -59,7 +59,6 @@ class FocusSweep(TelescopeAction):
         "step": 100,
         "camera": {
             "exposure": 1,
-            "filter": "NONE" # Optional: defaults to None
             "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
             # Also supports optional temperature, gain, offset, stream (advanced options)
         },

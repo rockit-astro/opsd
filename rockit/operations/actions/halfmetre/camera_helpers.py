@@ -28,33 +28,6 @@ from rockit.camera.moravian import CameraStatus, CommandStatus as CamCommandStat
 from rockit.common import daemons, log
 
 
-FILTER_TIMEOUT = 30
-
-filters = ['L', 'g', 'r', 'i', 'I']
-
-
-def cam_set_filter(log_name, filter_name, quiet=False, timeout=FILTER_TIMEOUT):
-    try:
-        if filter_name not in filters:
-            log.error(log_name, f'Unknown filter {filter_name}')
-            return False
-
-        with daemons.halfmetre_cam.connect(timeout=timeout) as cam:
-            status = cam.set_filter(filter_name, quiet=quiet)
-            if status == CamCommandStatus.Succeeded:
-                return True
-
-            log.error(log_name, f'Failed to set filter with status {status}')
-            return False
-    except Pyro4.errors.CommunicationError:
-        log.error(log_name, 'Failed to communicate with camera')
-        return False
-    except Exception:
-        log.error(log_name, 'Unknown error with camera')
-        traceback.print_exc(file=sys.stdout)
-        return False
-
-
 def cam_configure(log_name, config={}, quiet=False):
     """Set camera configuration
        config is assumed to contain a dictionary of camera
