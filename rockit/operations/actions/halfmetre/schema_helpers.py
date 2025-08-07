@@ -106,7 +106,7 @@ def camera_science_schema():
             },
             'mode': {
                 'type': 'string',
-                'enum': ['hdr', 'ln']
+                'enum': ['hdr', 'ln12', 'ln16']
             }
         }
     }
