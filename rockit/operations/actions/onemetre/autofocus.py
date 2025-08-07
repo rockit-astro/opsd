@@ -414,7 +414,7 @@ CONFIG = {
         'minimum_hfd': 1.5,
 
         # Number of objects that are required to consider MEDHFD valid
-        'minimum_object_count': 10,
+        'minimum_object_count': 3,
 
         # Aim to reach this HFD on the inside edge of the v-curve
         # before offsetting to the final focus
@@ -446,7 +446,7 @@ CONFIG = {
         'minimum_hfd': 1.5,
 
         # Number of objects that are required to consider MEDHFD valid
-        'minimum_object_count': 10,
+        'minimum_object_count': 3,
 
         # Aim to reach this HFD on the inside edge of the v-curve
         # before offsetting to the final focus
