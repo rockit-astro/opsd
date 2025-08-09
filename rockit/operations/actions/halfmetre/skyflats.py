@@ -74,6 +74,8 @@ class SkyFlats(TelescopeAction):
                 tasks.append(f'Wait until sunalt < {CONFIG["max_sun_altitude"]} deg')
             else:
                 tasks.append(f'Wait until sunalt > {CONFIG["min_sun_altitude"]} deg')
+        elif not self.dome_is_open:
+                tasks.append('Wait for dome')
 
         if self._progress <= Progress.Slewing:
             tasks.append('Slew to flats location')
@@ -107,7 +109,7 @@ class SkyFlats(TelescopeAction):
                     self.status = TelescopeActionStatus.Complete
                     return
 
-                if sun_altitude < CONFIG['max_sun_altitude']:
+                if sun_altitude < CONFIG['max_sun_altitude'] and self.dome_is_open:
                     break
 
                 print(f'AutoFlat: {sun_altitude:.1f} > {CONFIG["max_sun_altitude"]:.1f} - keep waiting')
@@ -117,7 +119,7 @@ class SkyFlats(TelescopeAction):
                     self.status = TelescopeActionStatus.Complete
                     return
 
-                if sun_altitude > CONFIG['min_sun_altitude']:
+                if sun_altitude > CONFIG['min_sun_altitude'] and self.dome_is_open:
                     break
 
                 print(f'AutoFlat: {sun_altitude:.1f} < {CONFIG["min_sun_altitude"]:.1f} - keep waiting')
@@ -156,6 +158,11 @@ class SkyFlats(TelescopeAction):
 
             self._camera.check_timeout()
             if self.aborted:
+                break
+
+            if not self.dome_is_open:
+                self._camera.abort()
+                log.error(self.log_name, 'AutoFlat: Dome has closed')
                 break
 
             # We are done once all cameras are either complete or have errored
