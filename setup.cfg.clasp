@@ -10,7 +10,7 @@ packages =
 
 install_requires =
     rockit.camera.qhy
-    rockit.camera.raptor
+    rockit.camera.scicam
     rockit.dome
     rockit.mount.planewave
     rockit.focuser

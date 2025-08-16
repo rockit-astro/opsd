@@ -29,7 +29,7 @@ from rockit.camera.qhy import (
     CameraStatus as QHYStatus,
     CommandStatus as QHYCommandStatus,
     CoolerMode as QHYCoolerMode)
-from rockit.camera.raptor import (
+from rockit.camera.scicam import (
     CameraStatus as SWIRStatus,
     CommandStatus as SWIRCommandStatus,
     CoolerMode as SWIRCoolerMode)
