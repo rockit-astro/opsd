@@ -13,6 +13,6 @@ install_requires =
     rockit.camera.scicam
     rockit.dome
     rockit.mount.planewave
-    rockit.focuser
+    rockit.focuser.multichannel
     rockit.operations
     rockit.pipeline
