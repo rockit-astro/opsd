@@ -10,9 +10,9 @@ packages =
 
 install_requires =
     rockit.ashdome
-    rockit.atlas
+    rockit.focuser.atlas
     rockit.camera.qhy
-    rockit.cfw
+    rockit.filterwheel.fli
     rockit.mount.meade
     rockit.operations
     rockit.pipeline

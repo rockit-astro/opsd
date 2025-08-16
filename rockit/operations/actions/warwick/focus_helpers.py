@@ -20,7 +20,7 @@ import sys
 import traceback
 import Pyro4
 from rockit.common import daemons, log
-from rockit.atlas import FocuserStatus, CommandStatus as FocCommandStatus
+from rockit.focuser.atlas import FocuserStatus, CommandStatus as FocCommandStatus
 
 FOCUS_TIMEOUT = 300
 

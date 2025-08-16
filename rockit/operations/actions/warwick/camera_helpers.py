@@ -24,7 +24,7 @@ import traceback
 from astropy.time import Time
 import astropy.units as u
 import Pyro4
-from rockit.cfw import CommandStatus as CFWCommandStatus
+from rockit.filterwheel.fli import CommandStatus as CFWCommandStatus
 from rockit.camera.qhy import CameraStatus, CommandStatus as CamCommandStatus
 from rockit.common import daemons, log
 from .focus_helpers import focus_offset
@@ -50,8 +50,8 @@ def cam_set_filter(log_name, filter_name, timeout=FILTER_TIMEOUT):
         return False
 
     try:
-        with daemons.warwick_filterwheel.connect(timeout=timeout) as cfwd:
-            current_filter = cfwd.report_status().get('filter', None)
+        with daemons.warwick_filterwheel.connect(timeout=timeout) as filterwheel:
+            current_filter = filterwheel.report_status().get('filter', None)
             if current_filter not in FOCUS_OFFSETS:
                 log.error(log_name, f'Unknown filter {current_filter}')
                 return False
@@ -59,7 +59,7 @@ def cam_set_filter(log_name, filter_name, timeout=FILTER_TIMEOUT):
             if filter_name == current_filter:
                 return True
 
-            status = cfwd.set_filter(filter_name)
+            status = filterwheel.set_filter(filter_name)
             if status != CFWCommandStatus.Succeeded:
                 log.error(log_name, f'Failed to configure filter wheel with status {status}')
                 return False
