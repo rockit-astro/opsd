@@ -19,7 +19,7 @@
 from datetime import datetime
 import time
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from rockit.ashdome import CommandStatus as DomeCommandStatus
+from rockit.dome.ash import CommandStatus as DomeCommandStatus
 from rockit.focuser.atlas import CommandStatus as FocusCommandStatus
 from rockit.camera.qhy import CommandStatus as CamCommandStatus, CameraStatus, CoolerMode
 from rockit.filterwheel.fli import CommandStatus as FilterCommandStatus

@@ -14,9 +14,9 @@
 # You should have received a copy of the GNU General Public License
 # along with rockit.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Interface to allow the dome controller to operate an Ash dome via ashdomed"""
+"""Interface to allow the dome controller to operate an Ash dome via ash_domed"""
 
-from rockit.ashdome import (
+from rockit.dome.ash import (
     CommandStatus as DomeCommandStatus,
     ShutterStatus, HeartbeatStatus)
 from rockit.operations.constants import DomeStatus
@@ -52,7 +52,7 @@ def validate_config(config_json):
 
 
 class DomeInterface:
-    """Interface to allow the dome controller to operate an ash dome via ashdomed"""
+    """Interface to allow the dome controller to operate an ash dome via ash_domed"""
 
     def __init__(self, dome_config_json):
         self._daemon = getattr(daemons, dome_config_json['daemon'])

@@ -22,7 +22,7 @@ import traceback
 import Pyro4
 from rockit.common import daemons, log
 from rockit.mount.meade import CommandStatus as TelCommandStatus
-from rockit.ashdome import AzimuthStatus
+from rockit.dome.ash import AzimuthStatus
 
 PARK_POSITION = 'stow'
 PARK_TIMEOUT = 120

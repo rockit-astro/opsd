@@ -9,7 +9,7 @@ packages =
   rockit.operations.dome.ash
 
 install_requires =
-    rockit.ashdome
+    rockit.dome.ash
     rockit.focuser.atlas
     rockit.camera.qhy
     rockit.filterwheel.fli
