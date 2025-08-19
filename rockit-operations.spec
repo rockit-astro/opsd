@@ -26,6 +26,7 @@ mkdir -p %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/onemetre.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/sting.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/warwick.json %{buildroot}%{_sysconfdir}/opsd
+%{__install} %{_sourcedir}/config/heliostat.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/portable.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/pdt.json %{buildroot}%{_sysconfdir}/opsd
 
@@ -97,7 +98,7 @@ Requires: python3-rockit-operations-sting
 %{_sysconfdir}/opsd/de421.bsp
 
 %package data-warwick
-Summary: Operations data for Windmill Hill observatory
+Summary: Operations data for the Marsh observatory
 Group:   Unspecified
 Requires: python3-rockit-operations-warwick
 %description data-warwick
@@ -105,6 +106,17 @@ Requires: python3-rockit-operations-warwick
 %files data-warwick
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/warwick.json
+%{_sysconfdir}/opsd/de421.bsp
+
+%package data-heliostat
+Summary: Operations data for the Marsh observatory heliostat
+Group:   Unspecified
+Requires: python3-rockit-operations-heliostat
+%description data-heliostat
+
+%files data-heliostat
+%defattr(0644,root,root,-)
+%{_sysconfdir}/opsd/heliostat.json
 %{_sysconfdir}/opsd/de421.bsp
 
 %package data-portable

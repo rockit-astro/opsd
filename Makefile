@@ -25,7 +25,10 @@ all:
 	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope sting" --define "_label STING" -ba python3-rockit-operations.spec
 	mv build/noarch/*.rpm .
 	rm -rf build/*
-	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope warwick" --define "_label Windmill Hill" -ba python3-rockit-operations.spec
+	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope warwick" --define "_label Marsh Observatory" -ba python3-rockit-operations.spec
+	mv build/noarch/*.rpm .
+	rm -rf build/*
+	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope heliostat" --define "_label Marsh Observatory Heliostat" -ba python3-rockit-operations.spec
 	mv build/noarch/*.rpm .
 	rm -rf build/*
 	${RPMBUILD} --define "_version %(cat VERSION)" --define "_telescope portable" --define "_label Portable" -ba python3-rockit-operations.spec

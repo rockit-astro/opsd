@@ -1,0 +1,14 @@
+[metadata]
+name = rockit.operations.heliostat
+version = file: VERSION
+
+[options]
+packages =
+  rockit.operations.actions.heliostat
+  rockit.operations.scripts.heliostat
+  rockit.operations.dome.pulsar
+
+install_requires =
+    rockit.dome.pulsar
+    rockit.mount.heliostat
+    rockit.operations
