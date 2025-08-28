@@ -35,6 +35,12 @@ from .schema_helpers import camera_science_schema
 
 LOOP_INTERVAL = 5
 
+def focus_set_antibacklash(log_name, camera_id, position, backlash):
+    if camera_id == 'blue' and backlash != 0:
+        if not focus_set(log_name, camera_id, position - backlash):
+            return False
+
+    return focus_set(log_name, camera_id, position)
 
 class Progress:
     Waiting, Slewing, Blue, Red = range(4)
@@ -55,6 +61,7 @@ class AutoFocus(TelescopeAction):
             "exposure": 1
             # Also supports optional bin, window, temperature, gainindex, readoutindex (advanced options)
         }
+        "backlash": 200 # Optional: defaults to 0
     }
     """
     def __init__(self, **args):
@@ -163,6 +170,11 @@ class AutoFocus(TelescopeAction):
             if current_focus is None:
                 continue
 
+            # Remove backlash before measuring initial focus
+            backlash = self.config.get('backlash', 0)
+            if camera_id == 'blue':
+                focus_set_antibacklash(self.log_name, camera_id, initial_focus, backlash)
+
             try:
                 log.info(self.log_name, f'AutoFocus: Focusing {camera_id}')
                 initial_hfd = min_hfd = self.measure_current_hfd(camera_id, camera_config['coarse_measure_repeats'])
@@ -179,7 +191,7 @@ class AutoFocus(TelescopeAction):
                 log.info(self.log_name, 'AutoFocus: Searching for position on v-curve')
                 while True:
                     current_focus -= camera_config['focus_step_size']
-                    if not focus_set(self.log_name, camera_id, current_focus):
+                    if not focus_set_antibacklash(self.log_name, camera_id, current_focus, backlash):
                         failed = True
                         break
 
@@ -207,7 +219,7 @@ class AutoFocus(TelescopeAction):
                     log.info(self.log_name, f'AutoFocus: Stepping towards HFD {camera_config["target_hfd"]}')
 
                     current_focus -= int(current_hfd / (2 * camera_config['inside_focus_slope']))
-                    if not focus_set(self.log_name, camera_id, current_focus):
+                    if not focus_set_antibacklash(self.log_name, camera_id, current_focus, backlash):
                         failed = True
                         break
 
@@ -224,7 +236,7 @@ class AutoFocus(TelescopeAction):
 
                 # Do a final move to (approximately) the target HFD
                 current_focus += int((camera_config['target_hfd'] - current_hfd) / camera_config['inside_focus_slope'])
-                if not focus_set(self.log_name, camera_id, current_focus):
+                if not focus_set_antibacklash(self.log_name, camera_id, current_focus, backlash):
                     continue
 
                 # Take more frames to get an improved HFD estimate at the current position
@@ -240,7 +252,7 @@ class AutoFocus(TelescopeAction):
                 current_focus += int(
                     (camera_config['crossing_hfd'] - current_hfd) / camera_config['inside_focus_slope'])
 
-                if not focus_set(self.log_name, camera_id, current_focus):
+                if not focus_set_antibacklash(self.log_name, camera_id, current_focus, backlash):
                     continue
 
                 self._current_state = AutoFocusState.MeasureFinalHFD
@@ -255,7 +267,7 @@ class AutoFocus(TelescopeAction):
             finally:
                 if not success and initial_focus is not None:
                     log.info(self.log_name, 'Restoring initial focus position')
-                    focus_set(self.log_name, camera_id, initial_focus)
+                    focus_set_antibacklash(self.log_name, camera_id, initial_focus, backlash)
 
         mount_stop(self.log_name)
         self.status = TelescopeActionStatus.Complete
@@ -367,6 +379,9 @@ class AutoFocus(TelescopeAction):
                 'expires': {
                     'type': 'string',
                     'format': 'date-time',
+                },
+                'backlash': {
+                    'type': 'number'
                 }
             },
             'dependencies': {
