@@ -39,30 +39,33 @@ def shutdown_cameras(prefix, args):
         sys.stdout.write('Warming cameras...')
         sys.stdout.flush()
 
+        enabled = {}
         try:
             failed = False
             warm = {camera_id: False for camera_id in args.cameras}
             for camera_id in args.cameras:
-                with cameras[camera_id].connect() as cam:
-                    status = cam.set_target_temperature(None)
-                    if status not in [CommandStatus.Succeeded, CommandStatus.CameraNotInitialized]:
-                        failed = True
-                        warm[camera_id] = True
+                virt_daemon = daemons.sting_camvirt_das1 if camera_id in ['cam1', 'cam2'] else daemons.sting_camvirt_das2
+                with virt_daemon.connect() as virt:
+                    enabled[camera_id] = virt.report_camera_status(camera_id).get('vm_active', False)
+
+                if enabled[camera_id]:
+                    with cameras[camera_id].connect() as cam:
+                        status = cam.set_target_temperature(None)
+                        if status not in [CommandStatus.Succeeded, CommandStatus.CameraNotInitialized]:
+                            failed = True
+                            warm[camera_id] = True
+                else:
+                    warm[camera_id] = True
 
             while True:
                 for camera_id in args.cameras:
-                    if warm[camera_id]:
+                    if warm[camera_id] or not enabled[camera_id]:
                         continue
 
                     with cameras[camera_id].connect() as camd:
                         status = camd.report_status() or {}
-
-                        if 'state' not in status or 'cooler_mode' not in status:
-                            failed = True
-                            warm[camera_id] = True
-                        else:
-                            warm[camera_id] = status['state'] == CameraStatus.Disabled or \
-                                              status['cooler_mode'] == CoolerMode.Warm
+                        warm[camera_id] = status.get('state', CameraStatus.Disabled) == CameraStatus.Disabled or \
+                            status.get('cooler_mode', CoolerMode.Warm) == CoolerMode.Warm
 
                 if all(warm[k] for k in warm):
                     break
@@ -80,7 +83,11 @@ def shutdown_cameras(prefix, args):
         sys.stdout.write('Shutting down cameras...')
         sys.stdout.flush()
 
+        failed = False
         for camera_id in args.cameras:
+            if not enabled[camera_id]:
+                continue
+
             try:
                 with cameras[camera_id].connect() as cam:
                     cam.shutdown()
