@@ -71,9 +71,12 @@ def add_headers(prefix, args):
 
             try:
                 process_image(path, pipeline_workerd, pipeline_config, 'hfd' in args.type, 'wcs' in args.type)
-                print(f'\r\033[KProcessing {filename}...{padding}[b][green]COMPLETE[/green][/b]')
+
+                sys.stdout.write('\r\033[K')
+                print(f'Processing {filename}...{padding}[b][green]COMPLETE[/green][/b]')
             except Exception:
-                print(f'\r\033[KProcessing {filename}...{padding}[b][red]FAILED[/red][/b]')
+                sys.stdout.write('\r\033[K')
+                print(f'Processing {filename}...{padding}[b][red]FAILED[/red][/b]')
                 sys.stdout.flush()
 
     finally:

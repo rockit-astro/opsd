@@ -72,13 +72,15 @@ def shutdown_cameras(prefix, args):
 
                 time.sleep(5)
         except Exception:
-            print(f'\r\033[KWarming cameras [b][red]FAILED[/red][/b]')
+            sys.stdout.write('\r\033[K')
+            print('Warming cameras [b][red]FAILED[/red][/b]')
             return
 
+        sys.stdout.write('\r\033[K')
         if failed:
-            print(f'\r\033[KWarming cameras [b][yellow]FAILED[/yellow][/b]')
+            print('Warming cameras [b][yellow]FAILED[/yellow][/b]')
         else:
-            print(f'\r\033[KWarming cameras [b][green]COMPLETE[/green][/b]')
+            print('Warming cameras [b][green]COMPLETE[/green][/b]')
 
         sys.stdout.write('Shutting down cameras...')
         sys.stdout.flush()
@@ -100,10 +102,11 @@ def shutdown_cameras(prefix, args):
                 failed = True
                 continue
 
+        sys.stdout.write('\r\033[K')
         if failed:
-            print(f'\r\033[KShutting down cameras [b][red]FAILED[/red][/b]')
+            print('Shutting down cameras [b][red]FAILED[/red][/b]')
         else:
-            print(f'\r\033[KShutting down cameras [b][green]COMPLETE[/green][/b]')
+            print('Shutting down cameras [b][green]COMPLETE[/green][/b]')
 
         sys.stdout.write('Shutting down camera VMs...')
         sys.stdout.flush()
@@ -118,10 +121,11 @@ def shutdown_cameras(prefix, args):
                     failed = True
                     continue
 
+        sys.stdout.write('\r\033[K')
         if failed:
-            print(f'\r\033[KShutting down camera VMs [b][red]FAILED[/red][/b]')
+            print('Shutting down camera VMs [b][red]FAILED[/red][/b]')
         else:
-            print(f'\r\033[KShutting down camera VMs [b][green]COMPLETE[/green][/b]')
+            print('Shutting down camera VMs [b][green]COMPLETE[/green][/b]')
 
     finally:
         # Restore cursor
