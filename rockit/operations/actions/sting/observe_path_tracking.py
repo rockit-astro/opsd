@@ -18,7 +18,9 @@
 
 # pylint: disable=too-many-branches
 
+import sys
 import threading
+import traceback
 from astropy.time import Time
 from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
@@ -170,12 +172,35 @@ class ObservePathTracking(TelescopeAction):
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
         keys = []
-        for i, (utc, ra, dec) in enumerate(self.config['path']):
-            keys.extend([
-                {'keyword': f'PATHT{i:03d}', 'value': utc},
-                {'keyword': f'PATHR{i:03d}', 'value': ra},
-                {'keyword': f'PATHD{i:03d}', 'value': dec},
-            ])
+        try:
+            # Include all path nodes within the exposure plus one before/after
+            start = 0
+            end = len(self.config['path'])
+            date_start = Time(headers['DATE-OBS'])
+            date_end = Time(headers['DATE-END'])
+            date_path = Time([x[0] for x in self.config['path']])
+
+            # Bogus path?!?
+            if date_end < date_path[0] or date_start > date_path[-1]:
+                return keys
+
+            for i in range(len(date_path) - 1):
+                if date_path[i] < date_start < date_path[i + 1]:
+                    start = i
+
+                if date_path[i] < date_end < date_path[i + 1]:
+                    end = i + 2
+
+            for i, j in enumerate(range(start, end)):
+                utc, ra, dec = self.config['path'][j]
+                keys.extend([
+                    {'keyword': f'PATHT{i:03d}', 'value': utc},
+                    {'keyword': f'PATHR{i:03d}', 'value': ra},
+                    {'keyword': f'PATHD{i:03d}', 'value': dec},
+                ])
+        except Exception:
+            traceback.print_exc(file=sys.stdout)
+
         return keys
 
     def abort(self):
