@@ -177,7 +177,7 @@ class AutoFocus(TelescopeAction):
 
             try:
                 log.info(self.log_name, f'AutoFocus: Focusing {camera_id}')
-                initial_hfd = min_hfd = self.measure_current_hfd(camera_id, camera_config['coarse_measure_repeats'])
+                initial_hfd = current_hfd = self.measure_current_hfd(camera_id, camera_config['coarse_measure_repeats'])
                 if initial_hfd is None:
                     continue
 
@@ -188,6 +188,7 @@ class AutoFocus(TelescopeAction):
 
                 # Step inwards until we are well defocused on the inside edge of the v curve
                 failed = False
+                best_hfd = None
                 log.info(self.log_name, 'AutoFocus: Searching for position on v-curve')
                 while True:
                     current_focus -= camera_config['focus_step_size']
@@ -203,10 +204,14 @@ class AutoFocus(TelescopeAction):
                     log.info(self.log_name, f'AutoFocus: HFD at {current_focus} steps is ' +
                              f'{current_hfd:.1f}" ({camera_config["coarse_measure_repeats"]} samples)')
 
-                    min_hfd = min(min_hfd, current_hfd)
-                    if current_hfd > camera_config['target_hfd'] and current_hfd > min_hfd:
+                    if best_hfd is not None and current_hfd > best_hfd + camera_config['search_hfd_increase'] and current_hfd > camera_config['target_hfd']:
                         log.info(self.log_name, 'AutoFocus: Found position on v-curve')
                         break
+
+                    if best_hfd is None:
+                        best_hfd = current_hfd
+                    else:
+                        best_hfd = min(best_hfd, current_hfd)
 
                 if failed:
                     continue
@@ -446,7 +451,11 @@ CONFIG = {
 
         # Number of seconds to add to the exposure time to account for readout + object detection
         # Consider the frame lost if this is exceeded
-        'max_processing_time': 20
+        'max_processing_time': 20,
+
+        # Keep moving focus until the HFD increases by this many arcseconds above the best measured value
+        # when searching for the initial position on the V curve
+        'search_hfd_increase': 2
     },
     'red': {
         # The slope (in hfd / step) on the inside edge of the v-curve
@@ -478,6 +487,10 @@ CONFIG = {
 
         # Number of seconds to add to the exposure time to account for readout + object detection
         # Consider the frame lost if this is exceeded
-        'max_processing_time': 20
+        'max_processing_time': 20,
+
+        # Keep moving focus until the HFD increases by this many arcseconds above the best measured value
+        # when searching for the initial position on the V curve
+        'search_hfd_increase': 2
     }
 }
