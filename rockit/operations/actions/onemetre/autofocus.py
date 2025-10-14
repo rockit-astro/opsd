@@ -175,6 +175,9 @@ class AutoFocus(TelescopeAction):
             if camera_id == 'blue':
                 focus_set_antibacklash(self.log_name, camera_id, initial_focus, backlash)
 
+            best_hfd = None
+            best_hfd_focus = None
+
             try:
                 log.info(self.log_name, f'AutoFocus: Focusing {camera_id}')
                 initial_hfd = current_hfd = self.measure_current_hfd(camera_id, camera_config['coarse_measure_repeats'])
@@ -188,7 +191,6 @@ class AutoFocus(TelescopeAction):
 
                 # Step inwards until we are well defocused on the inside edge of the v curve
                 failed = False
-                best_hfd = None
                 log.info(self.log_name, 'AutoFocus: Searching for position on v-curve')
                 while True:
                     current_focus -= camera_config['focus_step_size']
@@ -208,10 +210,9 @@ class AutoFocus(TelescopeAction):
                         log.info(self.log_name, 'AutoFocus: Found position on v-curve')
                         break
 
-                    if best_hfd is None:
+                    if best_hfd is None or current_hfd < best_hfd:
                         best_hfd = current_hfd
-                    else:
-                        best_hfd = min(best_hfd, current_hfd)
+                        best_hfd_focus = current_focus
 
                 if failed:
                     continue
@@ -267,10 +268,13 @@ class AutoFocus(TelescopeAction):
 
                 runtime = (Time.now() - start_time).to_value(u.s)
 
-                log.info(self.log_name, f'AutoFocus: Achieved HFD of {current_hfd:.1f}" at {current_focus} in {runtime:.0f} seconds')
+                log.info(self.log_name, f'AutoFocus: Achieved HFD of {current_hfd:.1f}" at {current_focus:.0f} in {runtime:.0f} seconds')
                 success = current_hfd <= initial_hfd
             finally:
-                if not success and initial_focus is not None:
+                if best_hfd and best_hfd < current_hfd:
+                    log.info(self.log_name, f'Using best-focus position {best_hfd_focus:.0f}')
+                    focus_set_antibacklash(self.log_name, camera_id, best_hfd_focus, backlash)
+                elif not success and initial_focus is not None:
                     log.info(self.log_name, 'Restoring initial focus position')
                     focus_set_antibacklash(self.log_name, camera_id, initial_focus, backlash)
 
