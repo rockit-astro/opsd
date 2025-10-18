@@ -72,7 +72,7 @@ class FieldAcquisitionHelper:
         self.wcs_field_center = None
         self.wcs_derivatives = None
 
-    def acquire_field(self, ra_degrees, dec_degrees, threshold_arcsec=5):
+    def acquire_field(self, ra_degrees, dec_degrees, exposure_seconds, threshold_arcsec=5):
         acquire_start = Time.now()
         if not mount_slew_radec(self._parent_action.log_name, ra_degrees, dec_degrees, True):
             return False
@@ -82,6 +82,10 @@ class FieldAcquisitionHelper:
             'wcs': True,
             'type': 'JUNK',
             'object': 'WCS',
+        }
+
+        camera_config = {
+            'exposure': exposure_seconds,
         }
 
         if not configure_pipeline(self._parent_action.log_name, pipeline_config, quiet=True):
@@ -100,10 +104,6 @@ class FieldAcquisitionHelper:
             self._wcs_status = WCSStatus.WaitingForWCS
 
             print('FieldAcquisitionHelper: taking test image')
-            camera_config = {
-                'exposure': 5,
-            }
-
             while not cam_take_images(self._parent_action.log_name, config=camera_config, quiet=True):
                 # Try stopping the camera, waiting a bit, then try again
                 cam_stop(self._parent_action.log_name)
@@ -119,7 +119,7 @@ class FieldAcquisitionHelper:
                 break
 
             # Wait for new frame
-            expected_complete = Time.now() + camera_config['exposure'] * u.s + MAX_PROCESSING_TIME
+            expected_complete = Time.now() + exposure_seconds * u.s + MAX_PROCESSING_TIME
 
             while True:
                 with self._wait_condition:

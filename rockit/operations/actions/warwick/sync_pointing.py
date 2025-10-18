@@ -102,7 +102,7 @@ class SyncPointing(TelescopeAction):
         dec = self.config.get('dec', zenith_dec)
 
         self._progress = Progress.Acquiring
-        if self._acquisition_helper.acquire_field(ra, dec):
+        if self._acquisition_helper.acquire_field(ra, dec, 5):
             self.status = TelescopeActionStatus.Complete
         else:
             self.status = TelescopeActionStatus.Error

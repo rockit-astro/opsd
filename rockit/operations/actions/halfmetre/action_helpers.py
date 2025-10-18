@@ -48,9 +48,6 @@ MAX_PROCESSING_TIME = 25 * u.s
 # Amount of time to wait before retrying if an image acquisition generates an error
 CAM_ERROR_RETRY_DELAY = 10 * u.s
 
-# Exposure time to use when taking a WCS field image
-WCS_EXPOSURE_TIME = 5 * u.s
-
 # Amount of time to wait between camera status checks while observing
 CAM_CHECK_STATUS_DELAY = 10 * u.s
 
@@ -72,7 +69,7 @@ class FieldAcquisitionHelper:
         self.wcs_field_center = None
         self.wcs_derivatives = None
 
-    def acquire_field(self, ra_degrees, dec_degrees, threshold_arcsec=5):
+    def acquire_field(self, ra_degrees, dec_degrees, exposure_seconds, threshold_arcsec=5):
         acquire_start = Time.now()
         if not mount_slew_radec(self._parent_action.log_name, ra_degrees, dec_degrees, True):
             return False
@@ -93,6 +90,10 @@ class FieldAcquisitionHelper:
                           dec=dec_degrees,
                           unit=u.degree, frame='icrs')
 
+        camera_config = {
+            'exposure': exposure_seconds,
+        }
+
         while not self._parent_action.aborted and self._parent_action.dome_is_open:
             # Wait for telescope position to settle before taking first image
             time.sleep(5)
@@ -100,10 +101,6 @@ class FieldAcquisitionHelper:
             self._wcs_status = WCSStatus.WaitingForWCS
 
             print('FieldAcquisitionHelper: taking test image')
-            camera_config = {
-                'exposure': 5,
-            }
-
             while not cam_take_images(self._parent_action.log_name, config=camera_config, quiet=True):
                 # Try stopping the camera, waiting a bit, then try again
                 cam_stop(self._parent_action.log_name)
@@ -119,7 +116,7 @@ class FieldAcquisitionHelper:
                 break
 
             # Wait for new frame
-            expected_complete = Time.now() + camera_config['exposure'] * u.s + MAX_PROCESSING_TIME
+            expected_complete = Time.now() + exposure_seconds * u.s + MAX_PROCESSING_TIME
 
             while True:
                 with self._wait_condition:

@@ -110,9 +110,10 @@ class ObserveImageSequence(TelescopeAction):
         blind_offset_ddec = self.config.get('blind_offset_ddec', 0)
         acquisition_ra = self.config['ra'] + blind_offset_dra
         acquisition_dec = self.config['dec'] + blind_offset_ddec
+        acquisition_exposure = self.config.get('acquisition_exposure', 5)
 
         if self.config.get('onsky', True):
-            if not self._acquisition_helper.acquire_field(acquisition_ra, acquisition_dec):
+            if not self._acquisition_helper.acquire_field(acquisition_ra, acquisition_dec, acquisition_exposure):
                 return ObservationStatus.Error
         else:
             if not mount_slew_radec(self.log_name, acquisition_ra, acquisition_dec, True):
@@ -300,6 +301,10 @@ class ObserveImageSequence(TelescopeAction):
                 },
                 'blind_offset_ddec': {
                     'type': 'number'
+                },
+                'acquisition_exposure': {
+                    'type': 'number',
+                    'minimum': 0
                 },
                 'pipeline': pipeline_science_schema(),
                 'sequence': {

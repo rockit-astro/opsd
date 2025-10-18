@@ -49,9 +49,6 @@ MAX_PROCESSING_TIME = 60 * u.s
 # Amount of time to wait before retrying if an image acquisition generates an error
 CAM_ERROR_RETRY_DELAY = 10 * u.s
 
-# Exposure time to use when taking a WCS field image
-WCS_EXPOSURE_TIME = 5 * u.s
-
 # Amount of time to wait between camera status checks while observing
 CAM_CHECK_STATUS_DELAY = 10 * u.s
 
@@ -139,6 +136,8 @@ class ObserveTimeSeries(TelescopeAction):
         blind_offset_ddec = self.config.get('blind_offset_ddec', 0)
         acquisition_ra = self.config['ra'] + blind_offset_dra
         acquisition_dec = self.config['dec'] + blind_offset_ddec
+        acquisition_exposure = self.config.get('acquisition_exposure', 5)
+
         if not mount_slew_radec(self.log_name, acquisition_ra, acquisition_dec, True):
             return ObservationStatus.Error
 
@@ -155,7 +154,7 @@ class ObserveTimeSeries(TelescopeAction):
         cam_config = {}
         cam_config.update(self.config.get(self._guide_camera, {}))
         cam_config.update({
-            'exposure': WCS_EXPOSURE_TIME.to(u.second).value,
+            'exposure': acquisition_exposure,
             'stream': False
         })
 
@@ -187,7 +186,7 @@ class ObserveTimeSeries(TelescopeAction):
                 break
 
             # Wait for new frame
-            expected_complete = Time.now() + WCS_EXPOSURE_TIME + MAX_PROCESSING_TIME
+            expected_complete = Time.now() + acquisition_exposure * u.s + MAX_PROCESSING_TIME
 
             while True:
                 with self._wait_condition:
@@ -618,6 +617,10 @@ class ObserveTimeSeries(TelescopeAction):
                 'guide_camera': {
                     'type': 'string',
                     'enum': list(cameras.keys())
+                },
+                'acquisition_exposure': {
+                    'type': 'number',
+                    'minimum': 0
                 },
                 'pipeline': pipeline_science_schema(),
             }

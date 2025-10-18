@@ -125,7 +125,9 @@ class ObserveTimeSeries(TelescopeAction):
         blind_offset_ddec = self.config.get('blind_offset_ddec', 0)
         acquisition_ra = self.config['ra'] + blind_offset_dra
         acquisition_dec = self.config['dec'] + blind_offset_ddec
-        if not self._acquisition_helper.acquire_field(acquisition_ra, acquisition_dec):
+        acquisition_exposure = self.config.get('acquisition_exposure', 5)
+
+        if not self._acquisition_helper.acquire_field(acquisition_ra, acquisition_dec, acquisition_exposure):
             return ObservationStatus.Error
 
         if blind_offset_dra != 0 or blind_offset_ddec != 0:
@@ -464,6 +466,10 @@ class ObserveTimeSeries(TelescopeAction):
                 },
                 'blind_offset_ddec': {
                     'type': 'number'
+                },
+                'acquisition_exposure': {
+                    'type': 'number',
+                    'minimum': 0
                 },
                 'pipeline': pipeline_science_schema(),
                 'camera': camera_science_schema()
