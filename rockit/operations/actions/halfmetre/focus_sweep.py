@@ -54,11 +54,11 @@ class FocusSweep(TelescopeAction):
         "expires": "2022-09-18T22:30:00", # Optional: defaults to never
         "ra": 0, # Optional: defaults to zenith
         "dec": -4.5, # Optional: defaults to zenith
-        "min": 1000,
-        "max": 2001,
-        "step": 100,
+        "min": -1.5,
+        "max": 1.5,
+        "step": 0.1,
         "camera": {
-            "exposure": 1,
+            "exposure": 5,
             "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
             # Also supports optional temperature, gain, offset, stream (advanced options)
         },
@@ -195,7 +195,7 @@ class FocusSweep(TelescopeAction):
                 break
 
             # The last measurement has finished - move on to the next
-            if current_focus in self._focus_measurements:
+            if f'{current_focus:0.3f}' in self._focus_measurements:
                 current_focus += self.config['step']
                 if current_focus > self.config['max']:
                     break
@@ -250,7 +250,7 @@ class FocusSweep(TelescopeAction):
         with self._wait_condition:
             if 'MEDHFD' in headers and 'HFDCNT' in headers and 'TELFOC' in headers:
                 print('got hfd', headers['MEDHFD'], 'from', headers['HFDCNT'], 'sources')
-                self._focus_measurements[headers['TELFOC']] = (headers['MEDHFD'], headers['HFDCNT'])
+                self._focus_measurements[f"{headers['TELFOC']:0.3f}"] = (headers['MEDHFD'], headers['HFDCNT'])
             else:
                 print('Headers are missing MEDHFD, HFDCNT, or TELFOC')
                 print(headers)
@@ -277,17 +277,17 @@ class FocusSweep(TelescopeAction):
                     'maximum': 90
                 },
                 'min': {
-                    'type': 'integer',
-                    'minimum': 0,
-                    'maximum': 100500
+                    'type': 'number',
+                    'minimum': -5,
+                    'maximum': 5
                 },
                 'max': {
-                    'type': 'integer',
-                    'minimum': 0,
-                    'maximum': 100500
+                    'type': 'number',
+                    'minimum': -5,
+                    'maximum': 5
                 },
                 'step': {
-                    'type': 'integer',
+                    'type': 'number',
                     'minimum': 0
                 },
                 'pipeline': pipeline_junk_schema(),
