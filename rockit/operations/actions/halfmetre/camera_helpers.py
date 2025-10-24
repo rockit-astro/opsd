@@ -24,7 +24,7 @@ import traceback
 from astropy.time import Time
 import astropy.units as u
 import Pyro4
-from rockit.camera.moravian import CameraStatus, CommandStatus as CamCommandStatus
+from rockit.camera.andor3 import CameraStatus, CommandStatus as CamCommandStatus
 from rockit.common import daemons, log
 
 

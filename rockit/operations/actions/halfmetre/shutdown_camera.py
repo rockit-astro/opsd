@@ -23,7 +23,7 @@ import threading
 import traceback
 import Pyro4
 from astropy.time import Time
-from rockit.camera.moravian import CameraStatus
+from rockit.camera.andor3 import CameraStatus
 from rockit.common import daemons, log, validation
 from rockit.mount.planewave import MountState
 from rockit.operations import TelescopeAction, TelescopeActionStatus

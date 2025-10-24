@@ -34,7 +34,7 @@ from scipy import conjugate, polyfit
 from scipy.fftpack import fft, ifft
 # pylint: enable=no-name-in-module
 
-from rockit.camera.moravian import CameraStatus
+from rockit.camera.andor3 import CameraStatus
 from rockit.common import log
 
 from .camera_helpers import cam_status, cam_stop, cam_take_images
