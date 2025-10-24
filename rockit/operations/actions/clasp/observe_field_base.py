@@ -68,10 +68,6 @@ class ObserveFieldBase(TelescopeAction):
         target_name = self.config["pipeline"]["object"]
         if self._progress <= Progress.AcquiringTarget:
             tasks.append(f'Acquire target field for {target_name}')
-            if 'blind_offset_dra' in self.config:
-                dra = self.config['blind_offset_dra']
-                ddec = self.config['blind_offset_ddec']
-                tasks.append(f'Using blind offset: {dra:.3f}, {ddec:.3f} deg')
             tasks.append(f'Observe until {self._end_date.strftime("%H:%M:%S")}')
 
         elif self._progress <= Progress.Observing:
