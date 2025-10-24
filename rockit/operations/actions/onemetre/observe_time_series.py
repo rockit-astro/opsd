@@ -116,15 +116,28 @@ class ObserveTimeSeries(TelescopeAction):
         self._progress = Progress.Acquiring
 
         print('ObserveTimeSeries: slewing to target field')
-        blind_offset_dra = self.config.get('blind_offset_dra', 0)
-        blind_offset_ddec = self.config.get('blind_offset_ddec', 0)
-        acquisition_ra = self.config['ra'] + blind_offset_dra
-        acquisition_dec = self.config['dec'] + blind_offset_ddec
+        blind_offset_dra = offset_dra = self.config.get('blind_offset_dra', 0)
+        blind_offset_ddec = offset_ddec = self.config.get('blind_offset_ddec', 0)
         acquisition_exposure = self.config.get('acquisition_exposure', 5)
-        if not self._acquisition_helper.acquire_field(acquisition_ra, acquisition_dec, acquisition_exposure):
-            return ObservationStatus.Error
+        retry_offset_size = self.config.get('acquisition_retry_offset', 0.5)
 
-        if blind_offset_dra != 0 or blind_offset_ddec != 0:
+        attempt = 0
+        while True:
+            acquisition_ra = self.config['ra'] + offset_dra
+            acquisition_dec = self.config['dec'] + offset_ddec
+            if self._acquisition_helper.acquire_field(acquisition_ra, acquisition_dec, acquisition_exposure):
+                break
+
+            attempt += 1
+            if attempt == 5:
+                return ObservationStatus.Error
+
+            angle = np.random.uniform(0, 2*np.pi)
+            offset_dra = blind_offset_dra + retry_offset_size * np.sin(angle) / np.cos(acquisition_dec)
+            offset_ddec = blind_offset_ddec + retry_offset_size * np.cos(angle)
+            print(f'ObserveTimeSeries: retrying with offset {3600*offset_dra:.3f} {3600*offset_ddec:.3f}')
+
+        if offset_dra != 0 or offset_ddec != 0:
             print('ObserveTimeSeries: Offsetting to target')
             if not mount_offset_radec(self.log_name, -blind_offset_dra, -blind_offset_ddec):
                 return ObservationStatus.Error
@@ -487,6 +500,10 @@ class ObserveTimeSeries(TelescopeAction):
                     'enum': list(cameras.keys())
                 },
                 'acquisition_exposure': {
+                    'type': 'number',
+                    'minimum': 0
+                },
+                'acquisition_retry_offset': {
                     'type': 'number',
                     'minimum': 0
                 },
