@@ -133,13 +133,13 @@ class ObserveTimeSeries(TelescopeAction):
                 return ObservationStatus.Error
 
             angle = np.random.uniform(0, 2*np.pi)
-            offset_dra = blind_offset_dra + retry_offset_size * np.sin(angle) / np.cos(acquisition_dec)
+            offset_dra = blind_offset_dra + retry_offset_size * np.sin(angle) / np.cos(np.radians(acquisition_dec))
             offset_ddec = blind_offset_ddec + retry_offset_size * np.cos(angle)
             print(f'ObserveTimeSeries: retrying with offset {3600*offset_dra:.3f} {3600*offset_ddec:.3f}')
 
         if offset_dra != 0 or offset_ddec != 0:
             print('ObserveTimeSeries: Offsetting to target')
-            if not mount_offset_radec(self.log_name, -blind_offset_dra, -blind_offset_ddec):
+            if not mount_offset_radec(self.log_name, -offset_dra, -offset_ddec):
                 return ObservationStatus.Error
 
             # Wait for the offset to complete
