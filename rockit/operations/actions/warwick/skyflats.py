@@ -72,6 +72,7 @@ class SkyFlats(TelescopeAction):
         self._start_exposure = CONFIG['min_exposure'] if self.config['evening'] else CONFIG['min_save_exposure']
         self._start_time = None
         self._exposure_count = 0
+        self._retry_attempt = 0
         self._bias_level = 0
         self._filters = self.config.get('filters', filters.copy())
         self._current_filter = None
@@ -190,8 +191,14 @@ class SkyFlats(TelescopeAction):
                 self._wait_condition.wait(LOOP_INTERVAL)
 
             if self.state < AutoFlatState.FilterComplete and Time.now() > self._expected_complete:
-                log.error(self.log_name, 'AutoFlat: exposure timed out')
-                self.state = AutoFlatState.Error
+                if self._retry_attempt < 5:
+                    log.warning(self.log_name, 'AutoFlat: exposure timed out, retrying')
+                    self._retry_attempt += 1
+                    with daemons.warwick_camera.connect() as cam:
+                        cam.start_sequence(1, quiet=True)
+                else:
+                    log.error(self.log_name, 'AutoFlat: exposure timed out')
+                    self.state = AutoFlatState.Error
 
             if self.aborted:
                 break
@@ -202,7 +209,10 @@ class SkyFlats(TelescopeAction):
                 break
 
             # We are done once all filters are complete or acquisition has errored
-            if self.state >= AutoFlatState.FilterComplete and not self._filters:
+            if self.state == AutoFlatState.FilterComplete and not self._filters:
+                break
+
+            if self.state == AutoFlatState.Error:
                 break
 
         if self.state == AutoFlatState.Error:
@@ -231,6 +241,7 @@ class SkyFlats(TelescopeAction):
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
         last_state = self.state
+        self._retry_attempt = 0
 
         if self.state == AutoFlatState.Bias:
             self._bias_level = headers['MEDBIAS']
