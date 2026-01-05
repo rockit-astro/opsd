@@ -72,7 +72,7 @@ class FieldAcquisitionHelper:
         self.wcs_field_center = None
         self.wcs_derivatives = None
 
-    def acquire_field(self, ra_degrees, dec_degrees, exposure_seconds, threshold_arcsec=5):
+    def acquire_field(self, ra_degrees, dec_degrees, exposure_seconds, acquisition_filter=None, threshold_arcsec=5):
         acquire_start = Time.now()
         if not mount_slew_radec(self._parent_action.log_name, ra_degrees, dec_degrees, True):
             return False
@@ -87,6 +87,9 @@ class FieldAcquisitionHelper:
         camera_config = {
             'exposure': exposure_seconds,
         }
+
+        if acquisition_filter:
+            camera_config['filter'] = acquisition_filter
 
         if not configure_pipeline(self._parent_action.log_name, pipeline_config, quiet=True):
             return False
