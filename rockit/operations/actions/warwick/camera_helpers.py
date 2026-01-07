@@ -74,13 +74,36 @@ def cam_set_filter(log_name, filter_name, timeout=FILTER_TIMEOUT):
     return focus_offset(log_name, FOCUS_OFFSETS[filter_name] - FOCUS_OFFSETS[current_filter])
 
 
-def cam_configure(log_name, config=None, quiet=False):
+def cam_set_exposure(log_name, exposure, quiet=False):
+    """Set camera exposure without modifying other configuration."""
+    try:
+        with daemons.warwick_camera.connect() as cam:
+            status = cam.set_exposure(exposure, quiet=quiet)
+            if status == CamCommandStatus.Succeeded:
+                return True
+
+            if status == CamCommandStatus.CameraNotInitialized:
+                log.error(log_name, 'Camera is not initialized')
+                return False
+
+            log.error(log_name, f'Failed to configure camera with status {status}')
+            return False
+    except Pyro4.errors.CommunicationError:
+        log.error(log_name, 'Failed to communicate with camera')
+        return False
+    except Exception:
+        log.error(log_name, 'Unknown error with camera')
+        traceback.print_exc(file=sys.stdout)
+        return False
+
+
+def cam_configure(log_name, config=None, ignore_filter=False, quiet=False):
     """Set camera configuration
        config is assumed to contain a dictionary of camera
        configuration that has been validated by the camera schema.
     """
     config = config or {}
-    if not cam_set_filter(log_name, config.pop('filter', 'NONE')):
+    if not ignore_filter and not cam_set_filter(log_name, config.pop('filter', 'NONE')):
         return False
 
     try:
