@@ -19,11 +19,12 @@
 # pylint: disable=too-many-return-statements
 # pylint: disable=too-many-branches
 
+import queue
 import threading
 from astropy.coordinates import SkyCoord
 from astropy.time import Time
 import astropy.units as u
-from rockit.common import validation
+from rockit.common import log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import cam_take_images, cam_stop
 from .coordinate_helpers import zenith_radec
@@ -36,8 +37,6 @@ from .schema_helpers import camera_science_schema, pipeline_junk_schema
 # Consider the frame lost if this is exceeded
 MAX_PROCESSING_TIME = 20
 
-LOOP_INTERVAL = 5
-
 
 class Progress:
     Waiting, Slewing, Focusing = range(3)
@@ -45,7 +44,7 @@ class Progress:
 
 class FocusSweep(TelescopeAction):
     """
-    Telescope action to do a focus sweep with one camera on a defined field
+    Telescope action to do a focus sweep on a defined field
 
     Example block:
     {
@@ -57,6 +56,7 @@ class FocusSweep(TelescopeAction):
         "min": 1000,
         "max": 2001,
         "step": 100,
+        "samples": 5,
         "camera": {
             "exposure": 1,
             "filter": "NONE" # Optional: defaults to None
@@ -74,7 +74,9 @@ class FocusSweep(TelescopeAction):
         super().__init__('Focus Sweep', **args)
         self._wait_condition = threading.Condition()
         self._progress = Progress.Waiting
-        self._focus_measurements = {}
+        self._received_queue = queue.Queue()
+        self._current_step = 0
+        self._total_steps = int((self.config['max'] - self.config['min']) / self.config['step'])
 
         if 'start' in self.config:
             self._start_date = Time(self.config['start'])
@@ -111,8 +113,7 @@ class FocusSweep(TelescopeAction):
         if self._progress < Progress.Focusing:
             tasks.append('Run Focus Sweep')
         elif self._progress == Progress.Focusing:
-            count = int((self.config['max'] - self.config['min']) / self.config['step'])
-            tasks.append(f'Run Focus Sweep ({len(self._focus_measurements) + 1} / {count})')
+            tasks.append(f'Run Focus Sweep ({self._current_step + 1} / {self._total_steps})')
 
         return tasks
 
@@ -172,27 +173,37 @@ class FocusSweep(TelescopeAction):
             self.status = TelescopeActionStatus.Error
             return
 
+        start_time = Time.now()
         # Configure the camera then take the first exposure to start the process
-        camera_config = self.config["camera"].copy()
-
-        if not cam_take_images(self.log_name, 1, camera_config):
+        exposure = self.config['camera']['exposure']
+        expected_complete = Time.now() + (exposure + MAX_PROCESSING_TIME) * u.s
+        if not cam_take_images(self.log_name, config=self.config['camera'], quiet=True):
             mount_stop(self.log_name)
             self.status = TelescopeActionStatus.Error
             return
 
-        expected_next_exposure = Time.now() + (camera_config['exposure'] + MAX_PROCESSING_TIME) * u.s
+        measurements = 0
+        failed_measurements = 0
+        while not self.aborted:
+            try:
+                self._received_queue.get(timeout=1)
+                failed_measurements = 0
+            except queue.Empty:
+                if Time.now() > expected_complete:
+                    if failed_measurements < 5:
+                        log.warning(self.log_name, 'FocusSweep: exposure timed out, retrying')
+                        failed_measurements += 1
+                        expected_complete = Time.now() + (exposure + MAX_PROCESSING_TIME) * u.s
+                        cam_take_images(self.log_name, quiet=True)
+                    else:
+                        log.error(self.log_name, 'FocusSweep: exposure timed out')
+                        break
+                continue
 
-        while True:
-            # The wait period rate limits the camera status check
-            # The frame received callback will wake this up immediately
-            with self._wait_condition:
-                self._wait_condition.wait(LOOP_INTERVAL)
-
-            if self.aborted:
-                break
-
-            # The last measurement has finished - move on to the next
-            if current_focus in self._focus_measurements:
+            measurements += 1
+            if measurements == self.config['samples']:
+                measurements = 0
+                self._current_step += 1
                 current_focus += self.config['step']
                 if current_focus > self.config['max']:
                     break
@@ -202,27 +213,18 @@ class FocusSweep(TelescopeAction):
                     self.status = TelescopeActionStatus.Error
                     return
 
-                if not cam_take_images(self.log_name, 1, camera_config):
-                    mount_stop(self.log_name)
-                    self.status = TelescopeActionStatus.Error
-                    return
-
-                expected_next_exposure = Time.now() + (camera_config['exposure'] + MAX_PROCESSING_TIME) * u.s
-
-            elif Time.now() > expected_next_exposure:
-                print('Exposure timed out - retrying')
-                if not cam_take_images(self.log_name, 1, camera_config):
-                    mount_stop(self.log_name)
-                    self.status = TelescopeActionStatus.Error
-                    return
-
-                expected_next_exposure = Time.now() + (camera_config['exposure'] + MAX_PROCESSING_TIME) * u.s
+            expected_complete = Time.now() + (exposure + MAX_PROCESSING_TIME) * u.s
+            if not cam_take_images(self.log_name, quiet=True):
+                mount_stop(self.log_name)
+                self.status = TelescopeActionStatus.Error
+                return
 
         mount_stop(self.log_name)
         if not focus_set(self.log_name, initial_focus):
             self.status = TelescopeActionStatus.Error
             return
 
+        log.info(self.log_name, f'Focus sweep completed in {(Time.now() - start_time).to_value(u.s):.0f} s')
         self.status = TelescopeActionStatus.Complete
 
     def abort(self):
@@ -244,15 +246,7 @@ class FocusSweep(TelescopeAction):
 
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
-        with self._wait_condition:
-            if 'MEDHFD' in headers and 'HFDCNT' in headers and 'TELFOC' in headers:
-                print('got hfd', headers['MEDHFD'], 'from', headers['HFDCNT'], 'sources')
-                self._focus_measurements[headers['TELFOC']] = (headers['MEDHFD'], headers['HFDCNT'])
-            else:
-                print('Headers are missing MEDHFD, HFDCNT, or TELFOC')
-                print(headers)
-
-            self._wait_condition.notify_all()
+        self._received_queue.put(headers)
 
     @classmethod
     def validate_config(cls, config_json):
@@ -260,7 +254,7 @@ class FocusSweep(TelescopeAction):
         schema = {
             'type': 'object',
             'additionalProperties': False,
-            'required': ['min', 'max', 'step', 'camera', 'pipeline'],
+            'required': ['min', 'max', 'step', 'samples', 'camera', 'pipeline'],
             'properties': {
                 'type': {'type': 'string'},
                 'ra': {
@@ -285,7 +279,11 @@ class FocusSweep(TelescopeAction):
                 },
                 'step': {
                     'type': 'integer',
-                    'minimum': 0
+                    'minimum': 1
+                },
+                'samples': {
+                    'type': 'integer',
+                    'minimum': 1
                 },
                 'pipeline': pipeline_junk_schema(),
                 'camera': camera_science_schema()
