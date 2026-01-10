@@ -18,7 +18,6 @@
 
 from .add_headers import add_headers
 from .plot_focus_sweep import plot_focus_sweep
-from .run_autofocus import run_autofocus
 from .run_focus_sweep import run_focus_sweep
 from .run_skyflats import run_skyflats
 from .run_sync_pointing import run_sync_pointing
