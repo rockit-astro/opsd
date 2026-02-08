@@ -18,6 +18,7 @@
 
 from .park_telescope import ParkTelescope
 from .initialize_cameras import InitializeCameras
+from .acquire_image import AcquireImage
 from .observe_field import ObserveField
 from .observe_altaz_field import ObserveAltAzField
 from .observe_hadec_field import ObserveHADecField
