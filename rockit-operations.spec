@@ -27,6 +27,7 @@ mkdir -p %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/sting.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/warwick.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/heliostat.json %{buildroot}%{_sysconfdir}/opsd
+%{__install} %{_sourcedir}/config/h400.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/portable.json %{buildroot}%{_sysconfdir}/opsd
 %{__install} %{_sourcedir}/config/pdt.json %{buildroot}%{_sysconfdir}/opsd
 
@@ -118,6 +119,16 @@ Requires: python3-rockit-operations-heliostat
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/heliostat.json
 %{_sysconfdir}/opsd/de421.bsp
+
+%package data-h400
+Summary: Operations data for the H400 test telescope
+Group:   Unspecified
+Requires: python3-rockit-operations-h400
+%description data-h400
+
+%files data-h400
+%defattr(0644,root,root,-)
+%{_sysconfdir}/opsd/h400.json
 
 %package data-portable
 Summary: Operations data for the portable telescope
