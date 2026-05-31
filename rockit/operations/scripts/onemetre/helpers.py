@@ -16,7 +16,9 @@
 
 """Client-side scripts that can be run for semi-automated behaviours"""
 
+import argparse
 import Pyro4
+from astropy.coordinates import Longitude, Latitude
 from astropy.time import Time
 import astropy.units as u
 from rockit.common import daemons
@@ -42,3 +44,18 @@ def schedule_action(action):
     if ret != CommandStatus.Succeeded:
         print(CommandStatus.message(ret))
     return ret
+
+def argparse_type_ra(arg):
+    """Custom argparse type specifying a RA value"""
+    try:
+        return Longitude(arg, unit=u.hourangle).to_value(u.deg)
+    except:
+        raise argparse.ArgumentTypeError(f'invalid value \'{arg}\'')
+
+
+def argparse_type_dec(arg):
+    """Custom argparse type specifying a Dec value"""
+    try:
+        return Latitude(arg, unit=u.deg).to_value(u.deg)
+    except:
+        raise argparse.ArgumentTypeError(f'invalid value \'{arg}\'')

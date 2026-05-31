@@ -26,7 +26,7 @@ from astropy.time import Time
 import astropy.units as u
 from rockit.common import log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from .camera_helpers import cameras, cam_take_images
+from .camera_helpers import cam_take_images
 from .coordinate_helpers import zenith_radec
 from .focus_helpers import focus_get, focus_set
 from .mount_helpers import mount_slew_radec, mount_stop
@@ -35,15 +35,9 @@ from .schema_helpers import camera_science_schema
 
 LOOP_INTERVAL = 5
 
-def focus_set_antibacklash(log_name, camera_id, position, backlash):
-    if camera_id == 'blue' and backlash != 0:
-        if not focus_set(log_name, camera_id, position - backlash):
-            return False
-
-    return focus_set(log_name, camera_id, position)
 
 class Progress:
-    Waiting, Slewing, Blue, Red = range(4)
+    Waiting, Slewing, MeasureInitialHFD, FindPosition, FindJumpHFD, MeasureJumpHFD, MeasureFinalHFD = range(7)
 
 
 class AutoFocus(TelescopeAction):
@@ -57,18 +51,16 @@ class AutoFocus(TelescopeAction):
         "expires": "2022-09-18T22:30:00", # Optional: defaults to never
         "ra": 0, # Optional: defaults to zenith
         "dec": -4.5, # Optional: defaults to zenith
-        "blue": { # Optional: cameras that aren't listed won't be focused
-            "exposure": 1
-            # Also supports optional bin, window, temperature, gainindex, readoutindex (advanced options)
+        "camera": {
+            "exposure": 1,
+            # Also supports optional temperature, gain, offset, stream (advanced options)
         }
-        "backlash": 200 # Optional: defaults to 0
     }
     """
     def __init__(self, **args):
         super().__init__('Auto Focus', **args)
         self._wait_condition = threading.Condition()
         self._progress = Progress.Waiting
-        self._current_state = AutoFocusState.MeasureInitial
 
         if 'start' in self.config:
             self._start_date = Time(self.config['start'])
@@ -81,12 +73,6 @@ class AutoFocus(TelescopeAction):
             self._expires_date = None
 
         self._focus_measurement = None
-
-        # Blue (i.e. telescope) focus impacts red, so must be done first
-        self._camera_ids = []
-        for camera_id in ['blue', 'red']:
-            if camera_id in self.config:
-                self._camera_ids.append(camera_id)
 
     def task_labels(self):
         """Returns list of tasks to be displayed in the schedule table"""
@@ -109,15 +95,16 @@ class AutoFocus(TelescopeAction):
             else:
                 tasks.append('Slew to zenith')
 
-        if self._progress < Progress.Blue and 'blue' in self._camera_ids:
-            tasks.append('Focus Blue camera')
-        elif self._progress == Progress.Blue:
-            tasks.append(f'Focus Blue camera ({AutoFocusState.Labels[self._current_state]})')
-
-        if self._progress < Progress.Red and 'red' in self._camera_ids:
-            tasks.append('Focus Red camera')
-        elif self._progress == Progress.Red:
-            tasks.append(f'Focus Red camera ({AutoFocusState.Labels[self._current_state]})')
+        if self._progress <= Progress.MeasureInitialHFD:
+            tasks.append('Measure initial HFD')
+        if self._progress <= Progress.FindPosition:
+            tasks.append('Find position on V curve')
+        if self._progress <= Progress.FindJumpHFD:
+            tasks.append(f'Search for HFD {CONFIG["target_hfd"]}')
+        if self._progress <= Progress.MeasureJumpHFD:
+            tasks.append('Measure HFD for final move')
+        if self._progress <= Progress.MeasureFinalHFD:
+            tasks.append('Measure final HFD')
 
         return tasks
 
@@ -156,141 +143,120 @@ class AutoFocus(TelescopeAction):
             self.status = TelescopeActionStatus.Error
             return
 
-        for camera_id in self._camera_ids:
-            self._current_state = AutoFocusState.MeasureInitial
-            if camera_id == 'blue':
-                self._progress = Progress.Blue
-            elif camera_id == 'red':
-                self._progress = Progress.Red
-
-            camera_config = CONFIG[camera_id]
+        for _ in range(1):
             start_time = Time.now()
             success = False
-            initial_focus = current_focus = focus_get(self.log_name, camera_id)
+            initial_focus = current_focus = focus_get(self.log_name)
             if current_focus is None:
                 continue
 
-            # Remove backlash before measuring initial focus
-            backlash = self.config.get('backlash', 0)
-            if camera_id == 'blue':
-                focus_set_antibacklash(self.log_name, camera_id, initial_focus, backlash)
-
-            best_hfd = None
-            best_hfd_focus = None
-
             try:
-                log.info(self.log_name, f'AutoFocus: Focusing {camera_id}')
-                initial_hfd = current_hfd = self.measure_current_hfd(camera_id, camera_config['coarse_measure_repeats'])
+                log.info(self.log_name, 'AutoFocus: Focusing')
+
+                self._progress = Progress.MeasureInitialHFD
+                initial_hfd = min_hfd = self.measure_current_hfd(CONFIG['coarse_measure_repeats'])
                 if initial_hfd is None:
                     continue
 
                 log.info(self.log_name, f'AutoFocus: HFD at {current_focus} steps is ' +
-                         f'{initial_hfd:.1f}" ({camera_config["coarse_measure_repeats"]} samples)')
+                         f'{initial_hfd:.1f}" ({CONFIG["coarse_measure_repeats"]} samples)')
 
-                self._current_state = AutoFocusState.FindPositionOnVCurve
+                self._progress = Progress.FindPosition
 
                 # Step inwards until we are well defocused on the inside edge of the v curve
                 failed = False
-                log.info(self.log_name, 'AutoFocus: Searching for position on v-curve')
                 while True:
-                    current_focus -= camera_config['focus_step_size']
-                    if not focus_set_antibacklash(self.log_name, camera_id, current_focus, backlash):
+                    log.info(self.log_name, 'AutoFocus: Searching for position on v-curve')
+                    current_focus -= CONFIG['focus_step_size']
+                    if not focus_set(self.log_name, current_focus):
                         failed = True
                         break
 
-                    current_hfd = self.measure_current_hfd(camera_id, camera_config['coarse_measure_repeats'])
+                    current_hfd = self.measure_current_hfd(CONFIG['coarse_measure_repeats'])
                     if current_hfd is None:
                         failed = True
                         break
 
                     log.info(self.log_name, f'AutoFocus: HFD at {current_focus} steps is ' +
-                             f'{current_hfd:.1f}" ({camera_config["coarse_measure_repeats"]} samples)')
+                             f'{current_hfd:.1f}" ({CONFIG["coarse_measure_repeats"]} samples)')
 
-                    if best_hfd is not None and current_hfd > best_hfd + camera_config['search_hfd_increase'] and current_hfd > camera_config['target_hfd']:
+                    min_hfd = min(min_hfd, current_hfd)
+                    if current_hfd > CONFIG['target_hfd'] and current_hfd > min_hfd:
                         log.info(self.log_name, 'AutoFocus: Found position on v-curve')
                         break
-
-                    if best_hfd is None or current_hfd < best_hfd:
-                        best_hfd = current_hfd
-                        best_hfd_focus = current_focus
 
                 if failed:
                     continue
 
                 # We may have stepped to far inwards in the previous step
                 # Step outwards if needed until the current HFD is closer to the target
-                self._current_state = AutoFocusState.FindTargetHFD
+                self._progress = Progress.FindJumpHFD
                 failed = False
-                while current_hfd > 2 * camera_config['target_hfd']:
-                    log.info(self.log_name, f'AutoFocus: Stepping towards HFD {camera_config["target_hfd"]}')
+                while current_hfd > 2 * CONFIG['target_hfd']:
+                    log.info(self.log_name, f'AutoFocus: Stepping towards HFD {CONFIG["target_hfd"]}')
 
-                    current_focus -= int(current_hfd / (2 * camera_config['inside_focus_slope']))
-                    if not focus_set_antibacklash(self.log_name, camera_id, current_focus, backlash):
+                    current_focus -= int(current_hfd / (2 * CONFIG['inside_focus_slope']))
+                    if not focus_set(self.log_name, current_focus):
                         failed = True
                         break
 
-                    current_hfd = self.measure_current_hfd(camera_id, camera_config['coarse_measure_repeats'])
+                    current_hfd = self.measure_current_hfd(CONFIG['coarse_measure_repeats'])
                     if current_hfd is None:
                         failed = True
                         break
 
                     log.info(self.log_name, f'AutoFocus: HFD at {current_focus} steps is ' +
-                             f'{current_hfd:.1f}" ({camera_config["coarse_measure_repeats"]} samples)')
+                             f'{current_hfd:.1f}" ({CONFIG["coarse_measure_repeats"]} samples)')
 
                 if failed:
                     continue
 
                 # Do a final move to (approximately) the target HFD
-                current_focus += int((camera_config['target_hfd'] - current_hfd) / camera_config['inside_focus_slope'])
-                if not focus_set_antibacklash(self.log_name, camera_id, current_focus, backlash):
+                current_focus += int((CONFIG['target_hfd'] - current_hfd) / CONFIG['inside_focus_slope'])
+                if not focus_set(self.log_name, current_focus):
                     continue
 
                 # Take more frames to get an improved HFD estimate at the current position
-                self._current_state = AutoFocusState.MeasureTargetHFD
-                current_hfd = self.measure_current_hfd(camera_id, camera_config['fine_measure_repeats'])
+                self._progress = Progress.MeasureJumpHFD
+                current_hfd = self.measure_current_hfd(CONFIG['fine_measure_repeats'])
                 if current_hfd is None:
                     continue
 
                 log.info(self.log_name, f'AutoFocus: HFD at {current_focus} steps is ' +
-                         f'{current_hfd:.1f}" ({camera_config["fine_measure_repeats"]} samples)')
+                         f'{current_hfd:.1f}" ({CONFIG["fine_measure_repeats"]} samples)')
 
                 # Jump to target focus using calibrated parameters
-                current_focus += int(
-                    (camera_config['crossing_hfd'] - current_hfd) / camera_config['inside_focus_slope'])
+                current_focus += int((CONFIG['crossing_hfd'] - current_hfd) / CONFIG['inside_focus_slope'])
 
-                if not focus_set_antibacklash(self.log_name, camera_id, current_focus, backlash):
+                if not focus_set(self.log_name, current_focus):
                     continue
 
-                self._current_state = AutoFocusState.MeasureFinalHFD
-                current_hfd = self.measure_current_hfd(camera_id, camera_config['fine_measure_repeats'])
+                self._progress = Progress.MeasureFinalHFD
+                current_hfd = self.measure_current_hfd(CONFIG['fine_measure_repeats'])
                 if current_hfd is None:
                     continue
 
                 runtime = (Time.now() - start_time).to_value(u.s)
 
-                log.info(self.log_name, f'AutoFocus: Achieved HFD of {current_hfd:.1f}" at {current_focus:.0f} in {runtime:.0f} seconds')
+                log.info(self.log_name, f'AutoFocus: Achieved HFD of {current_hfd:.1f}" in {runtime:.0f} seconds')
                 success = current_hfd <= initial_hfd
             finally:
-                if best_hfd and best_hfd < current_hfd:
-                    log.info(self.log_name, f'Using best-focus position {best_hfd_focus:.0f}')
-                    focus_set_antibacklash(self.log_name, camera_id, best_hfd_focus, backlash)
-                elif not success and initial_focus is not None:
+                if not success and initial_focus is not None:
                     log.info(self.log_name, 'Restoring initial focus position')
-                    focus_set_antibacklash(self.log_name, camera_id, initial_focus, backlash)
+                    focus_set(self.log_name, initial_focus)
 
         mount_stop(self.log_name)
         self.status = TelescopeActionStatus.Complete
 
-    def measure_current_hfd(self, camera_id, exposures=1):
+    def measure_current_hfd(self, exposures=1):
         """ Takes a set of exposures and returns the smallest MEDHFD value
             Returns None on error
         """
-        camera_config = CONFIG[camera_id]
         requested = exposures
         failed = 0
 
-        cam_config = self.config[camera_id].copy()
-        cam_config['shutter'] = True
+        cam_config = self.config["camera"].copy()
+        cam_config['stream'] = False
 
         # Handle exposures individually
         # This adds a few seconds of overhead when we want to take
@@ -305,10 +271,10 @@ class AutoFocus(TelescopeAction):
                 log.error(self.log_name, 'AutoFocus: Aborting because 5 HFD samples failed')
                 return None
 
-            if not cam_take_images(self.log_name, camera_id, 1, cam_config, quiet=True):
+            if not cam_take_images(self.log_name, 1, cam_config, quiet=True):
                 return None
 
-            expected_complete = Time.now() + (cam_config['exposure'] + camera_config['max_processing_time']) * u.s
+            expected_complete = Time.now() + (cam_config['exposure'] + CONFIG['max_processing_time']) * u.s
 
             while True:
                 if not self.dome_is_open:
@@ -322,7 +288,7 @@ class AutoFocus(TelescopeAction):
                 if self._focus_measurement:
                     hfd, count = self._focus_measurement
                     self._focus_measurement = None
-                    if count > camera_config['minimum_object_count'] and hfd > camera_config['minimum_hfd']:
+                    if count > CONFIG['minimum_object_count'] and hfd > CONFIG['minimum_hfd']:
                         samples.append(hfd)
                     else:
                         log.warning(self.log_name, f'AutoFocus: Discarding frame with {count} samples ({hfd} HFD)')
@@ -368,7 +334,7 @@ class AutoFocus(TelescopeAction):
         schema = {
             'type': 'object',
             'additionalProperties': False,
-            'required': [],
+            'required': ['camera'],
             'properties': {
                 'type': {'type': 'string'},
                 'ra': {
@@ -389,9 +355,7 @@ class AutoFocus(TelescopeAction):
                     'type': 'string',
                     'format': 'date-time',
                 },
-                'backlash': {
-                    'type': 'number'
-                }
+                'camera': camera_science_schema()
             },
             'dependencies': {
                 'ra': ['dec'],
@@ -400,101 +364,38 @@ class AutoFocus(TelescopeAction):
             }
         }
 
-        for camera_id in cameras:
-            schema['properties'][camera_id] = camera_science_schema(camera_id)
-
         return validation.validation_errors(config_json, schema)
 
 
-class AutoFocusState:
-    """Possible states of the AutoFocus routine"""
-    MeasureInitial, FindPositionOnVCurve, FindTargetHFD, MeasureTargetHFD, \
-        MeasureFinalHFD, Aborting, Complete, Failed, Error = range(9)
-
-    Labels = {
-        0: 'Measuring initial HFD',
-        1: 'Finding position on V curve',
-        2: 'Moving to target HFD',
-        3: 'Measuring HFD',
-        4: 'Measuring final HFD',
-        5: 'Aborting',
-        6: 'Complete',
-        7: 'Failed',
-        8: 'Error'
-    }
-
-
 CONFIG = {
-    'blue': {
-        # The slope (in hfd / step) on the inside edge of the v-curve
-        'inside_focus_slope': -0.020337,
+    # The slope (in hfd / step) on the inside edge of the v-curve
+    'inside_focus_slope': -5.2149,
 
-        # The HFD value where the two v-curve edges cross
-        # This is a more convenient way of representing the position intercept difference
-        'crossing_hfd': 1.1,
+    # The HFD value where the two v-curve edges cross
+    # This is a more convenient way of representing the position intercept difference
+    'crossing_hfd': 1.863,
 
-        # Threshold HFD that is used to filter junk
-        # Real stars should never be smaller than this
-        'minimum_hfd': 1.5,
+    # Threshold HFD that is used to filter junk
+    # Real stars should never be smaller than this
+    'minimum_hfd': 1.2,
 
-        # Number of objects that are required to consider MEDHFD valid
-        'minimum_object_count': 3,
+    # Number of objects that are required to consider MEDHFD valid
+    'minimum_object_count': 25,
 
-        # Aim to reach this HFD on the inside edge of the v-curve
-        # before offsetting to the final focus
-        'target_hfd': 4.5,
+    # Aim to reach this HFD on the inside edge of the v-curve
+    # before offsetting to the final focus
+    'target_hfd': 4,
 
-        # Number of measurements to take when moving in to find the target HFD
-        'coarse_measure_repeats': 3,
+    # Number of measurements to take when moving in to find the target HFD
+    'coarse_measure_repeats': 3,
 
-        # Number of measurements to take when sampling the target and final HFDs
-        'fine_measure_repeats': 7,
+    # Number of measurements to take when sampling the target and final HFDs
+    'fine_measure_repeats': 7,
 
-        # Number of focuser steps to move when searching for the target HFD
-        'focus_step_size': 100,
+    # Number of focuser steps to move when searching for the target HFD
+    'focus_step_size': 0.2,
 
-        # Number of seconds to add to the exposure time to account for readout + object detection
-        # Consider the frame lost if this is exceeded
-        'max_processing_time': 20,
-
-        # Keep moving focus until the HFD increases by this many arcseconds above the best measured value
-        # when searching for the initial position on the V curve
-        'search_hfd_increase': 2
-    },
-    'red': {
-        # The slope (in hfd / step) on the inside edge of the v-curve
-        'inside_focus_slope': -0.0006526110711109228,
-
-        # The HFD value where the two v-curve edges cross
-        # This is a more convenient way of representing the position intercept difference
-        'crossing_hfd': 0.943,
-
-        # Threshold HFD that is used to filter junk
-        # Real stars should never be smaller than this
-        'minimum_hfd': 1.5,
-
-        # Number of objects that are required to consider MEDHFD valid
-        'minimum_object_count': 3,
-
-        # Aim to reach this HFD on the inside edge of the v-curve
-        # before offsetting to the final focus
-        'target_hfd': 4.5,
-
-        # Number of measurements to take when moving in to find the target HFD
-        'coarse_measure_repeats': 3,
-
-        # Number of measurements to take when sampling the target and final HFDs
-        'fine_measure_repeats': 7,
-
-        # Number of focuser steps to move when searching for the target HFD
-        'focus_step_size': 500,
-
-        # Number of seconds to add to the exposure time to account for readout + object detection
-        # Consider the frame lost if this is exceeded
-        'max_processing_time': 20,
-
-        # Keep moving focus until the HFD increases by this many arcseconds above the best measured value
-        # when searching for the initial position on the V curve
-        'search_hfd_increase': 2
-    }
+    # Number of seconds to add to the exposure time to account for readout + object detection
+    # Consider the frame lost if this is exceeded
+    'max_processing_time': 20
 }

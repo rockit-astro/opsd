@@ -14,7 +14,7 @@
 # You should have received a copy of the GNU General Public License
 # along with rockit.  If not, see <http://www.gnu.org/licenses/>.
 
-"""Telescope action to observe a sidereally tracked field with autoguiding"""
+"""Telescope action to observe a sidereally tracked field"""
 
 # pylint: disable=too-many-return-statements
 # pylint: disable=too-many-branches
@@ -22,7 +22,6 @@
 from collections import deque
 import sys
 import threading
-import time
 import traceback
 
 from astropy.time import Time
@@ -31,11 +30,9 @@ import numpy as np
 from rockit.common import log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .action_helpers import CameraWrapper, CameraWrapperStatus, FieldAcquisitionHelper, PIDController, cross_correlate
-from .camera_helpers import cameras
 from .mount_helpers import mount_offset_radec, mount_stop
 from .pipeline_helpers import configure_pipeline
 from .schema_helpers import camera_science_schema, pipeline_science_schema
-
 
 # Amount of time to wait between camera status checks while observing
 CAM_CHECK_STATUS_DELAY = 10 * u.s
@@ -63,7 +60,7 @@ class Progress:
 
 
 class ObserveTimeSeries(TelescopeAction):
-    """Telescope action to observe a sidereally tracked field with autoguiding"""
+    """Telescope action to observe a sidereally tracked field"""
     def __init__(self, **args):
         super().__init__('Observe Time Series', **args)
         self._wait_condition = threading.Condition()
@@ -72,9 +69,7 @@ class ObserveTimeSeries(TelescopeAction):
         self._end_date = Time(self.config['end'])
         self._progress = Progress.Waiting
 
-        self._acquisition_helper = FieldAcquisitionHelper(self)
         self._observation_status = ObservationStatus.PositionLost
-        self._guide_camera = self.config['guide_camera']
         self._is_guiding = False
         self._guide_reference_expcount = None
         self._guide_filename = None
@@ -83,10 +78,8 @@ class ObserveTimeSeries(TelescopeAction):
         self._guide_accumulated_dec = 0
         self._guide_last_updated = None
 
-        self._cameras = {}
-        for camera_id in cameras:
-            self._cameras[camera_id] = CameraWrapper(camera_id, self.config.get(camera_id, None), self.log_name)
-
+        self._camera = CameraWrapper(self)
+        self._acquisition_helper = FieldAcquisitionHelper(self)
         self._guide_buff_x = deque(maxlen=GUIDE_BUFFER_LENGTH)
         self._guide_buff_y = deque(maxlen=GUIDE_BUFFER_LENGTH)
         self._guide_pid_x = PIDController(*GUIDE_PID)
@@ -105,16 +98,26 @@ class ObserveTimeSeries(TelescopeAction):
         target_name = self.config["pipeline"]["object"]
         if self._progress <= Progress.Acquiring:
             tasks.append(f'Acquire target field for {target_name}')
+            if 'blind_offset_dra' in self.config:
+                dra = self.config['blind_offset_dra']
+                ddec = self.config['blind_offset_ddec']
+                tasks.append(f'Using blind offset: {dra:.3f}, {ddec:.3f} deg')
             tasks.append(f'Observe until {self._end_date.strftime("%H:%M:%S")}')
 
         elif self._progress <= Progress.Observing:
             tasks.append(f'Observe target {target_name} until {self._end_date.strftime("%H:%M:%S")}')
 
+        exposure = self.config['camera']['exposure']
+        tasks.append([
+            f'Exposure time: {exposure}s',
+            'Autoguiding: enabled'
+        ])
         return tasks
 
     def __acquire_field(self):
         self._progress = Progress.Acquiring
 
+        # Point to the requested location
         print('ObserveTimeSeries: slewing to target field')
         blind_offset_dra = offset_dra = self.config.get('blind_offset_dra', 0)
         blind_offset_ddec = offset_ddec = self.config.get('blind_offset_ddec', 0)
@@ -125,6 +128,7 @@ class ObserveTimeSeries(TelescopeAction):
         while True:
             acquisition_ra = self.config['ra'] + offset_dra
             acquisition_dec = self.config['dec'] + offset_ddec
+
             if self._acquisition_helper.acquire_field(acquisition_ra, acquisition_dec, acquisition_exposure):
                 break
 
@@ -137,14 +141,10 @@ class ObserveTimeSeries(TelescopeAction):
             offset_ddec = blind_offset_ddec + retry_offset_size * np.cos(angle)
             print(f'ObserveTimeSeries: retrying with offset {3600*offset_dra:.3f} {3600*offset_ddec:.3f}')
 
-        if offset_dra != 0 or offset_ddec != 0:
+        if blind_offset_dra != 0 or blind_offset_ddec != 0:
             print('ObserveTimeSeries: Offsetting to target')
-            if not mount_offset_radec(self.log_name, -offset_dra, -offset_ddec):
+            if not mount_offset_radec(self.log_name, -blind_offset_dra, -blind_offset_ddec):
                 return ObservationStatus.Error
-
-            # Wait for the offset to complete
-            # TODO: monitor tel status instead!
-            time.sleep(10)
 
         return ObservationStatus.OnTarget
 
@@ -163,20 +163,15 @@ class ObserveTimeSeries(TelescopeAction):
     def __observe_field(self):
         # Start science observations
         pipeline_config = self.config['pipeline'].copy()
-        pipeline_config['guide'] = self._guide_camera.upper()
+        pipeline_config['guide'] = 'QHY600M'
         pipeline_config['type'] = 'SCIENCE'
-        if 'archive' not in pipeline_config:
-            pipeline_config['archive'] = [camera_id.upper() for camera_id in self._cameras]
+        pipeline_config['archive'] = ['QHY600M']
 
         if not configure_pipeline(self.log_name, pipeline_config):
             return ObservationStatus.Error
 
-        # Mark cameras idle so they will be started by camera.update() below
         print('ObserveTimeSeries: starting science observations')
-        for camera in self._cameras.values():
-            if camera.status == CameraWrapperStatus.Stopped:
-                camera.status = CameraWrapperStatus.Idle
-
+        self._camera.start(self.config['camera'])
         self._is_guiding = True
 
         # Monitor observation status
@@ -196,33 +191,28 @@ class ObserveTimeSeries(TelescopeAction):
                 return_status = ObservationStatus.PositionLost
                 break
 
-            for camera in self._cameras.values():
-                camera.update()
-                if camera.status == CameraWrapperStatus.Error:
-                    return_status = ObservationStatus.Error
-                    break
+            self._camera.update()
+            if self._camera.status == CameraWrapperStatus.Error:
+                return_status = ObservationStatus.Error
+                break
 
             self.wait_until_time_or_aborted(Time.now() + CAM_CHECK_STATUS_DELAY, self._wait_condition)
 
         # Wait for all cameras to stop before returning to the main loop
         print('ObserveTimeSeries: stopping science observations')
         self._is_guiding = False
-        for camera in self._cameras.values():
-            camera.stop()
-
+        self._camera.stop()
         start = Time.now()
         while True:
-            if all(camera.status in [CameraWrapperStatus.Error, CameraWrapperStatus.Stopped]
-                   for camera in self._cameras.values()):
-                print('ObserveTimeSeries: cameras have stopped')
+            if self._camera.status in [CameraWrapperStatus.Error, CameraWrapperStatus.Stopped]:
+                print('ObserveTimeSeries: camera has stopped')
                 break
 
             if (Time.now() - start) > CAM_STOP_TIMEOUT:
-                print('ObserveTimeSeries: timeout waiting for cameras to stop')
+                print('ObserveTimeSeries: timeout waiting for camera to stop')
                 break
 
-            for camera in self._cameras.values():
-                camera.update()
+            self._camera.update()
 
             with self._wait_condition:
                 self._wait_condition.wait(CAM_CHECK_STATUS_DELAY.to_value(u.s))
@@ -289,22 +279,15 @@ class ObserveTimeSeries(TelescopeAction):
 
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
-        camera_id = headers.get('CAMID', '').lower()
-        self._acquisition_helper.received_frame(camera_id, headers)
-        if camera_id in self._cameras:
-            self._cameras[camera_id].received_frame(headers)
-        else:
-            print('ObserveTimeSeries: Ignoring unknown frame')
+        print('ObserveTimeSeries: Got frame')
+        self._acquisition_helper.received_frame(headers)
+        self._camera.received_frame(headers)
 
         # The FILENAME header key is not available when received_guide_profile is called
         # so we instead save the exposure count number to match against filename here
         if self._guide_reference_expcount is not None and self._guide_filename is None:
             if headers.get('EXPCNT', None) == self._guide_reference_expcount:
                 self._guide_filename = headers.get('FILENAME', None)
-
-        if headers.get('TELSTATE', None) == 'STOPPED':
-            print('ObserveTimeSeries: telescope has stopped!')
-            self._is_guiding = False
 
     def received_guide_profile(self, headers, profile_x, profile_y):
         """Notification called when a guide profile has been calculated by the data pipeline"""
@@ -343,7 +326,7 @@ class ObserveTimeSeries(TelescopeAction):
             # Measure image offset
             dx = cross_correlate(profile_x, self._guide_profiles[0])
             dy = cross_correlate(profile_y, self._guide_profiles[1])
-            print(f'ObserveField: measured guide offsets {dx:.2f} {dy:.2f} px')
+            print(f'ObserveTimeSeries: measured guide offsets {dx:.2f} {dy:.2f} px')
 
             guide_headers.append({
                 "keyword": "AG_ERRX",
@@ -468,7 +451,7 @@ class ObserveTimeSeries(TelescopeAction):
         schema = {
             'type': 'object',
             'additionalProperties': False,
-            'required': ['start', 'end', 'ra', 'dec', 'guide_camera', 'pipeline'],
+            'required': ['start', 'end', 'ra', 'dec', 'pipeline', 'camera'],
             'properties': {
                 'type': {'type': 'string'},
                 'start': {
@@ -495,10 +478,6 @@ class ObserveTimeSeries(TelescopeAction):
                 'blind_offset_ddec': {
                     'type': 'number'
                 },
-                'guide_camera': {
-                    'type': 'string',
-                    'enum': list(cameras.keys())
-                },
                 'acquisition_exposure': {
                     'type': 'number',
                     'minimum': 0
@@ -508,10 +487,12 @@ class ObserveTimeSeries(TelescopeAction):
                     'minimum': 0
                 },
                 'pipeline': pipeline_science_schema(),
+                'camera': camera_science_schema()
+            },
+            'dependencies': {
+                'blind_offset_dra': ['blind_offset_ddec'],
+                'blind_offset_ddec': ['blind_offset_dra']
             }
         }
-
-        for camera_id in cameras:
-            schema['properties'][camera_id] = camera_science_schema(camera_id)
 
         return validation.validation_errors(config_json, schema)

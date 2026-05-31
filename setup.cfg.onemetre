@@ -9,10 +9,10 @@ packages =
   rockit.operations.dome.astrohaven
 
 install_requires =
-    rockit.camera.andor2
+    rockit.camera.qhy
     rockit.covers
     rockit.dome
-    rockit.focuser.c863
+    rockit.focuser.atlas
     rockit.operations
     rockit.pipeline
     rockit.mount.talon

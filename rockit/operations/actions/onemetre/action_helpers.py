@@ -34,7 +34,7 @@ from scipy import conjugate, polyfit
 from scipy.fftpack import fft, ifft
 # pylint: enable=no-name-in-module
 
-from rockit.camera.andor2 import CameraStatus
+from rockit.camera.qhy import CameraStatus
 from rockit.common import log
 
 from .camera_helpers import cam_status, cam_stop, cam_take_images
@@ -57,14 +57,13 @@ class WCSStatus:
 
 
 class CameraWrapperStatus:
-    Idle, Active, Error, Stopping, Stopped, Skipped = range(6)
+    Idle, Active, Error, Stopping, Stopped = range(5)
 
 
 class FieldAcquisitionHelper:
     def __init__(self, parent_action):
         self._wait_condition = threading.Condition()
         self._parent_action = parent_action
-        self._camera_id = parent_action.config['guide_camera']
         self._wcs_status = WCSStatus.Inactive
 
         self.wcs_field_center = None
@@ -85,16 +84,16 @@ class FieldAcquisitionHelper:
         if not configure_pipeline(self._parent_action.log_name, pipeline_config, quiet=True):
             return False
 
-        camera_config = {}
-        camera_config.update(self._parent_action.config.get(self._camera_id, {}))
-        camera_config.update({
-            'exposure': exposure_seconds,
-            'shutter': True
-        })
-
         # Converge on requested position
         attempt = 1
-        target = SkyCoord(ra=ra_degrees, dec=dec_degrees, unit=u.deg, frame='icrs')
+        target = SkyCoord(ra=ra_degrees,
+                          dec=dec_degrees,
+                          unit=u.degree, frame='icrs')
+
+        camera_config = {
+            'exposure': exposure_seconds,
+        }
+
         while not self._parent_action.aborted and self._parent_action.dome_is_open:
             # Wait for telescope position to settle before taking first image
             time.sleep(5)
@@ -102,9 +101,9 @@ class FieldAcquisitionHelper:
             self._wcs_status = WCSStatus.WaitingForWCS
 
             print('FieldAcquisitionHelper: taking test image')
-            while not cam_take_images(self._parent_action.log_name, self._camera_id, config=camera_config, quiet=True):
+            while not cam_take_images(self._parent_action.log_name, config=camera_config, quiet=True):
                 # Try stopping the camera, waiting a bit, then try again
-                cam_stop(self._parent_action.log_name, self._camera_id)
+                cam_stop(self._parent_action.log_name)
                 time.sleep(10)
                 if self._parent_action.aborted or not self._parent_action.dome_is_open:
                     break
@@ -166,11 +165,8 @@ class FieldAcquisitionHelper:
 
         return True
 
-    def received_frame(self, camera_id, headers):
+    def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
-        if camera_id != self._camera_id:
-            return
-
         with self._wait_condition:
             if self._wcs_status == WCSStatus.WaitingForWCS:
                 if 'CRVAL1' in headers and 'IMAG-RGN' in headers and 'SITELAT' in headers:
@@ -196,11 +192,12 @@ class FieldAcquisitionHelper:
 
 class CameraWrapper:
     """Holds camera-specific state"""
-    def __init__(self, camera_id, camera_config, log_name):
-        self.camera_id = camera_id
-        self.status = CameraWrapperStatus.Stopped if camera_config is not None else CameraWrapperStatus.Skipped
-        self._log_name = log_name
-        self._config = camera_config or {}
+    def __init__(self, parent_action):
+        self.status = CameraWrapperStatus.Stopped
+        self.completed_frames = 0
+        self.target_frames = 0
+        self._log_name = parent_action.log_name
+        self._config = {}
         self._start_attempts = 0
         self._last_frame_time = Time.now()
 
@@ -209,22 +206,38 @@ class CameraWrapper:
             self.status = CameraWrapperStatus.Stopped
         elif self.status == CameraWrapperStatus.Active:
             self.status = CameraWrapperStatus.Stopping
-            cam_stop(self._log_name, self.camera_id)
+            cam_stop(self._log_name)
+
+    def start(self, config, total=0):
+        self._start_attempts = 0
+        self._last_frame_time = Time.now()
+        self._config = config
+        self.completed_frames = 0
+        self.target_frames = total
+        if self.status == CameraWrapperStatus.Stopped:
+            self.status = CameraWrapperStatus.Idle
+
+        self.update()
 
     # pylint: disable=unused-argument
     def received_frame(self, headers):
         """Callback to process an acquired frame. headers is a dictionary of header keys"""
         self._last_frame_time = Time.now()
+        self.completed_frames += 1
     # pylint: enable=unused-argument
 
     def update(self):
         """Monitor camera status"""
-        if self.status in [CameraWrapperStatus.Error, CameraWrapperStatus.Stopped, CameraWrapperStatus.Skipped]:
+        if self.status in [CameraWrapperStatus.Error, CameraWrapperStatus.Stopped]:
             return
+
+        if self.status in [CameraWrapperStatus.Idle, CameraWrapperStatus.Active] and self.target_frames != 0 and \
+                self.completed_frames == self.target_frames:
+            self.status = CameraWrapperStatus.Stopped
 
         # Start exposure sequence on first update
         if self.status == CameraWrapperStatus.Idle:
-            if cam_take_images(self._log_name, self.camera_id, 0, self._config):
+            if cam_take_images(self._log_name, self.target_frames - self.completed_frames, self._config):
                 self._start_attempts = 0
                 self._last_frame_time = Time.now()
                 self.status = CameraWrapperStatus.Active
@@ -232,45 +245,45 @@ class CameraWrapper:
 
             # Something went wrong - see if we can recover
             self._start_attempts += 1
-            log.error(self._log_name, f'Failed to start {self.camera_id} exposures (attempt {self._start_attempts} of 5)')
+            log.error(self._log_name, f'Failed to start exposures (attempt {self._start_attempts} of 5)')
 
             if self._start_attempts >= 5:
-                log.error(self._log_name, f'Too many {self.camera_id} start attempts: aborting')
+                log.error(self._log_name, 'Too many start attempts: aborting')
                 self.status = CameraWrapperStatus.Error
                 return
 
             # Try stopping the camera and see if we can recover on the next update loop
-            cam_stop(self._log_name, self.camera_id)
+            cam_stop(self._log_name)
             return
 
         if self.status == CameraWrapperStatus.Stopping:
-            if cam_status(self._log_name, self.camera_id).get('state', CameraStatus.Idle) == CameraStatus.Idle:
+            if cam_status(self._log_name).get('state', CameraStatus.Idle) == CameraStatus.Idle:
                 self.status = CameraWrapperStatus.Stopped
                 return
 
         # Assume that everything is ok if we are still receiving frames at a regular rate
-        if Time.now() < self._last_frame_time + self._config['exposure'] * u.s + MAX_PROCESSING_TIME:
+        if Time.now() < self._last_frame_time + 2 * self._config['exposure'] * u.s + MAX_PROCESSING_TIME:
             return
 
         # Exposure has timed out: lets find out why
-        status = cam_status(self._log_name, self.camera_id).get('state', None)
+        status = cam_status(self._log_name).get('state', None)
 
         # Lost communication with camera daemon, this is assumed to be unrecoverable
         if not status:
-            log.error(self._log_name, f'Lost communication with {self.camera_id} camera')
+            log.error(self._log_name, 'Lost communication with camera')
             self.status = CameraWrapperStatus.Error
             return
 
         # Camera may be idle if the pipeline blocked for too long
         if status == CameraStatus.Idle:
-            log.warning(self._log_name, f'Recovering idle {self.camera_id} camera')
+            log.warning(self._log_name, 'Recovering idle camera')
             self.status = CameraWrapperStatus.Idle
             self.update()
             return
 
         # Try stopping the camera and see if we can recover on the next update loop
-        log.warning(self._log_name, f'Camera {self.camera_id} has timed out in state {CameraStatus.label(status)}, stopping camera')
-        cam_stop(self._log_name, self.camera_id)
+        log.warning(self._log_name, f'Camera has timed out in state {CameraStatus.label(status)}, stopping camera')
+        cam_stop(self._log_name)
 
 
 def cross_correlate(check, reference):
