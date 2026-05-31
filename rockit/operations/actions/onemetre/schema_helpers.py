@@ -14,9 +14,6 @@
 # You should have received a copy of the GNU General Public License
 # along with rockit.  If not, see <http://www.gnu.org/licenses/>.
 
-from .camera_helpers import cameras
-
-
 def pipeline_science_schema():
     """Schema block for science actions"""
     return {
@@ -27,13 +24,6 @@ def pipeline_science_schema():
             'subdirectory': {'type': 'string'},
             'prefix': {'type': 'string'},
             'object': {'type': 'string'},
-            'archive': {
-                'type': 'array',
-                'items': {
-                    'type': 'string',
-                    'enum': [camera_id.upper() for camera_id in cameras]
-                }
-            }
 
             # NOTE: wcs, intstats, hfd, guide are considered internal properties
             # that cannot be set through the json definitions.
@@ -50,13 +40,6 @@ def pipeline_junk_schema():
         'properties': {
             'subdirectory': {'type': 'string'},
             'prefix': {'type': 'string'},
-            'archive': {
-                'type': 'array',
-                'items': {
-                    'type': 'string',
-                    'enum': [camera_id.upper() for camera_id in cameras]
-                }
-            }
         }
     }
 
@@ -74,97 +57,84 @@ def pipeline_flat_schema():
     }
 
 
-def camera_science_schema(camera_id):
+def camera_science_schema():
     """Schema block for QHY cameras"""
-    if camera_id == 'red':
-        ccd_width_with_overscan = 2088
-    else:
-        ccd_width_with_overscan = 2048
-
     return {
         'type': 'object',
         'additionalProperties': False,
         'required': ['exposure'],
         'properties': {
-            'temperature': {
-                'type': 'number',
-                'minimum': -80,
-                'maximum': 0,
-            },
-            'cooler': {
-                'type': 'boolean'
-            },
-            'shutter': {
-                'type': 'boolean'
-            },
-            'gainindex': {
-                'type': 'integer',
-                'minimum': 0,
-                'maximum': 2
-            },
-            'readoutindex': {
-                'type': 'integer',
-                'minimum': 0,
-                'maximum': 3
-            },
             'exposure': {
                 'type': 'number',
                 'minimum': 0
             },
-            'delay': {
-                'type': 'number',
-                'minimum': 0
-            },
-            'bin': {
-                'type': 'array',
-                'minItems': 2,
-                'maxItems': 2,
-                'items': {
-                    'type': 'integer',
-                    'minimum': 1
-                }
-            },
             'window': {
                 'type': 'array',
-                'minItems': 4,
                 'maxItems': 4,
+                'minItems': 4,
                 'items': [
                     {
-                        'type': 'integer',
+                        'type': 'number',
                         'minimum': 1,
-                        'maximum': ccd_width_with_overscan
+                        'maximum': 9600,
                     },
                     {
-                        'type': 'integer',
+                        'type': 'number',
                         'minimum': 1,
-                        'maximum': ccd_width_with_overscan
+                        'maximum': 9600,
                     },
                     {
-                        'type': 'integer',
+                        'type': 'number',
                         'minimum': 1,
-                        'maximum': 2048
+                        'maximum': 6422,
                     },
                     {
-                        'type': 'integer',
+                        'type': 'number',
                         'minimum': 1,
-                        'maximum': 2048
-                    }
+                        'maximum': 6422,
+                    },
                 ]
+            },
+            'bin': {
+                'type': 'number',
+                'minimum': 1,
+                'maximum': 9600,
+            },
+            'bin_method': {
+                'type': 'string',
+                'enum': ['sum', 'mean']
+            },
+            'temperature': {
+                'type': 'number',
+                'minimum': -20,
+                'maximum': 30,
+            },
+            'gain': {
+                'type': 'integer',
+                'minimum': 0,
+                'maximum': 100,
+            },
+            'offset': {
+                'type': 'integer',
+                'minimum': 0,
+                'maximum': 1000,
+            },
+            'stream': {
+                'type': 'boolean'
             }
         }
     }
 
 
-def camera_flat_schema(camera_id):
-    """Flat-specific schema block for Andor cameras"""
-    schema = camera_science_schema(camera_id)
+def camera_flat_schema():
+    """Flat-specific schema block for QHY cameras"""
+    schema = camera_science_schema()
 
     # Exposure is calculated dynamically
-    schema['required'].remove('exposure')
     schema['properties'].pop('exposure')
-    schema['properties'].pop('delay')
+    schema['required'].remove('exposure')
 
-    # Shutter is managed by the action
-    schema['properties'].pop('shutter')
+    # Streaming is force-disabled as images are processed one-by-one
+    schema['properties'].pop('stream')
 
     return schema

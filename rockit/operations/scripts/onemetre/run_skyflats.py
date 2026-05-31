@@ -17,7 +17,6 @@
 """Script to queue a skyflats action"""
 
 import argparse
-from rockit.operations.actions.onemetre.camera_helpers import cameras
 from .helpers import schedule_action
 
 
@@ -28,8 +27,6 @@ def run_skyflats(prefix, args):
                         help='schedule morning flats instead of evening flats')
     parser.add_argument('--prefix', type=str, default='evening-flat',
                         help='filename prefix for saved images')
-    parser.add_argument('--cameras', type=str, nargs='+', choices=cameras.keys(),
-                        default=cameras.keys(), help='cameras to acquire flats')
 
     args = parser.parse_args(args)
 
@@ -40,8 +37,5 @@ def run_skyflats(prefix, args):
            'prefix': args.prefix
         }
     }
-
-    for camera_id in args.cameras:
-        action[camera_id] = {}
 
     schedule_action(action)

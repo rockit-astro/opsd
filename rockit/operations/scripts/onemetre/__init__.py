@@ -16,4 +16,6 @@
 
 """Client-side scripts that can be run for semi-automated behaviours"""
 
+from .plot_focus_sweep import plot_focus_sweep
+from .run_focus_sweep import run_focus_sweep
 from .run_skyflats import run_skyflats

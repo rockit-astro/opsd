@@ -23,7 +23,7 @@ from astropy.time import Time
 import astropy.units as u
 from rockit.common import validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from .camera_helpers import cameras, cam_take_images
+from .camera_helpers import cam_take_images
 from .coordinate_helpers import altaz_to_radec
 from .mount_helpers import mount_slew_radec, mount_stop
 from .pipeline_helpers import configure_pipeline
@@ -46,11 +46,7 @@ class PointingMeshPointing(TelescopeAction):
         "type": "PointingMeshPointing",
         "alt": 50,
         "az": 180,
-        "blue": { # Optional: cameras that aren't listed won't acquire an image
-            "exposure": 1
-            # Also supports optional bin, window, temperature, gainindex, readoutindex (advanced options)
-        },
-        "red": { # Optional: cameras that aren't listed won't acquire an image
+        "camera": {
             "exposure": 1
             # Also supports optional bin, window, temperature, gainindex, readoutindex (advanced options)
         },
@@ -65,11 +61,7 @@ class PointingMeshPointing(TelescopeAction):
         super().__init__('Pointing Model', **args)
         self._wait_condition = threading.Condition()
         self._progress = Progress.NotStarted
-        self._camera_ids = []
         self._received_frames = []
-        for camera_id in ['blue', 'red']:
-            if camera_id in self.config:
-                self._camera_ids.append(camera_id)
 
     def task_labels(self):
         """Returns list of tasks to be displayed in the schedule table"""
@@ -79,7 +71,7 @@ class PointingMeshPointing(TelescopeAction):
         if self._progress <= Progress.Slewing:
             tasks.append(f'Slew to alt {round(self.config["alt"])}\u00B0, az {round(self.config["az"])}\u00B0')
         if self._progress <= Progress.Measuring:
-            tasks.append(f'Acquire image ({", ".join(self._camera_ids)})')
+            tasks.append('Acquire image')
 
         return tasks
 
@@ -100,7 +92,7 @@ class PointingMeshPointing(TelescopeAction):
         pipeline_config = self.config['pipeline'].copy()
         pipeline_config['wcs'] = True
         if 'archive' not in pipeline_config:
-            pipeline_config['archive'] = [c.upper() for c in self._camera_ids]
+            pipeline_config['archive'] = ['QHY600M']
 
         if not configure_pipeline(self.log_name, pipeline_config, quiet=True):
             self.status = TelescopeActionStatus.Error
@@ -112,10 +104,9 @@ class PointingMeshPointing(TelescopeAction):
             return
 
         max_exposure = 0
-        for camera_id in self._camera_ids:
-            print('PointingMeshPointing: taking image')
-            cam_take_images(self.log_name, camera_id, 1, self.config[camera_id], quiet=True)
-            max_exposure = max(max_exposure, self.config[camera_id]['exposure'])
+        print('PointingMeshPointing: taking image')
+        cam_take_images(self.log_name, 1, self.config['camera'], quiet=True)
+        max_exposure = max(max_exposure, self.config['camera']['exposure'])
 
         # Wait for new frame
         expected_complete = Time.now() + max_exposure * u.s + MAX_PROCESSING_TIME
@@ -123,7 +114,7 @@ class PointingMeshPointing(TelescopeAction):
         while True:
             with self._wait_condition:
                 remaining = (expected_complete - Time.now()).to(u.second).value
-                if remaining < 0 or len(self._received_frames) == len(self._camera_ids):
+                if remaining < 0 or self._received_frames:
                     break
 
                 self._wait_condition.wait(max(remaining, 1))
@@ -150,10 +141,9 @@ class PointingMeshPointing(TelescopeAction):
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
         camera_id = headers.get('CAMID', '').lower()
-        if camera_id in self._camera_ids:
-            with self._wait_condition:
-                self._received_frames.append(camera_id)
-                self._wait_condition.notify_all()
+        with self._wait_condition:
+            self._received_frames.append(camera_id)
+            self._wait_condition.notify_all()
 
     @classmethod
     def validate_config(cls, config_json):
@@ -161,7 +151,7 @@ class PointingMeshPointing(TelescopeAction):
         schema = {
             'type': 'object',
             'additionalProperties': False,
-            'required': ['alt', 'az', 'pipeline'],
+            'required': ['alt', 'az', 'pipeline', 'camera'],
             'properties': {
                 'type': {'type': 'string'},
                 'alt': {
@@ -174,11 +164,9 @@ class PointingMeshPointing(TelescopeAction):
                     'minimum': 0,
                     'maximum': 360
                 },
+                'camera': camera_science_schema(),
                 'pipeline': pipeline_junk_schema()
             }
         }
-
-        for camera_id in cameras:
-            schema['properties'][camera_id] = camera_science_schema(camera_id)
 
         return validation.validation_errors(config_json, schema)

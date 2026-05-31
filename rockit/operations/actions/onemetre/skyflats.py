@@ -25,9 +25,9 @@ import traceback
 import Pyro4
 from astropy.time import Time
 from astropy import units as u
-from rockit.common import log, validation
+from rockit.common import daemons, log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
-from .camera_helpers import cameras, cam_stop
+from .camera_helpers import cam_stop
 from .coordinate_helpers import sun_altaz
 from .mount_helpers import mount_slew_altaz
 from .pipeline_helpers import pipeline_enable_archiving, configure_pipeline
@@ -48,10 +48,9 @@ class SkyFlats(TelescopeAction):
     {
         "type": "SkyFlats",
         "evening": true,
-        "(blue|red)": { # Optional: cameras that aren't listed won't be used
-            "bin": [1, 1] # Optional: defaults to 1, 1
-            "window": [1, 2048, 1, 2048] # Optional: defaults to full-frame
-            # Also supports optional temperature, gainindex, readoutindex (advanced options)
+        "camera": { # Optional: defaults will be used if not specified
+            "window": [1, 9600, 1, 6422] # Optional: defaults to full-frame
+            # Also supports optional temperature, gain, offset (advanced options)
         },
         "pipeline": {
            "prefix": "evening-flat",
@@ -64,10 +63,7 @@ class SkyFlats(TelescopeAction):
         self._wait_condition = threading.Condition()
         self._progress = Progress.Waiting
 
-        self._cameras = {}
-        for camera_id, camera_daemon in cameras.items():
-            self._cameras[camera_id] = CameraWrapper(camera_id, camera_daemon, self.config.get(camera_id, None),
-                                                     self.config['evening'], self.log_name)
+        self._camera = CameraWrapper(self.config.get('camera', {}), self.config['evening'], self.log_name)
 
     def task_labels(self):
         """Returns list of tasks to be displayed in the schedule table"""
@@ -78,21 +74,14 @@ class SkyFlats(TelescopeAction):
                 tasks.append(f'Wait until sunalt < {CONFIG["max_sun_altitude"]} deg')
             else:
                 tasks.append(f'Wait until sunalt > {CONFIG["min_sun_altitude"]} deg')
-        elif not self.dome_is_open:
-            tasks.append('Wait for dome')
 
         if self._progress <= Progress.Slewing:
             tasks.append('Slew to flats location')
 
         if self._progress < Progress.Measuring:
-            camera_ids = [c.camera_id for c in self._cameras.values() if c.state != AutoFlatState.Complete]
-            tasks.append(f'Run AutoFlat ({", ".join(camera_ids)})')
+            tasks.append('Run AutoFlat')
         elif self._progress == Progress.Measuring:
-            tasks.append('Run AutoFlat:')
-            camera_state = []
-            for camera_id, camera in self._cameras.items():
-                camera_state.append(f'{camera_id}: {AutoFlatState.Labels[camera.state]}')
-            tasks.append(camera_state)
+            tasks.append('Run AutoFlat: ' + AutoFlatState.Labels[self._camera.state])
 
         return tasks
 
@@ -118,22 +107,20 @@ class SkyFlats(TelescopeAction):
                     self.status = TelescopeActionStatus.Complete
                     return
 
-                if sun_altitude < CONFIG['max_sun_altitude'] and self.dome_is_open:
+                if sun_altitude < CONFIG['max_sun_altitude']:
                     break
 
-                print(f'AutoFlat: {sun_altitude:.1f} > {CONFIG["max_sun_altitude"]:.1f}; ' +
-                      f'dome {self.dome_is_open} - keep waiting')
+                print(f'AutoFlat: {sun_altitude:.1f} > {CONFIG["max_sun_altitude"]:.1f} - keep waiting')
             else:
                 if sun_altitude > CONFIG['max_sun_altitude']:
                     log.info(self.log_name, 'AutoFlat: Sun already above maximum altitude')
                     self.status = TelescopeActionStatus.Complete
                     return
 
-                if sun_altitude > CONFIG['min_sun_altitude'] and self.dome_is_open:
+                if sun_altitude > CONFIG['min_sun_altitude']:
                     break
 
-                print(f'AutoFlat: {sun_altitude:.1f} < {CONFIG["min_sun_altitude"]:.1f}; ' +
-                      f'dome {self.dome_is_open} - keep waiting')
+                print(f'AutoFlat: {sun_altitude:.1f} < {CONFIG["min_sun_altitude"]:.1f} - keep waiting')
 
             with self._wait_condition:
                 self._wait_condition.wait(CONFIG['sun_altitude_check_interval'])
@@ -146,7 +133,7 @@ class SkyFlats(TelescopeAction):
         sun_az = sun_altaz(self.site_location)[1]
 
         self._progress = Progress.Slewing
-        if not mount_slew_altaz(self.log_name, 75, sun_az + 180, open_covers=True):
+        if not mount_slew_altaz(self.log_name, 75, sun_az + 180):
             if not self.aborted:
                 log.error(self.log_name, 'AutoFlat: Failed to slew telescope')
                 self.status = TelescopeActionStatus.Error
@@ -160,32 +147,22 @@ class SkyFlats(TelescopeAction):
         # This starts the autoflat logic, which is run
         # in the received_frame callbacks
         self._progress = Progress.Measuring
-        for camera in self._cameras.values():
-            camera.start()
+        self._camera.start()
 
         # Wait until complete
         while True:
             with self._wait_condition:
                 self._wait_condition.wait(LOOP_INTERVAL)
 
-            for camera in self._cameras.values():
-                camera.check_timeout()
-
+            self._camera.check_timeout()
             if self.aborted:
                 break
 
-            if not self.dome_is_open:
-                for camera in self._cameras.values():
-                    camera.abort()
-
-                log.error(self.log_name, 'AutoFlat: Dome has closed')
-                break
-
             # We are done once all cameras are either complete or have errored
-            if all(camera.state >= AutoFlatState.Complete for camera in self._cameras.values()):
+            if self._camera.state >= AutoFlatState.Complete:
                 break
 
-        if any(camera.state == AutoFlatState.Error for camera in self._cameras.values()):
+        if self._camera.state == AutoFlatState.Error:
             self.status = TelescopeActionStatus.Error
         else:
             self.status = TelescopeActionStatus.Complete
@@ -193,8 +170,7 @@ class SkyFlats(TelescopeAction):
     def abort(self):
         """Notification called when the telescope is stopped by the user"""
         super().abort()
-        for camera in self._cameras.values():
-            camera.abort()
+        self._camera.abort()
 
         with self._wait_condition:
             self._wait_condition.notify_all()
@@ -208,11 +184,7 @@ class SkyFlats(TelescopeAction):
 
     def received_frame(self, headers):
         """Notification called when a frame has been processed by the data pipeline"""
-        camera_id = headers.get('CAMID', '').lower()
-        if camera_id in self._cameras:
-            self._cameras[camera_id].received_frame(headers)
-        else:
-            print('AutoFlat: Ignoring unknown frame')
+        self._camera.received_frame(headers)
 
     @classmethod
     def validate_config(cls, config_json):
@@ -224,12 +196,10 @@ class SkyFlats(TelescopeAction):
             'properties': {
                 'type': {'type': 'string'},
                 'evening': {'type': 'boolean'},
-                'pipeline': pipeline_flat_schema()
+                'pipeline': pipeline_flat_schema(),
+                'camera': camera_flat_schema()
             }
         }
-
-        for camera_id in cameras:
-            schema['properties'][camera_id] = camera_flat_schema(camera_id)
 
         return validation.validation_errors(config_json, schema)
 
@@ -242,9 +212,7 @@ class AutoFlatState:
 
 class CameraWrapper:
     """Holds camera-specific flat state"""
-    def __init__(self, camera_id, daemon, camera_config, is_evening, log_name):
-        self.camera_id = camera_id
-        self._daemon = daemon
+    def __init__(self, camera_config, is_evening, log_name):
         self._log_name = log_name
         self._camera_config = camera_config or {}
         self._expected_complete = Time.now()
@@ -261,76 +229,79 @@ class CameraWrapper:
         if self.state == AutoFlatState.Complete:
             return
 
-        with self._daemon.connect() as cam:
+        with daemons.portable_camera.connect() as cam:
             config = self._camera_config.copy()
 
-            # Start with a bias frame
-            config['shutter'] = False
+            # The current QHY firmware adds an extra exposure time's delay
+            # before returning the first frame. Use the single frame mode instead!
+            config['stream'] = False
+
+            # Start by taking a full-frame image to measure the bias level,
+            # as the actual flat frames may window away the overscan
+            config.pop('window', None)
 
             cam.configure(config, quiet=True)
 
-        self.__take_image(0, 0)
+        self.__take_image(0)
         self._start_time = Time.now()
 
     def check_timeout(self):
         """Sets error state if an expected frame is more than 30 seconds late"""
-        if self.state not in [AutoFlatState.Waiting, AutoFlatState.Saving]:
+        if self.state >= AutoFlatState.Complete or Time.now() < self._expected_complete:
             return
 
-        if Time.now() > self._expected_complete:
-            log.error(self._log_name, f'AutoFlat: camera {self.camera_id} exposure timed out')
-            self.state = AutoFlatState.Error
+        log.error(self._log_name, 'AutoFlat: exposure timed out')
+        self.state = AutoFlatState.Error
 
-    def __take_image(self, exposure, delay):
+    def __take_image(self, exposure):
         """Tells the camera to take an exposure"""
-        self._expected_complete = Time.now() + (exposure + delay + CONFIG['max_processing_time']) * u.s
+        self._expected_complete = Time.now() + (exposure + CONFIG['max_processing_time']) * u.s
 
         try:
             # Need to communicate directly with camera daemon
             # to adjust exposure without resetting other config
-            with self._daemon.connect() as cam:
-                cam.set_exposure_delay(delay, quiet=True)
+            with daemons.portable_camera.connect() as cam:
                 cam.set_exposure(exposure, quiet=True)
                 cam.start_sequence(1, quiet=True)
         except Pyro4.errors.CommunicationError:
-            log.error(self._log_name, 'Failed to communicate with camera ' + self.camera_id)
+            log.error(self._log_name, 'Failed to communicate with camera')
             self.state = AutoFlatState.Error
         except Exception:
-            log.error(self._log_name, 'Unknown error with camera ' + self.camera_id)
+            log.error(self._log_name, 'Unknown error with camera')
             traceback.print_exc(file=sys.stdout)
             self.state = AutoFlatState.Error
 
     def received_frame(self, headers):
         """Callback to process an acquired frame. headers is a dictionary of header keys"""
         last_state = self.state
-        delay_exposure = 0
 
         if self.state == AutoFlatState.Bias:
-            self._bias_level = headers['MEDCNTS']
-            log.info(self._log_name, f'AutoFlat: {self.camera_id} bias is {self._bias_level:.0f} ADU')
+            self._bias_level = headers['MEDBIAS']
+            log.info(self._log_name, f'AutoFlat: bias is {self._bias_level:.0f} ADU')
 
-            try:
-                with self._daemon.connect() as cam:
-                    cam.set_shutter(True, quiet=True)
-            except Pyro4.errors.CommunicationError:
-                log.error(self._log_name, 'Failed to communicate with camera ' + self.camera_id)
-                self.state = AutoFlatState.Error
-                return
-            except Exception:
-                log.error(self._log_name, 'Unknown error with camera ' + self.camera_id)
-                traceback.print_exc(file=sys.stdout)
-                self.state = AutoFlatState.Error
-                return
+            if 'window' in self._camera_config:
+                try:
+                    with daemons.portable_camera.connect() as cam:
+                        cam.set_window(self._camera_config['window'], quiet=True)
+                except Pyro4.errors.CommunicationError:
+                    log.error(self._log_name, 'Failed to communicate with camera ')
+                    self.state = AutoFlatState.Error
+                    return
+                except Exception:
+                    log.error(self._log_name, 'Unknown error with camera')
+                    traceback.print_exc(file=sys.stdout)
+                    self.state = AutoFlatState.Error
+                    return
 
             # Take the first flat image
             self.state = AutoFlatState.Waiting
-            self.__take_image(self._start_exposure, delay_exposure)
+            self.__take_image(self._start_exposure)
 
         elif self.state in [AutoFlatState.Waiting, AutoFlatState.Saving]:
             if self.state == AutoFlatState.Saving:
                 self._exposure_count += 1
 
-            counts = headers['MEDCNTS'] - self._bias_level
+            counts = (headers['MEDCNTS'] - self._bias_level) / headers['CAM-BIN']**2
             exposure = headers['EXPTIME']
 
             # If the count rate is too low then we scale the exposure by the maximum amount
@@ -344,18 +315,11 @@ class CameraWrapper:
             clamped_exposure = max(clamped_exposure, CONFIG['min_exposure'], exposure / CONFIG['max_exposure_delta'])
 
             clamped_desc = f' (clamped from {new_exposure:.2f}s)' if new_exposure > clamped_exposure else ''
-            print(f'AutoFlat: camera {self.camera_id} exposure {exposure:.2f}s counts {counts:.0f} ADU ' +
+            print(f'AutoFlat: exposure {exposure:.2f}s counts {counts:.0f} ADU ' +
+                  f'(bin {headers["CAM-BIN"]} x {headers["CAM-BIN"]}) ' +
                   f'-> {clamped_exposure:.2f}s' + clamped_desc)
 
             if self._is_evening:
-                # Sky is decreasing in brightness
-                for min_exposure in CONFIG['evening_exposure_delays']:
-                    if new_exposure < min_exposure and counts > CONFIG['min_save_counts']:
-                        delay_exposure += CONFIG['evening_exposure_delays'][min_exposure]
-
-                if delay_exposure > 0:
-                    print(f'AutoFlat: camera {self.camera_id} waiting {delay_exposure}s for it to get darker')
-
                 if clamped_exposure == CONFIG['max_exposure'] and counts < CONFIG['min_save_counts']:
                     self.state = AutoFlatState.Complete
                 elif self.state == AutoFlatState.Waiting and counts > CONFIG['min_save_counts'] \
@@ -370,34 +334,31 @@ class CameraWrapper:
 
             if self.state != last_state:
                 archive = self.state == AutoFlatState.Saving
-                if not pipeline_enable_archiving(self._log_name, self.camera_id, archive):
+                if not pipeline_enable_archiving(self._log_name, archive):
                     self.state = AutoFlatState.Error
                     return
 
-                print('AutoFlat: camera ' + self.camera_id + ' ' + AutoFlatState.Labels[last_state] +
-                      ' -> ' + AutoFlatState.Labels[self.state])
-
+                print(f'AutoFlat: {AutoFlatState.Labels[last_state]} -> {AutoFlatState.Labels[self.state]}')
                 if self.state == AutoFlatState.Saving:
-                    log.info(self._log_name, f'AutoFlat: {self.camera_id} saving enabled')
+                    log.info(self._log_name, 'AutoFlat: saving enabled')
                 elif self.state == AutoFlatState.Complete:
                     runtime = (Time.now() - self._start_time).to_value(u.s)
-                    message = f'AutoFlat: camera {self.camera_id} acquired {self._exposure_count} flats ' + \
-                              f'in {runtime:.0f} seconds'
+                    message = f'AutoFlat: acquired {self._exposure_count} flats in {runtime:.0f} seconds'
                     log.info(self._log_name, message)
 
             if self.state != AutoFlatState.Complete:
-                self.__take_image(clamped_exposure, delay_exposure)
+                self.__take_image(clamped_exposure)
 
     def abort(self):
         """Aborts any active exposures and sets the state to complete"""
         if self.state == AutoFlatState.Saving:
-            cam_stop(self._log_name, self.camera_id)
+            cam_stop(self._log_name)
         self.state = AutoFlatState.Complete
 
 
 CONFIG = {
     # Range of sun angles where we can acquire useful data
-    'max_sun_altitude': -6,
+    'max_sun_altitude': -3,
     'min_sun_altitude': -10,
     'sun_altitude_check_interval': 30,
 
@@ -410,26 +371,17 @@ CONFIG = {
 
     # Number of seconds to add to the exposure time to account for readout + object detection
     # Consider the frame lost if this is exceeded
-    'max_processing_time': 10,
+    'max_processing_time': 20,
 
     # Exposure limits in seconds
     'min_exposure': 0.1,
-    'max_exposure': 30,
+    'max_exposure': 10,
 
-    # Exposures shorter than this will have large shutter effects and will be discarded
-    'min_save_exposure': 2.5,
+    'min_save_exposure': 0.5,
 
     # Exposures with less counts than this lack the signal to noise ratio that we desire
     'min_save_counts': 15000,
 
     # Target flat counts to aim for
     'target_counts': 30000,
-
-    # Delays to apply between evening flats to save shutter cycles
-    # These delays are cumulative, so if the next exposure is calculated to be 1.2
-    # 0.9 seconds the routine will wait 60 + 30 = 90 seconds before starting it
-    'evening_exposure_delays': {
-        1: 60,
-        2.5: 30
-    }
 }
