@@ -129,6 +129,7 @@ Requires: python3-rockit-operations-h400
 %files data-h400
 %defattr(0644,root,root,-)
 %{_sysconfdir}/opsd/h400.json
+%{_sysconfdir}/opsd/de421.bsp
 
 %package data-portable
 Summary: Operations data for the portable telescope
