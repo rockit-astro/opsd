@@ -87,7 +87,7 @@ class ObserveImageSequence(TelescopeAction):
 
             tasks.append(f'Acquire {s["count"]} images:')
             subtasks = [
-                'Filter: ' + s.get('filter', 'NONE'),
+                'Filter: ' + s.get('filter', 'L'),
                 f'Exposure time: {s["exposure"]}s'
             ]
 

@@ -105,7 +105,7 @@ class ShutdownCamera(TelescopeAction):
         # Warm cameras
         self._progress = Progress.Warming
         cam_stop(self.log_name, timeout=CAMERA_STOP_TIMEOUT)
-        cam_configure(self.log_name, {'temperature': 15}, quiet=True)
+        cam_configure(self.log_name, {'temperature': 15}, ignore_filter=True, quiet=True)
 
         while not self.aborted:
             status = cam_status(self.log_name)

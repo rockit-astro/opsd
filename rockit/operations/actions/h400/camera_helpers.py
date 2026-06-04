@@ -84,7 +84,7 @@ def cam_configure(log_name, config=None, ignore_filter=False, quiet=False):
        configuration that has been validated by the camera schema.
     """
     config = config or {}
-    if not ignore_filter and not cam_set_filter(log_name, config.pop('filter', 'NONE')):
+    if not ignore_filter and not cam_set_filter(log_name, config.pop('filter', 'L')):
         return False
 
     try:
