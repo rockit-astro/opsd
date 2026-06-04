@@ -194,7 +194,7 @@ class SkyFlats(TelescopeAction):
             last_state = self.state
 
             if self.state == AutoFlatState.Bias:
-                bias_level = headers['MEDBIAS']
+                bias_level = headers['MEDCNTS']
                 log.info(self.log_name, f'AutoFlat: bias is {bias_level:.0f} ADU')
 
                 # Reset window if needed
