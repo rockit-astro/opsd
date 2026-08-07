@@ -197,9 +197,8 @@ class SkyFlats(TelescopeAction):
                 bias_level = headers['MEDCNTS']
                 log.info(self.log_name, f'AutoFlat: bias is {bias_level:.0f} ADU')
 
-                # Reset window if needed
-                if 'window' in self.config.get('camera', {}):
-                    cam_configure(self.log_name, self.config['camera'], quiet=True)
+                # Reset shutter and window (if needed)
+                cam_configure(self.log_name, self.config.get('camera', {}), quiet=True)
 
                 self.state = AutoFlatState.FilterComplete
                 exposure = CONFIG['min_exposure'] if self.config['evening'] else CONFIG['min_save_exposure']
