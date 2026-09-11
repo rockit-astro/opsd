@@ -16,3 +16,4 @@ install_requires =
     rockit.mount.meade
     rockit.operations
     rockit.pipeline
+    matplotlib

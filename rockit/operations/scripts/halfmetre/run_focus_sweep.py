@@ -18,23 +18,7 @@
 
 import argparse
 from .helpers import schedule_action, argparse_type_ra, argparse_type_dec
-from rockit.operations.actions.h400.camera_helpers import filters
-
-def focus_pos(value):
-    try:
-        focus = int(value)
-    except ValueError:
-        raise argparse.ArgumentTypeError("focus steps must be integers")
-    if focus < 0 or focus >= 190000:
-        raise argparse.ArgumentTypeError(f'{focus} is outside the focuser range (0 - 190000 steps)')
-
-    return focus
-
-def focus_delta(value):
-    try:
-        return int(value)
-    except ValueError:
-        raise argparse.ArgumentTypeError("focus steps must be integers")
+from rockit.operations.actions.halfmetre.camera_helpers import filters
 
 def run_focus_sweep(prefix, args):
     """queue an automated focus sweep action"""
@@ -49,11 +33,11 @@ def run_focus_sweep(prefix, args):
                         help='camera exposure time')
     parser.add_argument('--samples', type=int, default=5,
                         help='number of measurements to obtain at each focus step')
-    parser.add_argument('min', type=focus_pos,
+    parser.add_argument('min', type=float,
                         help='minimum focus position to measure')
-    parser.add_argument('max', type=focus_pos,
+    parser.add_argument('max', type=float,
                         help='maximum focus position to measure')
-    parser.add_argument('step', type=focus_delta,
+    parser.add_argument('step', type=float,
                         help='focus steps between measurements')
     parser.add_argument('prefix', type=str,
                         help='filename prefix for the saved images')
