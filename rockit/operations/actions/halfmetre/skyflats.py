@@ -358,7 +358,7 @@ class AutoFlatState:
 
 CONFIG = {
     # Range of sun angles where we can acquire useful data
-    'max_sun_altitude': -4,
+    'max_sun_altitude': -3,
     'min_sun_altitude': -10,
     'sun_altitude_check_interval': 30,
 
