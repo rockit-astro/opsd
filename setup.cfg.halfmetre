@@ -9,7 +9,7 @@ packages =
   rockit.operations.dome.halfmetre
 
 install_requires =
-    rockit.camera.andor3
+    rockit.camera.moravian
     rockit.focuser.klipper
     rockit.mount.planewave
     rockit.operations

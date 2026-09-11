@@ -14,6 +14,8 @@
 # You should have received a copy of the GNU General Public License
 # along with rockit.  If not, see <http://www.gnu.org/licenses/>.
 
+from .camera_helpers import filters
+
 def pipeline_science_schema():
     """Schema block for science actions"""
     return {
@@ -76,38 +78,51 @@ def camera_science_schema():
                     {
                         'type': 'number',
                         'minimum': 1,
-                        'maximum': 6252
+                        'maximum': 14208
                     },
                     {
                         'type': 'number',
                         'minimum': 1,
-                        'maximum': 6252
+                        'maximum': 14208
                     },
                     {
                         'type': 'number',
                         'minimum': 1,
-                        'maximum': 4176
+                        'maximum': 10656
                     },
                     {
                         'type': 'number',
                         'minimum': 1,
-                        'maximum': 4176
+                        'maximum': 10656
                     },
                 ]
             },
             'bin': {
                 'type': 'number',
                 'minimum': 1,
-                'maximum': 4096
+                'maximum': 10656
             },
             'bin_method': {
                 'type': 'string',
                 'enum': ['sum', 'mean']
             },
-            'mode': {
-                'type': 'string',
-                'enum': ['hdr', 'ln12', 'ln16']
-            }
+            'temperature': {
+                'type': 'number',
+                'minimum': -20,
+                'maximum': 30,
+            },
+            'gain': {
+                'type': 'integer',
+                'minimum': 0,
+                'maximum': 4030,
+            },
+            'stream': {
+                'type': 'boolean'
+            },
+            'filter': {
+                "type": "string",
+                "enum": filters
+            },
         }
     }
 
