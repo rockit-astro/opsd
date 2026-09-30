@@ -67,16 +67,12 @@ class ObserveField(ObserveFieldBase):
                  ObservationStatus.PositionLost if another acquisition image is required,
                  ObservationStatus.Error on failure
         """
-        current = SkyCoord(
-            ra=self._wcs_field_center.ra,
-            dec=self._wcs_field_center.dec,
-            frame='icrs')
-        target = SkyCoord(
-            ra=self.config['ra'] * u.deg,
-            dec=self.config['dec'] * u.deg,
-            frame='icrs')
+        target = SkyCoord(ra=self.config['ra'], dec=self.config['dec'], unit=u.deg,
+            frame='icrs', obstime=self._wcs_field_center.obstime,
+            location=self._wcs_field_center.location
+        )
 
-        offset_ra, offset_dec = current.spherical_offsets_to(target)
+        offset_ra, offset_dec = self._wcs_field_center.spherical_offsets_to(target)
         print(f'ObserveField: offset is {offset_ra.to_value(u.arcsecond):.1f}, ' +
               f'{offset_dec.to_value(u.arcsecond):.1f}')
 

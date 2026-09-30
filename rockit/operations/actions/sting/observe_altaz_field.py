@@ -16,9 +16,12 @@
 
 """Telescope action to observe a static Alt/Az field within a defined time window"""
 
+import numpy as np
+from astropy.coordinates import SkyCoord
+import astropy.units as u
 from rockit.common import validation
-from .mount_helpers import mount_slew_altaz
-from .observe_field_base import ObserveFieldBase
+from .mount_helpers import mount_slew_altaz, mount_offset_radec
+from .observe_field_base import ObserveFieldBase, ObservationStatus
 
 
 class ObserveAltAzField(ObserveFieldBase):
@@ -55,6 +58,32 @@ class ObserveAltAzField(ObserveFieldBase):
         :return: True on success, false on failure
         """
         return mount_slew_altaz(self.log_name, self.config['alt'], self.config['az'])
+
+    def update_field_pointing(self):
+        """
+        Implemented by subclasses to update the field pointing based on self._wcs.
+        :return: ObservationStatus.OnTarget if acquired,
+                 ObservationStatus.PositionLost if another acquisition image is required,
+                 ObservationStatus.Error on failure
+        """
+
+        target = SkyCoord(alt=self.config['alt'], az=self.config['az'], unit=u.deg,
+                          frame='altaz', obstime=self._wcs_field_center.obstime,
+                          location=self._wcs_field_center.location).icrs
+
+        offset_ra, offset_dec = self._wcs_field_center.spherical_offsets_to(target)
+        print(f'ObserveField: offset is {offset_ra.to_value(u.arcsecond):.1f}, ' +
+              f'{offset_dec.to_value(u.arcsecond):.1f}')
+
+        # Close enough!
+        if np.abs(offset_ra) < 5 * u.arcmin and np.abs(offset_dec) < 5 * u.arcmin:
+            return ObservationStatus.OnTarget
+
+        # Offset telescope
+        if not mount_offset_radec(self.log_name, offset_ra.to_value(u.deg), offset_dec.to_value(u.deg)):
+            return ObservationStatus.Error
+
+        return ObservationStatus.PositionLost
 
     @classmethod
     def validate_config(cls, config_json):

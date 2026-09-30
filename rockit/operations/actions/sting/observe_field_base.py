@@ -394,14 +394,16 @@ class ObserveFieldBase(TelescopeAction):
                         lat=headers['SITELAT'],
                         lon=headers['SITELONG'],
                         height=headers['SITEELEV'])
-                    wcs_time = Time(headers['DATE-OBS'], location=location) + 0.5 * headers['EXPTIME'] * u.s
+                    wcs_time = Time(headers['DATE-OBS']) + 0.5 * headers['EXPTIME'] * u.s
+
                     self._wcs = wcs.WCS(headers)
                     ra, dec = self._wcs.all_pix2world(cx, cy, 0)
                     self._wcs_field_center = SkyCoord(
                         ra=ra * u.deg,
                         dec=dec * u.deg,
                         frame='icrs',
-                        obstime=wcs_time)
+                        obstime=wcs_time,
+                        location=location)
                     self._wcs_status = WCSStatus.WCSComplete
                 else:
                     self._wcs_status = WCSStatus.WCSFailed
