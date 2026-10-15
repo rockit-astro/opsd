@@ -21,7 +21,7 @@ import astropy.units as u
 from rockit.common import log, validation
 from rockit.operations import TelescopeAction, TelescopeActionStatus
 from .camera_helpers import (cameras, cam_switch_power, cam_cycle_power, cam_initialize, cam_status,
-                             das_machines, cam_initialize_vms)
+                             das_machines, cam_initialize_vms, cam_shutdown)
 
 # Interval (in seconds) to poll the camera for temperature lock
 CAMERA_CHECK_INTERVAL = 10
@@ -126,6 +126,10 @@ class InitializeCameras(TelescopeAction):
         cam_switch_power(self.log_name, self._camera_ids, True)
 
         for camera_id in self._camera_ids:
+            # Force reconnection to reboot the SWIR
+            if camera_id == 'swir':
+                cam_shutdown(self.log_name, camera_id)
+
             if not cam_initialize(self.log_name, camera_id):
                 # Cameras sometimes boot with a bogus device name
                 # This is usually fixed by a power cycle
