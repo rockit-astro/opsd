@@ -316,7 +316,8 @@ class FocusSweep(TelescopeAction):
             },
             'dependencies': {
                 'ra': ['dec'],
-                'dec': ['ra']
+                'dec': ['ra'],
+                'start': ['expires']
             },
             'anyOf': []
         }

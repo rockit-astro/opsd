@@ -257,6 +257,14 @@ class FocusSweep(TelescopeAction):
             'required': ['min', 'max', 'step', 'samples', 'camera', 'pipeline'],
             'properties': {
                 'type': {'type': 'string'},
+                'start': {
+                    'type': 'string',
+                    'format': 'date-time',
+                },
+                'expires': {
+                    'type': 'string',
+                    'format': 'date-time',
+                },
                 'ra': {
                     'type': 'number',
                     'minimum': 0,
@@ -287,6 +295,11 @@ class FocusSweep(TelescopeAction):
                 },
                 'pipeline': pipeline_junk_schema(),
                 'camera': camera_science_schema()
+            },
+            'dependencies': {
+                'ra': ['dec'],
+                'dec': ['ra'],
+                'start': ['expires']
             }
         }
 
